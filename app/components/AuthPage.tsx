@@ -232,4 +232,4 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   );
 }
 
-
+export default AuthPage;
