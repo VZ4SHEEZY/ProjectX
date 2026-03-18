@@ -11,7 +11,11 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: [
+      "http://localhost:5173",
+      "https://project-x-sage-nine.vercel.app",
+      process.env.FRONTEND_URL
+    ].filter(Boolean),
     methods: ["GET", "POST"]
   }
 });
@@ -23,14 +27,18 @@ app.use(helmet({
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100
 });
 app.use(limiter);
 
 // CORS
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  origin: [
+    "http://localhost:5173",
+    "https://project-x-sage-nine.vercel.app",
+    process.env.FRONTEND_URL
+  ].filter(Boolean),
   credentials: true
 }));
 
@@ -89,31 +97,26 @@ const connectedUsers = new Map();
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
   
-  // User joins with their userId
   socket.on('join', (userId) => {
     connectedUsers.set(userId, socket.id);
     socket.userId = userId;
     console.log(`User ${userId} joined with socket ${socket.id}`);
   });
 
-  // Join a room (for live streams or specific post comments)
   socket.on('join-room', (roomId) => {
     socket.join(roomId);
     console.log(`Socket ${socket.id} joined room ${roomId}`);
   });
 
-  // Leave a room
   socket.on('leave-room', (roomId) => {
     socket.leave(roomId);
     console.log(`Socket ${socket.id} left room ${roomId}`);
   });
 
-  // New comment
   socket.on('new-comment', (data) => {
     socket.to(data.postId).emit('comment', data);
   });
 
-  // New message
   socket.on('new-message', (data) => {
     const recipientSocketId = connectedUsers.get(data.recipientId);
     if (recipientSocketId) {
@@ -121,7 +124,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Typing indicator
   socket.on('typing', (data) => {
     socket.to(data.roomId).emit('user-typing', {
       userId: socket.userId,
@@ -129,7 +131,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Live stream events
   socket.on('stream-start', (data) => {
     socket.broadcast.emit('stream-started', data);
   });
@@ -142,7 +143,6 @@ io.on('connection', (socket) => {
     socket.to(data.streamId).emit('stream-message', data);
   });
 
-  // Notification
   socket.on('send-notification', (data) => {
     const recipientSocketId = connectedUsers.get(data.recipientId);
     if (recipientSocketId) {
@@ -150,7 +150,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Disconnect
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     if (socket.userId) {
