@@ -105,7 +105,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       const body = mode === 'login'
         ? { email: netId, password: accessKey }
         : { username: netId, email: netId, password: accessKey };
-      const res = await fetch(`http://localhost:3001${endpoint}`, {
+      const res = await fetch(`https://cyberdope-api.onrender.com${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -230,6 +230,6 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       </div>
     </div>
   );
-};
+}
 
-export default AuthPage;
+
