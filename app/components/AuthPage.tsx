@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, Terminal, Lock, Cpu, Eye, Zap } from 'lucide-react';
+import { Terminal, Lock, Cpu } from 'lucide-react';
 import GlitchButton from './GlitchButton';
 
 interface AuthPageProps {
@@ -10,10 +10,12 @@ type AuthStatus = 'idle' | 'handshake' | 'verifying' | 'granted' | 'error';
 
 const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [netId, setNetId] = useState('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [accessKey, setAccessKey] = useState('');
   const [status, setStatus] = useState<AuthStatus>('idle');
   const [errorFlash, setErrorFlash] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [bootSequence, setBootSequence] = useState(true);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -84,7 +86,11 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!netId || !accessKey) {
+    if (mode === 'login' && (!email || !accessKey)) {
+      triggerError('MISSING_CREDENTIALS');
+      return;
+    }
+    if (mode === 'register' && (!username || !email || !accessKey)) {
       triggerError('MISSING_CREDENTIALS');
       return;
     }
@@ -93,9 +99,10 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
 
   const triggerError = (msg: string) => {
     setStatus('error');
+    setErrorMsg(msg);
     setErrorFlash(true);
     setTimeout(() => setErrorFlash(false), 200);
-    setTimeout(() => setStatus('idle'), 2000);
+    setTimeout(() => { setStatus('idle'); setErrorMsg(''); }, 3000);
   };
 
   const startHandshake = async () => {
@@ -103,8 +110,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
     try {
       const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
       const body = mode === 'login'
-        ? { email: netId, password: accessKey }
-        : { username: netId, email: netId, password: accessKey };
+        ? { email, password: accessKey }
+        : { username, email, password: accessKey };
       const res = await fetch(`https://cyberdope-api.onrender.com${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,7 +119,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       });
       const data = await res.json();
       if (!res.ok) {
-        triggerError(data.error || 'AUTH_FAILED');
+        const msg = data.error || (data.errors && data.errors[0]?.msg) || 'AUTH_FAILED';
+        triggerError(msg);
         return;
       }
       localStorage.setItem('cdToken', data.token);
@@ -144,10 +152,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       <div className={`absolute inset-0 bg-red-600 z-50 pointer-events-none mix-blend-overlay transition-opacity duration-100 ${errorFlash ? 'opacity-50' : 'opacity-0'}`} />
 
       <div className="relative z-30 w-full max-w-md p-6 animate-in zoom-in-95 duration-1000">
-        <div className="relative bg-black/40 backdrop-blur-xl border border-[#39FF14]/30 p-8 shadow-[0_0_50px_rgba(0,0,0,0.5)] clip-path-polygon overflow-hidden group">
+        <div className="relative bg-black/40 backdrop-blur-xl border border-[#39FF14]/30 p-8 shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden">
           
-          <div className="absolute top-0 -left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12 animate-[shimmer_5s_infinite]" />
-
           <div className="flex justify-between items-start mb-8 border-b border-[#39FF14]/20 pb-4">
             <div>
               <h1 className="text-4xl font-black italic tracking-tighter text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
@@ -177,17 +183,34 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+
+            {mode === 'register' && (
+              <div className="space-y-1">
+                <label className="text-[10px] text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <Terminal size={12} /> Username
+                </label>
+                <input 
+                  type="text" 
+                  value={username} 
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full bg-black/60 border border-gray-700 text-[#39FF14] font-bold font-mono py-3 px-4 focus:outline-none focus:border-[#39FF14] focus:shadow-[0_0_15px_rgba(57,255,20,0.2)] transition-all placeholder-gray-800"
+                  placeholder="letters, numbers, underscores only"
+                  disabled={status !== 'idle' && status !== 'error'}
+                />
+              </div>
+            )}
+
             <div className="space-y-1">
               <label className="text-[10px] text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                <Terminal size={12} /> Net_Identity (ID)
+                <Terminal size={12} /> Email
               </label>
               <input 
                 type="text" 
-                value={netId} 
-                onChange={(e) => setNetId(e.target.value)}
+                value={email} 
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-black/60 border border-gray-700 text-[#39FF14] font-bold font-mono py-3 px-4 focus:outline-none focus:border-[#39FF14] focus:shadow-[0_0_15px_rgba(57,255,20,0.2)] transition-all placeholder-gray-800"
-                placeholder="USER_HANDLE or EMAIL"
+                placeholder="your@email.com"
                 disabled={status !== 'idle' && status !== 'error'}
               />
             </div>
@@ -205,6 +228,12 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                 disabled={status !== 'idle' && status !== 'error'}
               />
             </div>
+
+            {errorMsg && status === 'error' && (
+              <div className="text-red-400 text-xs font-bold tracking-widest text-center animate-pulse">
+                {errorMsg}
+              </div>
+            )}
 
             {status === 'idle' || status === 'error' ? (
               <GlitchButton type="submit" fullWidth className="h-14 text-lg mt-2">
@@ -230,6 +259,20 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       </div>
     </div>
   );
-}
+};
 
 export default AuthPage;
+```
+
+Then run these one at a time:
+```
+cd C:\Users\RTVZ\Desktop\zzzzzzzzzzzz\cyberdope\app
+```
+```
+git add components/AuthPage.tsx
+```
+```
+git commit -m "add username and email fields to register"
+```
+```
+git push origin master
