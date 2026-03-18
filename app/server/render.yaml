@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: cyberdope-api
+    runtime: node
+    buildCommand: ""
+    startCommand: node simple-server.js
+    envVars:
+      - key: PORT
+        value: 10000

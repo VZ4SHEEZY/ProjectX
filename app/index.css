@@ -1,0 +1,455 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&display=swap');
+
+/* 
+   CYBERDOPE GLOBAL STYLES 
+   The "Dystopian OS" Visual Language
+   Mobile-First Responsive Design
+*/
+
+:root {
+  --primary-color: #39FF14;
+  --secondary-color: #FF00FF;
+  --tertiary-color: #00FFFF;
+  --bg-color: #050505;
+  --grid-opacity: 0.15;
+  
+  /* Mobile-safe area insets */
+  --sat: env(safe-area-inset-top);
+  --sar: env(safe-area-inset-right);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  background-color: #000;
+  font-size: 14px;
+}
+
+@media (min-width: 640px) {
+  html { font-size: 15px; }
+}
+
+@media (min-width: 1024px) {
+  html { font-size: 16px; }
+}
+
+body {
+  background-color: var(--bg-color);
+  color: #FFF;
+  font-family: 'Share Tech Mono', monospace;
+  
+  /* The Grid Background Pattern */
+  background-image: 
+    linear-gradient(rgba(0, 255, 0, var(--grid-opacity)) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 0, var(--grid-opacity)) 1px, transparent 1px);
+  background-size: 30px 30px;
+  background-attachment: fixed;
+  
+  padding-top: var(--sat);
+  padding-bottom: var(--sab);
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+  
+  overscroll-behavior-y: none;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  min-height: 100dvh; /* Dynamic viewport height for mobile */
+}
+
+/* Mobile-first responsive container */
+.container-mobile {
+  width: 100%;
+  max-width: 100%;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (min-width: 640px) {
+  .container-mobile {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-mobile {
+    max-width: 1200px;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+/* --- CRT & GLITCH PROTOCOLS --- */
+
+/* 1. CRT Screen Curvature & Vignette */
+body::after {
+  content: " ";
+  display: block;
+  position: fixed;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: radial-gradient(circle, rgba(18, 16, 16, 0) 60%, rgba(0, 0, 0, 0.6) 100%);
+  pointer-events: none;
+  z-index: 9998;
+}
+
+/* 2. Scanline Overlay */
+.scanlines::before {
+  content: " ";
+  display: block;
+  position: fixed;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(
+      to bottom,
+      rgba(255,255,255,0),
+      rgba(255,255,255,0) 50%,
+      rgba(0,0,0,0.2) 50%,
+      rgba(0,0,0,0.2)
+  );
+  background-size: 100% 4px;
+  z-index: 9999;
+  pointer-events: none;
+  animation: scrollScanlines 10s linear infinite;
+}
+
+@keyframes scrollScanlines {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 100%; }
+}
+
+/* 3. Text Glow Utility */
+.text-glow {
+  text-shadow: 0 0 10px currentColor;
+}
+
+.box-glow {
+  box-shadow: 0 0 20px rgba(57, 255, 20, 0.2);
+}
+
+/* 4. Glitch Animations */
+@keyframes glitch-anim-1 {
+  0% { clip-path: inset(20% 0 80% 0); transform: translate(-2px, 1px); }
+  20% { clip-path: inset(60% 0 10% 0); transform: translate(2px, -1px); }
+  40% { clip-path: inset(40% 0 50% 0); transform: translate(-2px, 2px); }
+  60% { clip-path: inset(80% 0 5% 0); transform: translate(2px, -2px); }
+  80% { clip-path: inset(10% 0 60% 0); transform: translate(-1px, 1px); }
+  100% { clip-path: inset(30% 0 20% 0); transform: translate(1px, -1px); }
+}
+
+.glitch-text {
+  position: relative;
+}
+
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+}
+
+.glitch-text::before {
+  left: 2px;
+  text-shadow: -1px 0 #ff00ff;
+  clip-path: inset(0 0 0 0);
+  animation: glitch-anim-1 2s infinite linear alternate-reverse;
+}
+
+.glitch-text::after {
+  left: -2px;
+  text-shadow: -1px 0 #39ff14;
+  clip-path: inset(0 0 0 0);
+  animation: glitch-anim-1 3s infinite linear alternate-reverse;
+}
+
+/* 5. Custom Polygon Shapes */
+.clip-path-polygon {
+  clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);
+}
+
+/* 6. React Grid Layout Polish */
+.react-grid-item.react-grid-placeholder { 
+  background: rgba(57, 255, 20, 0.05) !important; 
+  opacity: 0.5; 
+  border: 1px dashed var(--primary-color);
+  border-radius: 0;
+  z-index: 1;
+}
+
+/* 7. Scrollbar - Show on desktop, minimal on mobile */
+::-webkit-scrollbar { 
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 2px;
+}
+
+@media (max-width: 768px) {
+  ::-webkit-scrollbar { 
+    width: 2px;
+    height: 2px;
+  }
+}
+
+/* 8. Helper Classes for Dynamic Themes */
+.text-primary { color: var(--primary-color) !important; }
+.border-primary { border-color: var(--primary-color) !important; }
+.bg-primary { background-color: var(--primary-color) !important; }
+
+/* --- MOBILE RESPONSIVE UTILITIES --- */
+
+/* Touch-friendly button sizes */
+.btn-touch {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Responsive text sizes */
+.text-responsive-xs { font-size: clamp(0.65rem, 1.5vw, 0.75rem); }
+.text-responsive-sm { font-size: clamp(0.75rem, 1.8vw, 0.875rem); }
+.text-responsive-base { font-size: clamp(0.875rem, 2vw, 1rem); }
+.text-responsive-lg { font-size: clamp(1rem, 2.5vw, 1.125rem); }
+.text-responsive-xl { font-size: clamp(1.125rem, 3vw, 1.25rem); }
+.text-responsive-2xl { font-size: clamp(1.25rem, 4vw, 1.5rem); }
+
+/* Mobile-safe padding for fixed elements */
+.safe-top { padding-top: max(var(--sat), 0.5rem); }
+.safe-bottom { padding-bottom: max(var(--sab), 0.5rem); }
+
+/* Hide on mobile */
+.hide-mobile { display: none; }
+@media (min-width: 768px) {
+  .hide-mobile { display: block; }
+  .hide-desktop { display: none; }
+}
+
+/* Mobile card styles */
+.card-mobile {
+  border-radius: 0.75rem;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(57, 255, 20, 0.2);
+}
+
+@media (min-width: 768px) {
+  .card-mobile {
+    border-radius: 1rem;
+  }
+}
+
+/* Responsive grid gaps */
+.gap-responsive {
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .gap-responsive { gap: 0.75rem; }
+}
+
+@media (min-width: 1024px) {
+  .gap-responsive { gap: 1rem; }
+}
+
+/* Mobile-optimized modals */
+.modal-mobile {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .modal-mobile {
+    align-items: center;
+    padding: 1rem;
+  }
+}
+
+.modal-content-mobile {
+  width: 100%;
+  max-height: 90vh;
+  max-height: 90dvh;
+  border-radius: 1rem 1rem 0 0;
+  overflow-y: auto;
+}
+
+@media (min-width: 640px) {
+  .modal-content-mobile {
+    max-width: 500px;
+    border-radius: 1rem;
+    max-height: 85vh;
+  }
+}
+
+/* Bottom sheet for mobile */
+.bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: #0a0a0a;
+  border-radius: 1rem 1rem 0 0;
+  border-top: 1px solid rgba(57, 255, 20, 0.3);
+  max-height: 85vh;
+  overflow-y: auto;
+  transform: translateY(0);
+  transition: transform 0.3s ease-out;
+}
+
+.bottom-sheet.hidden {
+  transform: translateY(100%);
+}
+
+/* Swipe indicator for bottom sheets */
+.bottom-sheet::before {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  margin: 0.5rem auto;
+}
+
+/* Mobile navigation active state */
+.nav-item-active {
+  position: relative;
+}
+
+.nav-item-active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 3px;
+  background: var(--primary-color);
+  border-radius: 2px;
+  box-shadow: 0 0 10px var(--primary-color);
+}
+
+/* Responsive header */
+.header-mobile {
+  height: 3.5rem;
+  padding: 0 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .header-mobile {
+    height: 4rem;
+    padding: 0 1rem;
+  }
+}
+
+/* Prevent text selection on interactive elements */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Smooth scrolling */
+.scroll-smooth {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile-optimized inputs */
+input, textarea, select {
+  font-size: 16px; /* Prevents zoom on iOS */
+}
+
+@media (min-width: 768px) {
+  input, textarea, select {
+    font-size: 14px;
+  }
+}
+
+/* Focus states for accessibility */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Loading skeleton animation */
+@keyframes skeleton {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton 1.5s infinite;
+}
+
+/* Pulse animation for live indicators */
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.pulse-live {
+  animation: pulse-live 1.5s ease-in-out infinite;
+}
+
+/* Responsive aspect ratios for video */
+.aspect-video-mobile {
+  aspect-ratio: 9 / 16;
+}
+
+@media (min-width: 640px) {
+  .aspect-video-mobile {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+@media (min-width: 1024px) {
+  .aspect-video-mobile {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+/* Mobile-optimized story circles */
+.story-circle {
+  width: 64px;
+  height: 64px;
+}
+
+@media (min-width: 640px) {
+  .story-circle {
+    width: 72px;
+    height: 72px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .story-circle {
+    width: 80px;
+    height: 80px;
+  }
+}
