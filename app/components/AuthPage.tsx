@@ -264,15 +264,3 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
 export default AuthPage;
 ```
 
-Then run these one at a time:
-```
-cd C:\Users\RTVZ\Desktop\zzzzzzzzzzzz\cyberdope\app
-```
-```
-git add components/AuthPage.tsx
-```
-```
-git commit -m "add username and email fields to register"
-```
-```
-git push origin master
