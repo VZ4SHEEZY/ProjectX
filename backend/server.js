@@ -13,6 +13,7 @@ const io = new Server(httpServer, {
   cors: {
     origin: [
       "http://localhost:5173",
+      "http://localhost:3000",
       "https://project-x-sage-nine.vercel.app",
       process.env.FRONTEND_URL
     ].filter(Boolean),
@@ -36,6 +37,7 @@ app.use(limiter);
 app.use(cors({
   origin: [
     "http://localhost:5173",
+    "http://localhost:3000",
     "https://project-x-sage-nine.vercel.app",
     process.env.FRONTEND_URL
   ].filter(Boolean),
