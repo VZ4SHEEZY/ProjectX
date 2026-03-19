@@ -7,31 +7,32 @@ export interface ProfileTheme {
   cursorEffect?: 'sparkles' | 'trails' | 'none';
   layoutStyle?: 'grid' | 'masonry' | 'classic';
 }
-
 export interface SubscriptionPlan {
-  name: string; // e.g., "Neon Tier"
+  name: string;
   priceEth: string;
   priceBtc: string;
   benefits: string[];
 }
-
 export interface User {
   id: string;
   username: string;
-  walletAddress: string; // ETH
-  btcAddress?: string;   // BTC
+  walletAddress: string;
+  btcAddress?: string;
   avatar: string;
   bio: string;
   faction?: string;
-  isVerified?: boolean; // General platform verification (Blue check)
-  isAgeVerified?: boolean; // 18+ ID Verification
+  isVerified?: boolean;
+  isAgeVerified?: boolean;
   theme?: ProfileTheme;
   subscriptionPlan?: SubscriptionPlan;
   mood?: string;
   interests?: string[];
   memberSince?: string;
+  followersCount?: number;
+  followingCount?: number;
+  postsCount?: number;
+  isFollowing?: boolean;
 }
-
 export interface Video {
   id: string;
   url: string;
@@ -41,15 +42,14 @@ export interface Video {
   likes: number;
   comments?: number;
   shares?: number;
-  isSensitive: boolean; // General trigger warning (gore, flashing lights)
-  isNSFW?: boolean;     // Strict 18+ content
+  isSensitive: boolean;
+  isNSFW?: boolean;
   isPremium?: boolean;
   price?: string;
   tags: string[];
   createdAt?: string;
   views?: number;
 }
-
 export enum WidgetType {
   BIO = 'BIO',
   TOP_FRIENDS = 'TOP_FRIENDS',
@@ -64,7 +64,6 @@ export enum WidgetType {
   VISITOR_COUNTER = 'VISITOR_COUNTER',
   MOOD_STATUS = 'MOOD_STATUS'
 }
-
 export interface ProfileWidget {
   id: string;
   type: WidgetType;
@@ -74,7 +73,6 @@ export interface ProfileWidget {
   h: number;
   content?: any;
 }
-
 export interface Comment {
   id: string;
   user: User;
