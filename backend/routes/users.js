@@ -169,7 +169,12 @@ router.put('/profile', protect, async (req, res) => {
     if (location) updateFields.location = location;
     if (website) updateFields.website = website;
     if (socialLinks) updateFields.socialLinks = socialLinks;
-    if (theme) updateFields.theme = theme;
+    // Deep merge theme so partial updates don't wipe other theme fields
+    if (theme) {
+      Object.keys(theme).forEach(key => {
+        updateFields[`theme.${key}`] = theme[key];
+      });
+    }
     if (isCreator !== undefined) updateFields.isCreator = isCreator;
     if (creatorSettings) updateFields.creatorSettings = creatorSettings;
 

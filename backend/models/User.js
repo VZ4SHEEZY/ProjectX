@@ -84,7 +84,12 @@ const userSchema = new mongoose.Schema({
     fontSize: { type: String, default: 'medium' },
     animations: { type: Boolean, default: true },
     glowEffects: { type: Boolean, default: true },
-    scanlines: { type: Boolean, default: true }
+    scanlines: { type: Boolean, default: true },
+    // Profile page customization
+    backgroundImage: { type: String, default: '' },
+    customCss: { type: String, default: '' },
+    cursorEffect: { type: String, default: 'sparkles' },
+    layoutStyle: { type: String, default: 'grid' },
   },
   
   // Privacy settings
