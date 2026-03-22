@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import GlitchButton from './GlitchButton';
 import { AIGenerator } from './AIGenerator';
+import { uploadAPI, postAPI } from '../services/api';
 
 interface PostComposerProps {
   isOpen: boolean;
@@ -38,23 +39,33 @@ const PostComposer: React.FC<PostComposerProps> = ({ isOpen, onClose, onPublish 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploadedMediaUrl, setUploadedMediaUrl] = useState<string | null>(null);
+  const [uploadedThumbnailUrl, setUploadedThumbnailUrl] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setIsUploading(true);
-      // Simulate upload
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += 10;
-        setUploadProgress(progress);
-        if (progress >= 100) {
-          clearInterval(interval);
-          setIsUploading(false);
-          setPreviewUrl(URL.createObjectURL(file));
-        }
-      }, 200);
+    if (!file) return;
+    setIsUploading(true);
+    setUploadProgress(10);
+    setUploadError(null);
+    try {
+      let result: any;
+      setUploadProgress(30);
+      if (postType === 'video') result = await uploadAPI.uploadVideo(file);
+      else if (postType === 'image') result = await uploadAPI.uploadImage(file);
+      else result = await uploadAPI.uploadAudio(file);
+      setUploadProgress(100);
+      const url = result?.data?.data?.url;
+      setUploadedMediaUrl(url || null);
+      setUploadedThumbnailUrl(result?.data?.data?.thumbnailUrl || null);
+      setPreviewUrl(url || URL.createObjectURL(file));
+    } catch (err: any) {
+      setUploadError('Upload failed. Check connection and try again.');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -72,25 +83,38 @@ const PostComposer: React.FC<PostComposerProps> = ({ isOpen, onClose, onPublish 
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
 
-  const handlePublish = () => {
-    onPublish({
-      type: postType,
-      content: previewUrl || '',
-      caption,
-      monetization,
-      price: monetization === 'ppv' ? price : undefined,
-      isNSFW,
-      isSensitive,
-      tags
-    });
-    onClose();
-    // Reset state
-    setCaption('');
-    setTags([]);
-    setPreviewUrl(null);
-    setMonetization('free');
-    setIsNSFW(false);
-    setIsSensitive(false);
+  const handlePublish = async () => {
+    setIsPublishing(true);
+    try {
+      const response = await postAPI.createPost({
+        type: postType,
+        content: caption,
+        description: caption,
+        mediaUrl: uploadedMediaUrl || '',
+        thumbnailUrl: uploadedThumbnailUrl || '',
+        monetizationType: monetization,
+        price: monetization === 'ppv' ? price : 0,
+        isNSFW,
+        isSensitive,
+        tags,
+        visibility: 'public',
+        status: 'published',
+      });
+      onPublish(response.data.data);
+      onClose();
+      setCaption('');
+      setTags([]);
+      setPreviewUrl(null);
+      setUploadedMediaUrl(null);
+      setUploadedThumbnailUrl(null);
+      setMonetization('free');
+      setIsNSFW(false);
+      setIsSensitive(false);
+    } catch (err: any) {
+      setUploadError('Publish failed. Try again.');
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -371,13 +395,14 @@ const PostComposer: React.FC<PostComposerProps> = ({ isOpen, onClose, onPublish 
             >
               CANCEL
             </button>
+            {uploadError && <span className="text-red-400 text-xs font-mono">{uploadError}</span>}
             <GlitchButton 
               onClick={handlePublish}
-              disabled={!previewUrl && postType !== 'text'}
+              disabled={isPublishing || isUploading || (!uploadedMediaUrl && postType !== 'text')}
               className="px-8 py-2"
             >
               <Check size={16} className="mr-2" />
-              PUBLISH
+              {isPublishing ? 'PUBLISHING...' : 'PUBLISH'}
             </GlitchButton>
           </div>
         </div>

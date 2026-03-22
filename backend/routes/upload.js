@@ -1,218 +1,130 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
+const cloudinary = require('cloudinary').v2;
 const { protect } = require('../middleware/auth');
+const User = require('../models/User');
 
-// Configure multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../uploads');
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Use memory storage — stream directly to Cloudinary, no disk writes
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'video/mp4', 'video/webm', 'video/quicktime',
+      'audio/mpeg', 'audio/wav', 'audio/ogg'
+    ];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type.'), false);
+    }
   }
 });
 
-// File filter
-const fileFilter = (req, file, cb) => {
-  const allowedImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-  const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
-  const allowedAudioTypes = ['audio/mpeg', 'audio/wav', 'audio/ogg'];
-  
-  const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes, ...allowedAudioTypes];
-  
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Invalid file type. Only images, videos, and audio are allowed.'), false);
-  }
+// Helper: upload buffer to Cloudinary
+const uploadToCloudinary = (buffer, options) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(options, (error, result) => {
+      if (error) reject(error);
+      else resolve(result);
+    });
+    stream.end(buffer);
+  });
 };
 
-// Configure multer
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: 100 * 1024 * 1024 // 100MB max file size
-  }
-});
-
 // @route   POST /api/upload/image
-// @desc    Upload an image
-// @access  Private
 router.post('/image', protect, upload.single('image'), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'No image file provided'
-      });
-    }
-
-    // In production, you would upload to cloud storage (S3, Cloudinary, etc.)
-    // For now, return the local path
-    const imageUrl = `/uploads/${req.file.filename}`;
-
-    res.json({
-      success: true,
-      data: {
-        url: imageUrl,
-        filename: req.file.filename,
-        size: req.file.size,
-        mimetype: req.file.mimetype
-      }
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
+    const result = await uploadToCloudinary(req.file.buffer, {
+      folder: 'cyberdope/images',
+      resource_type: 'image',
+      transformation: [{ quality: 'auto', fetch_format: 'auto' }]
     });
+    res.json({ success: true, data: { url: result.secure_url, publicId: result.public_id, width: result.width, height: result.height } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
 // @route   POST /api/upload/video
-// @desc    Upload a video
-// @access  Private
 router.post('/video', protect, upload.single('video'), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'No video file provided'
-      });
-    }
-
-    const videoUrl = `/uploads/${req.file.filename}`;
-
-    res.json({
-      success: true,
-      data: {
-        url: videoUrl,
-        filename: req.file.filename,
-        size: req.file.size,
-        mimetype: req.file.mimetype
-      }
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
+    const result = await uploadToCloudinary(req.file.buffer, {
+      folder: 'cyberdope/videos',
+      resource_type: 'video',
     });
+    // Generate thumbnail
+    const thumbnailUrl = result.secure_url.replace('/upload/', '/upload/so_0,w_400,h_600,c_fill/').replace(/\.\w+$/, '.jpg');
+    res.json({ success: true, data: { url: result.secure_url, thumbnailUrl, publicId: result.public_id, duration: result.duration } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
 // @route   POST /api/upload/audio
-// @desc    Upload an audio file
-// @access  Private
 router.post('/audio', protect, upload.single('audio'), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'No audio file provided'
-      });
-    }
-
-    const audioUrl = `/uploads/${req.file.filename}`;
-
-    res.json({
-      success: true,
-      data: {
-        url: audioUrl,
-        filename: req.file.filename,
-        size: req.file.size,
-        mimetype: req.file.mimetype
-      }
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
+    const result = await uploadToCloudinary(req.file.buffer, {
+      folder: 'cyberdope/audio',
+      resource_type: 'video', // Cloudinary uses 'video' for audio
     });
+    res.json({ success: true, data: { url: result.secure_url, publicId: result.public_id, duration: result.duration } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
 // @route   POST /api/upload/avatar
-// @desc    Upload user avatar
-// @access  Private
 router.post('/avatar', protect, upload.single('avatar'), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'No avatar file provided'
-      });
-    }
-
-    const avatarUrl = `/uploads/${req.file.filename}`;
-
-    res.json({
-      success: true,
-      data: {
-        url: avatarUrl,
-        filename: req.file.filename
-      }
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
+    const result = await uploadToCloudinary(req.file.buffer, {
+      folder: 'cyberdope/avatars',
+      resource_type: 'image',
+      transformation: [{ width: 400, height: 400, crop: 'fill', gravity: 'face', quality: 'auto' }]
     });
+    // Save to user profile
+    await User.findByIdAndUpdate(req.user._id, { avatar: result.secure_url });
+    res.json({ success: true, data: { url: result.secure_url, publicId: result.public_id } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
 // @route   POST /api/upload/banner
-// @desc    Upload profile banner
-// @access  Private
 router.post('/banner', protect, upload.single('banner'), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'No banner file provided'
-      });
-    }
-
-    const bannerUrl = `/uploads/${req.file.filename}`;
-
-    res.json({
-      success: true,
-      data: {
-        url: bannerUrl,
-        filename: req.file.filename
-      }
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
+    const result = await uploadToCloudinary(req.file.buffer, {
+      folder: 'cyberdope/banners',
+      resource_type: 'image',
+      transformation: [{ width: 1500, height: 500, crop: 'fill', quality: 'auto' }]
     });
+    await User.findByIdAndUpdate(req.user._id, { banner: result.secure_url });
+    res.json({ success: true, data: { url: result.secure_url, publicId: result.public_id } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// Error handling middleware for multer
+// Multer error handler
 router.use((error, req, res, next) => {
-  if (error instanceof multer.MulterError) {
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        success: false,
-        message: 'File too large. Maximum size is 100MB.'
-      });
-    }
+  if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ success: false, message: 'File too large. Max 100MB.' });
   }
-  
-  res.status(400).json({
-    success: false,
-    message: error.message
-  });
+  res.status(400).json({ success: false, message: error.message });
 });
 
 module.exports = router;
