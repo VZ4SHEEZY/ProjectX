@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import VideoPlayer from './VideoPlayer';
-import { VIDEOS } from '../constants';
+import { postAPI } from '../services/api';
 import { generateSystemMessage } from '../services/aiService';
-import { User } from '../types';
+import { User, Video } from '../types';
 import { ChevronUp, ChevronDown, Radio, Wifi, Battery } from 'lucide-react';
 
 interface FeedProps {
@@ -118,16 +118,57 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
   const [isTransitioning, setIsTransitioning] = useState(false);
   const touchStartY = useRef(0);
   const touchEndY = useRef(0);
+  const [apiVideos, setApiVideos] = useState<Video[]>([]);
+  const [feedLoading, setFeedLoading] = useState(true);
+
+  const mapPostToVideo = (post: any): Video => ({
+    id: post._id || post.id,
+    url: post.mediaUrl || '',
+    thumbnail: post.thumbnailUrl || post.thumbnail || '',
+    description: post.description || post.title || '',
+    likes: post.stats?.likes ?? post.likesCount ?? 0,
+    views: post.stats?.views ?? post.views ?? 0,
+    isSensitive: post.isSensitive || false,
+    isNSFW: post.isNSFW || false,
+    isPremium: post.monetizationType && post.monetizationType !== 'free',
+    price: post.price ? String(post.price) : undefined,
+    tags: post.tags || [],
+    createdAt: post.createdAt,
+    user: {
+      id: post.author?._id || post.author?.id || '',
+      username: post.author?.username || 'Unknown',
+      walletAddress: post.author?.walletAddress || '',
+      avatar: post.author?.avatar || '',
+      bio: '',
+      isVerified: post.author?.isVerified || false,
+    },
+  });
+
+  useEffect(() => {
+    const loadFeed = async () => {
+      setFeedLoading(true);
+      try {
+        const response = await postAPI.getForYouFeed({ page: 1, limit: 20 });
+        const posts = response.data?.data || [];
+        if (posts.length > 0) {
+          setApiVideos(posts.map(mapPostToVideo));
+        }
+      } catch (err) {
+        console.warn('Feed API unavailable:', err);
+      } finally {
+        setFeedLoading(false);
+      }
+    };
+    loadFeed();
+  }, []);
 
   // Filter Videos: Remove NSFW if user is not age verified
   const visibleVideos = useMemo(() => {
-    return VIDEOS.filter(video => {
-      if (video.isNSFW && !currentUser.isAgeVerified) {
-        return false;
-      }
+    return apiVideos.filter(video => {
+      if (video.isNSFW && !currentUser.isAgeVerified) return false;
       return true;
     });
-  }, [currentUser.isAgeVerified]);
+  }, [apiVideos, currentUser.isAgeVerified]);
 
   // Handle Scroll to determine active video
   const handleScroll = useCallback(() => {
@@ -233,6 +274,19 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [goToNext, goToPrev]);
+
+  if (feedLoading && apiVideos.length === 0) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-black">
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-full border-2 border-gray-800 relative mx-auto mb-4">
+            <div className="absolute inset-0 rounded-full border-2 border-[#39FF14] border-t-transparent animate-spin" />
+          </div>
+          <p className="text-[#39FF14] font-mono text-sm animate-pulse">LOADING FEED...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (visibleVideos.length === 0) {
       return (

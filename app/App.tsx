@@ -27,7 +27,6 @@ import { Stories, CreateStory } from './components/Stories';
 import { Groups } from './components/Groups';
 import { AIChatAssistant } from './components/AIGenerator';
 
-import { CURRENT_USER } from './constants';
 import { User } from './types';
 import { 
   Wallet, Zap, User as UserIcon, Settings, 
@@ -37,6 +36,21 @@ import {
 
 type OnboardingStep = 'auth' | 'scanning' | 'reveal' | 'app';
 type MainView = 'feed' | 'profile' | 'explore' | 'creator';
+
+const mapApiUser = (apiUser: any): User => ({
+  id: apiUser.id || apiUser._id,
+  username: apiUser.username,
+  walletAddress: apiUser.walletAddress || '',
+  btcAddress: apiUser.btcAddress || '',
+  avatar: apiUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${apiUser.username}`,
+  bio: apiUser.bio || '',
+  faction: apiUser.faction || 'Unaffiliated',
+  isVerified: apiUser.isVerified || false,
+  isAgeVerified: apiUser.isAgeVerified || false,
+  followersCount: apiUser.followersCount || 0,
+  followingCount: apiUser.followingCount || 0,
+  postsCount: apiUser.postsCount || 0,
+});
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -75,22 +89,38 @@ const App: React.FC = () => {
   
   const [activeCreatorAddress, setActiveCreatorAddress] = useState<string>('');
 
-  // Initial loading
+  // Initial loading + session restore
   useEffect(() => {
-    // Simulate app initialization
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1500);
+    const token = localStorage.getItem('cdToken');
+    const storedUser = localStorage.getItem('cdUser');
+    if (token && storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        setUser(mapApiUser(parsedUser));
+        setOnboardingStep('app');
+      } catch (e) {
+        localStorage.removeItem('cdToken');
+        localStorage.removeItem('cdUser');
+      }
+    }
+    const timer = setTimeout(() => setIsLoading(false), 1500);
     return () => clearTimeout(timer);
   }, []);
 
   // 1. Auth Success -> Handle Routing based on user status
   const handleLoginSuccess = (isNewUser: boolean) => {
-    setUser(CURRENT_USER);
+    const storedUser = localStorage.getItem('cdUser');
+    if (storedUser) {
+      try {
+        setUser(mapApiUser(JSON.parse(storedUser)));
+      } catch (e) {
+        console.error('Failed to parse user:', e);
+      }
+    }
     if (isNewUser) {
-        setOnboardingStep('scanning');
+      setOnboardingStep('scanning');
     } else {
-        setOnboardingStep('app');
+      setOnboardingStep('app');
     }
   };
 
@@ -117,6 +147,14 @@ const App: React.FC = () => {
   const handleVerificationUpdate = (status: boolean) => {
     if (user) {
       setUser({ ...user, isAgeVerified: status });
+      const storedUser = localStorage.getItem('cdUser');
+      if (storedUser) {
+        try {
+          const u = JSON.parse(storedUser);
+          u.isAgeVerified = status;
+          localStorage.setItem('cdUser', JSON.stringify(u));
+        } catch (e) {}
+      }
     }
   };
 
@@ -130,6 +168,14 @@ const App: React.FC = () => {
   const handleWalletConnect = (address: string, balance: string) => {
     setWalletAddress(address);
     setWalletBalance(balance);
+    const storedUser = localStorage.getItem('cdUser');
+    if (storedUser) {
+      try {
+        const u = JSON.parse(storedUser);
+        u.walletAddress = address;
+        localStorage.setItem('cdUser', JSON.stringify(u));
+      } catch (e) {}
+    }
   };
 
   const handleWalletDisconnect = () => {
@@ -139,6 +185,8 @@ const App: React.FC = () => {
 
   // Logout function
   const handleLogout = () => {
+    localStorage.removeItem('cdToken');
+    localStorage.removeItem('cdUser');
     setUser(null);
     setOnboardingStep('auth');
     setCurrentView('feed');

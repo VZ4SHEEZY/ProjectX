@@ -77,7 +77,40 @@ const postSchema = new mongoose.Schema({
   }],
   
   // Pinned
-  isPinned: { type: Boolean, default: false }
+  isPinned: { type: Boolean, default: false },
+
+  // Status & Visibility
+  status: {
+    type: String,
+    enum: ['draft', 'published', 'archived'],
+    default: 'published'
+  },
+  visibility: {
+    type: String,
+    enum: ['public', 'subscribers', 'ppv'],
+    default: 'public'
+  },
+
+  // Stats sub-document
+  stats: {
+    views: { type: Number, default: 0 },
+    likes: { type: Number, default: 0 },
+    comments: { type: Number, default: 0 },
+    shares: { type: Number, default: 0 }
+  },
+
+  // Liked by (array of user refs)
+  likedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+
+  // Text content
+  content: { type: String, maxlength: 5000, default: '' },
+
+  // Faction
+  faction: {
+    type: String,
+    enum: ['Netrunners', 'Corporates', 'Street Samurai', 'Tech-Priests', 'Unaffiliated', ''],
+    default: ''
+  }
 }, {
   timestamps: true
 });
@@ -88,6 +121,9 @@ postSchema.index({ tags: 1 });
 postSchema.index({ createdAt: -1 });
 postSchema.index({ likesCount: -1 });
 postSchema.index({ views: -1 });
+postSchema.index({ status: 1 });
+postSchema.index({ visibility: 1 });
+postSchema.index({ faction: 1 });
 
 // Virtual for engagement rate
 postSchema.virtual('engagementRate').get(function() {

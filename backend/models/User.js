@@ -95,6 +95,15 @@ const userSchema = new mongoose.Schema({
   // Blocked users
   blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   
+  // Notification settings
+  notificationSettings: {
+    newPost: { type: Boolean, default: true },
+    likes: { type: Boolean, default: true },
+    comments: { type: Boolean, default: true },
+    follows: { type: Boolean, default: true },
+    messages: { type: Boolean, default: true }
+  },
+
   // Session
   lastActive: { type: Date, default: Date.now },
   isOnline: { type: Boolean, default: false }

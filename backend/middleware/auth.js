@@ -20,10 +20,10 @@ exports.protect = async (req, res, next) => {
 
     try {
       // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'cyberdope-secret-key-2024');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'cyberdope-secret-key');
       
       // Get user from token
-      req.user = await User.findById(decoded.id);
+      req.user = await User.findById(decoded.userId);
       
       if (!req.user) {
         return res.status(401).json({
@@ -59,8 +59,8 @@ exports.optionalAuth = async (req, res, next) => {
 
     if (token) {
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'cyberdope-secret-key-2024');
-        req.user = await User.findById(decoded.id);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'cyberdope-secret-key');
+        req.user = await User.findById(decoded.userId);
       } catch (err) {
         // Invalid token, continue without user
         req.user = null;
