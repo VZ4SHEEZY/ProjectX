@@ -166,6 +166,21 @@ const App: React.FC = () => {
     setIsTipModalOpen(true);
   };
 
+  // Handle profile updates from profile save
+  const handleProfileUpdate = (updates: Partial<User>) => {
+    if (user) {
+      const updated = { ...user, ...updates };
+      setUser(updated);
+      const storedUser = localStorage.getItem('cdUser');
+      if (storedUser) {
+        try {
+          const u = JSON.parse(storedUser);
+          localStorage.setItem('cdUser', JSON.stringify({ ...u, ...updates }));
+        } catch (e) {}
+      }
+    }
+  };
+
   // Handle Age Verification from Settings
   const handleVerificationUpdate = (status: boolean) => {
     if (user) {

@@ -66,6 +66,9 @@ export const userAPI = {
   updateProfile: (data: any) =>
     api.put('/users/profile', data),
 
+  saveProfile: (data: { bio?: string; avatar?: string; banner?: string; faction?: string; displayName?: string; location?: string; website?: string; theme?: any }) =>
+    api.put('/users/profile', data),
+
   followUser: (userId: string) =>
     api.post(`/users/${userId}/follow`),
 

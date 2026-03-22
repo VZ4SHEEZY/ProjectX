@@ -104,6 +104,19 @@ const userSchema = new mongoose.Schema({
     messages: { type: Boolean, default: true }
   },
 
+  // Extended profile fields
+  displayName: { type: String, maxlength: 50, default: '' },
+  banner: { type: String, default: '' },
+  location: { type: String, maxlength: 100, default: '' },
+  website: { type: String, maxlength: 200, default: '' },
+  socialLinks: {
+    twitter: { type: String, default: '' },
+    instagram: { type: String, default: '' },
+    discord: { type: String, default: '' },
+    telegram: { type: String, default: '' },
+  },
+  isActive: { type: Boolean, default: true },
+
   // Session
   lastActive: { type: Date, default: Date.now },
   isOnline: { type: Boolean, default: false }
@@ -138,7 +151,14 @@ userSchema.methods.toPublicProfile = function() {
     postsCount: this.postsCount,
     theme: this.theme,
     isOnline: this.isOnline,
-    lastActive: this.lastActive
+    lastActive: this.lastActive,
+    displayName: this.displayName,
+    banner: this.banner,
+    location: this.location,
+    website: this.website,
+    socialLinks: this.socialLinks,
+    isActive: this.isActive,
+    createdAt: this.createdAt
   };
 };
 

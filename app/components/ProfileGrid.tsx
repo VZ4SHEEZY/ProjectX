@@ -12,6 +12,7 @@ import CustomCodeWidget from './CustomCodeWidget';
 import ProfileDesignModal from './ProfileDesignModal';
 import { Copy, Wallet, Edit, Save, PaintBucket, Layers, Crown, Eye, EyeOff, Sparkles, MessageSquare, UserPlus, Heart, Eye as EyeIcon, Zap, Music } from 'lucide-react';
 import { generateBio } from '../services/aiService';
+import { userAPI } from '../services/api';
 
 interface ProfileGridProps {
   user: User;
@@ -187,6 +188,9 @@ const ContactButtons: React.FC<{ onMessage?: () => void; onAddFriend?: () => voi
 
 const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [isDesignOpen, setIsDesignOpen] = useState(false);
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
   const [isHudVisible, setIsHudVisible] = useState(true);
@@ -221,6 +225,60 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip }) => {
   const handleFollow = () => {
     setIsFollowing(!isFollowing);
   };
+
+  const handleSave = async () => {
+    if (!isEditing) {
+      setIsEditing(true);
+      return;
+    }
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await userAPI.saveProfile({
+        bio,
+        theme: localTheme,
+      });
+      // Update localStorage so session stays fresh
+      const storedUser = localStorage.getItem('cdUser');
+      if (storedUser) {
+        const u = JSON.parse(storedUser);
+        u.bio = bio;
+        u.theme = localTheme;
+        localStorage.setItem('cdUser', JSON.stringify(u));
+      }
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+      setIsEditing(false);
+    } catch (err) {
+      setSaveError('SAVE_FAILED');
+      setTimeout(() => setSaveError(null), 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const token = localStorage.getItem('cdToken');
+        if (!token) return;
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL || 'https://cyberdope-api.onrender.com/api'}/auth/me`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user) {
+            setBio(data.user.bio || user.bio);
+            if (data.user.theme) setLocalTheme(data.user.theme);
+          }
+        }
+      } catch (err) {
+        // silently fail, use props
+      }
+    };
+    fetchProfile();
+  }, []);
 
   return (
     <div
@@ -291,9 +349,10 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip }) => {
           <button onClick={() => setIsDesignOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-gray-700 text-gray-400 text-xs font-bold hover:border-[#39FF14] hover:text-[#39FF14] transition-all bg-black/50">
             <PaintBucket size={14} /> DESIGN
           </button>
-          <GlitchButton onClick={() => setIsEditing(!isEditing)} variant={isEditing ? 'danger' : 'primary'} className="h-9 px-4">
-            {isEditing ? <><Save size={14} /> SAVE</> : <><Edit size={14} /> EDIT</>}
+          <GlitchButton onClick={handleSave} variant={isEditing ? 'danger' : 'primary'} className="h-9 px-4" disabled={isSaving}>
+            {isSaving ? <><Save size={14} /> SAVING...</> : isEditing ? <><Save size={14} /> {saveSuccess ? 'SAVED ✓' : 'SAVE'}</> : <><Edit size={14} /> EDIT</>}
           </GlitchButton>
+          {saveError && <span className="text-red-500 text-[10px] font-mono">{saveError}</span>}
         </div>
       </div>
 
@@ -437,7 +496,22 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip }) => {
         isOpen={isDesignOpen}
         onClose={() => setIsDesignOpen(false)}
         currentTheme={localTheme}
-        onSave={setLocalTheme}
+        onSave={async (theme) => {
+          setLocalTheme(theme);
+          setIsDesignOpen(false);
+          // Persist theme to backend immediately
+          try {
+            await userAPI.saveProfile({ theme });
+            const storedUser = localStorage.getItem('cdUser');
+            if (storedUser) {
+              const u = JSON.parse(storedUser);
+              u.theme = theme;
+              localStorage.setItem('cdUser', JSON.stringify(u));
+            }
+          } catch (err) {
+            console.warn('Failed to save theme:', err);
+          }
+        }}
       />
     </div>
   );
