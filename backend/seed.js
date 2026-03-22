@@ -117,76 +117,101 @@ const sampleUsers = [
 const samplePosts = [
   {
     title: 'They Are Hiding More Than We Thought',
+    content: "Just hacked into the mainframe. The things I've seen... 🤯 Stay vigilant, netrunners.",
     description: "Just hacked into the mainframe. The things I've seen... 🤯 Stay vigilant, netrunners.",
     type: 'text',
+    status: 'published',
+    visibility: 'public',
     monetizationType: 'free',
     tags: ['netrunner', 'hacking', 'truth'],
-    views: 15420
+    stats: { views: 15420, likes: 1240, comments: 89, shares: 203 }
   },
   {
     title: 'Neural Link Review - This Changes Everything',
+    content: 'New cybernetic implant review dropping tomorrow! Subscribers get early access 👀',
     description: 'New cybernetic implant review dropping tomorrow! Subscribers get early access 👀',
     type: 'video',
-    mediaUrl: 'https://example.com/video1.mp4',
+    status: 'published',
+    visibility: 'public',
+    mediaUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800',
-    monetizationType: 'subscribers',
+    monetizationType: 'free',
     tags: ['cybernetics', 'review', 'tech'],
-    views: 8900
+    stats: { views: 8900, likes: 670, comments: 44, shares: 90 }
   },
   {
     title: 'Late Night Coding Session',
+    content: "There's something poetic about watching the sunrise through lines of code.",
     description: "There's something poetic about watching the sunrise through lines of code.",
     type: 'image',
+    status: 'published',
+    visibility: 'public',
     mediaUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=400',
     monetizationType: 'free',
     tags: ['coding', 'night', 'aesthetic'],
-    views: 6700
+    stats: { views: 6700, likes: 512, comments: 31, shares: 55 }
   },
   {
     title: 'Digital Tarot: The Tower Card',
+    content: '🔮 The Tower card appears. Expect sudden changes — destruction precedes creation. The system is about to reboot.',
     description: '🔮 The Tower card appears. Expect sudden changes - destruction precedes creation.',
     type: 'text',
+    status: 'published',
+    visibility: 'public',
     monetizationType: 'free',
     tags: ['tarot', 'divination', 'cyberwitch'],
-    views: 12300
+    stats: { views: 12300, likes: 980, comments: 77, shares: 140 }
   },
   {
     title: 'Night City at 3 AM',
+    content: "POV: You're walking through Night City at 3 AM. The neon never sleeps. Neither do I.",
     description: "POV: You're walking through Night City at 3 AM. The neon never sleeps.",
     type: 'image',
-    mediaUrl: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=800',
+    status: 'published',
+    visibility: 'public',
+    mediaUrl: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=800',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=400',
     monetizationType: 'free',
     tags: ['nightcity', 'neon', 'cyberpunk'],
-    views: 22100
+    stats: { views: 22100, likes: 2100, comments: 154, shares: 432 }
   },
   {
     title: 'Corporate Meltdown - Glitch Art',
+    content: 'My latest glitch art piece. The system corrupts itself. What do you see in the noise?',
     description: 'My latest glitch art piece. What do you think?',
     type: 'image',
+    status: 'published',
+    visibility: 'public',
     mediaUrl: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=800',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=400',
     monetizationType: 'free',
     tags: ['glitchart', 'digitalart', 'aesthetic'],
-    views: 18900
+    stats: { views: 18900, likes: 1560, comments: 102, shares: 287 }
   },
   {
     title: 'Behind The Scenes: Netrunning Operation',
+    content: 'The matrix is beautiful and terrifying. Full video for subscribers only.',
     description: 'The matrix is beautiful and terrifying.',
     type: 'video',
-    mediaUrl: 'https://example.com/video2.mp4',
+    status: 'published',
+    visibility: 'public',
+    mediaUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800',
-    monetizationType: 'ppv',
-    price: 2.99,
+    monetizationType: 'free',
     tags: ['netrunner', 'matrix'],
-    views: 4500
+    stats: { views: 4500, likes: 340, comments: 28, shares: 61 }
   },
   {
     title: 'Digital Dreams - New Single Out Now',
+    content: 'Just dropped my new single on all platforms! Synthwave meets cyberpunk. Link in bio 🎵',
     description: 'Just dropped my new single on all platforms! 🎵',
-    type: 'audio',
-    mediaUrl: 'https://example.com/audio1.mp3',
+    type: 'text',
+    status: 'published',
+    visibility: 'public',
     monetizationType: 'free',
-    tags: ['music', 'synthwave'],
-    views: 9800
+    tags: ['music', 'synthwave', 'cyberpunk'],
+    stats: { views: 9800, likes: 820, comments: 65, shares: 118 }
   }
 ];
 
@@ -217,8 +242,8 @@ const seedDatabase = async () => {
     console.log('Creating users...');
     const createdUsers = [];
     for (const userData of sampleUsers) {
-      const hashedPassword = await bcrypt.hash(userData.password, 10);
-      const user = await User.create({ ...userData, password: hashedPassword });
+      // Don't pre-hash — User model pre-save hook handles hashing
+      const user = await User.create({ ...userData });
       createdUsers.push(user);
       console.log(`Created user: ${user.username}`);
     }
