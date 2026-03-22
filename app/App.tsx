@@ -94,37 +94,41 @@ const App: React.FC = () => {
     const restore = async () => {
       const token = localStorage.getItem('cdToken');
       const storedUser = localStorage.getItem('cdUser');
-      if (token && storedUser) {
-        try {
-          // Validate token is still good against the real backend
-          const res = await fetch(
-            `${import.meta.env.VITE_API_URL || 'https://cyberdope-api.onrender.com/api'}/auth/me`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          if (res.ok) {
-            const data = await res.json();
-            const freshUser = data.user || JSON.parse(storedUser);
-            // Persist fresh user data
-            localStorage.setItem('cdUser', JSON.stringify(freshUser));
-            setUser(mapApiUser(freshUser));
-            setOnboardingStep('app');
-          } else {
-            // Token invalid/expired — clear and send to auth
-            localStorage.removeItem('cdToken');
-            localStorage.removeItem('cdUser');
-          }
-        } catch (e) {
-          // Network error — trust localStorage as fallback so offline works
-          try {
-            const parsedUser = JSON.parse(storedUser);
-            setUser(mapApiUser(parsedUser));
-            setOnboardingStep('app');
-          } catch {
-            localStorage.removeItem('cdToken');
-            localStorage.removeItem('cdUser');
-          }
-        }
+
+      if (!token || !storedUser) {
+        // No credentials at all — go to auth
+        setIsLoading(false);
+        return;
       }
+
+      try {
+        // Validate token with a 8s timeout (Render cold starts can be slow)
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL || 'https://cyberdope-api.onrender.com/api'}/auth/me`,
+          { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal }
+        );
+        clearTimeout(timeout);
+
+        if (res.ok) {
+          const data = await res.json();
+          const freshUser = data.user || JSON.parse(storedUser);
+          localStorage.setItem('cdUser', JSON.stringify(freshUser));
+          setUser(mapApiUser(freshUser));
+          setOnboardingStep('app');
+        } else {
+          // Token invalid or expired — wipe and send to auth
+          localStorage.removeItem('cdToken');
+          localStorage.removeItem('cdUser');
+        }
+      } catch (e) {
+        // Network error / timeout — don't trust stale cache, send to auth
+        localStorage.removeItem('cdToken');
+        localStorage.removeItem('cdUser');
+      }
+
       setIsLoading(false);
     };
     restore();
