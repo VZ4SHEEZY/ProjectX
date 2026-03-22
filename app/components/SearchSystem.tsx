@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Search, X, User, Hash, Video, Image as ImageIcon, 
   Filter, TrendingUp, Clock, DollarSign, EyeOff, Check,
-  ArrowRight, Loader2
+  ArrowRight, Loader2, UserPlus
 } from 'lucide-react';
+import { searchAPI, userAPI } from '../services/api';
 
 interface SearchSystemProps {
   isOpen: boolean;
@@ -26,34 +26,6 @@ type SearchResult = {
   price?: number;
 };
 
-// Mock search data
-const MOCK_USERS: SearchResult[] = [
-  { id: 'u1', type: 'user', title: 'Neon_Walker', subtitle: 'Cyberpunk Photographer', image: 'https://picsum.photos/seed/u1/100', verified: true, followers: 12500 },
-  { id: 'u2', type: 'user', title: 'Matrix_Coder', subtitle: 'Web3 Developer', image: 'https://picsum.photos/seed/u2/100', verified: true, followers: 8900 },
-  { id: 'u3', type: 'user', title: 'Synth_Wave_Queen', subtitle: 'Music Producer', image: 'https://picsum.photos/seed/u3/100', verified: false, followers: 5600 },
-  { id: 'u4', type: 'user', title: 'Cyber_Goth', subtitle: 'Fashion Creator', image: 'https://picsum.photos/seed/u4/100', verified: true, followers: 23000 },
-  { id: 'u5', type: 'user', title: 'Hacker_News', subtitle: 'Tech Journalist', image: 'https://picsum.photos/seed/u5/100', verified: false, followers: 3400 },
-];
-
-const MOCK_CONTENT: SearchResult[] = [
-  { id: 'c1', type: 'content', title: 'Cyberpunk City Night Tour', subtitle: 'Neon_Walker • 12K views', image: 'https://picsum.photos/seed/c1/200', isNSFW: false },
-  { id: 'c2', type: 'content', title: 'Late Night Drive 🔞', subtitle: 'Night_Rider • 8K views', image: 'https://picsum.photos/seed/c2/200', isNSFW: true },
-  { id: 'c3', type: 'content', title: 'Matrix Code Tutorial', subtitle: 'Matrix_Coder • 45K views', image: 'https://picsum.photos/seed/c3/200', isPremium: true, price: 5 },
-  { id: 'c4', type: 'content', title: 'Synthwave Mix 2077', subtitle: 'Synth_Wave_Queen • 23K views', image: 'https://picsum.photos/seed/c4/200' },
-];
-
-const MOCK_TAGS = [
-  { id: 't1', type: 'tag' as const, title: '#cyberpunk', subtitle: '234K posts' },
-  { id: 't2', type: 'tag' as const, title: '#neon', subtitle: '189K posts' },
-  { id: 't3', type: 'tag' as const, title: '#matrix', subtitle: '156K posts' },
-  { id: 't4', type: 'tag' as const, title: '#web3', subtitle: '98K posts' },
-  { id: 't5', type: 'tag' as const, title: '#nsfw', subtitle: '45K posts' },
-];
-
-const TRENDING_SEARCHES = [
-  'cyberpunk', 'neon nights', 'matrix code', 'web3 tutorial', 'synthwave'
-];
-
 const RECENT_SEARCHES = [
   'Neon_Walker', '#cyberpunk', 'late night drive'
 ];
@@ -64,6 +36,9 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
   const [isLoading, setIsLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'users' | 'content' | 'tags'>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [trendingSearches, setTrendingSearches] = useState<string[]>([]);
+  const [suggestedUsers, setSuggestedUsers] = useState<SearchResult[]>([]);
+  const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Focus input when opened
@@ -73,50 +48,112 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
     }
   }, [isOpen]);
 
+  // Load trending + suggested on mount / when opened
+  useEffect(() => {
+    if (!isOpen) return;
+    const loadDefaults = async () => {
+      try {
+        const [trendRes, usersRes] = await Promise.allSettled([
+          searchAPI.getTrending(),
+          userAPI.getSuggestedUsers(),
+        ]);
+
+        if (trendRes.status === 'fulfilled') {
+          const data = trendRes.value?.data;
+          // API may return { tags: [...] } or { trending: [...] } or plain array
+          const tags: string[] = data?.tags?.map((t: any) => t.name || t) ||
+                                  data?.trending?.map((t: any) => t.name || t) ||
+                                  (Array.isArray(data) ? data.map((t: any) => t.name || t) : []);
+          setTrendingSearches(tags.slice(0, 8));
+        }
+
+        if (usersRes.status === 'fulfilled') {
+          const rawUsers: any[] = usersRes.value?.data?.users || usersRes.value?.data || [];
+          const mapped: SearchResult[] = rawUsers.map((u: any) => ({
+            id: u._id,
+            type: 'user',
+            title: u.username,
+            subtitle: u.bio || '',
+            image: u.avatar,
+            verified: u.isVerified,
+            followers: u.followersCount,
+          }));
+          setSuggestedUsers(mapped);
+        }
+      } catch (err) {
+        console.warn('SearchSystem defaults fetch error:', err);
+      }
+    };
+    loadDefaults();
+  }, [isOpen]);
+
   // Search function
-  const performSearch = useCallback((searchQuery: string) => {
+  const performSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResults([]);
       return;
     }
 
     setIsLoading(true);
-    
-    // Simulate API delay
-    setTimeout(() => {
-      const lowerQuery = searchQuery.toLowerCase();
-      let filteredResults: SearchResult[] = [];
+    try {
+      const typeParam = activeFilter === 'all' ? undefined : (activeFilter === 'content' ? 'posts' : activeFilter) as any;
+      const res = await searchAPI.search(searchQuery, typeParam);
+      const data = res?.data;
 
-      // Search users
+      let combined: SearchResult[] = [];
+
+      // Users
       if (activeFilter === 'all' || activeFilter === 'users') {
-        const users = MOCK_USERS.filter(u => 
-          u.title.toLowerCase().includes(lowerQuery) ||
-          u.subtitle?.toLowerCase().includes(lowerQuery)
-        );
-        filteredResults = [...filteredResults, ...users];
+        const users: any[] = data?.users || [];
+        const mappedUsers: SearchResult[] = users.map((u: any) => ({
+          id: u._id,
+          type: 'user',
+          title: u.username,
+          subtitle: u.bio || '',
+          image: u.avatar,
+          verified: u.isVerified,
+          followers: u.followersCount,
+        }));
+        combined = [...combined, ...mappedUsers];
       }
 
-      // Search content
+      // Posts / content
       if (activeFilter === 'all' || activeFilter === 'content') {
-        const content = MOCK_CONTENT.filter(c => {
-          // Filter out NSFW if not verified and not explicitly searching for it
-          if (c.isNSFW && !isAgeVerified) return false;
-          return c.title.toLowerCase().includes(lowerQuery);
-        });
-        filteredResults = [...filteredResults, ...content];
+        const posts: any[] = data?.posts || [];
+        const mappedPosts: SearchResult[] = posts
+          .filter((p: any) => isAgeVerified || !p.isNSFW)
+          .map((p: any) => ({
+            id: p._id,
+            type: 'content',
+            title: p.title || p.content || 'Untitled',
+            subtitle: `${p.author?.username || ''} • ${p.stats?.views ?? 0} views`,
+            image: p.mediaUrl || p.thumbnailUrl,
+            isNSFW: p.isNSFW,
+            isPremium: p.monetizationType === 'ppv' || p.monetizationType === 'subscription',
+            price: p.price,
+          }));
+        combined = [...combined, ...mappedPosts];
       }
 
-      // Search tags
+      // Tags
       if (activeFilter === 'all' || activeFilter === 'tags') {
-        const tags = MOCK_TAGS.filter(t => 
-          t.title.toLowerCase().includes(lowerQuery)
-        );
-        filteredResults = [...filteredResults, ...tags];
+        const tags: any[] = data?.tags || [];
+        const mappedTags: SearchResult[] = tags.map((t: any) => ({
+          id: t._id || t.name,
+          type: 'tag',
+          title: `#${t.name || t}`,
+          subtitle: t.count ? `${t.count} posts` : '',
+        }));
+        combined = [...combined, ...mappedTags];
       }
 
-      setResults(filteredResults);
+      setResults(combined);
+    } catch (err) {
+      console.warn('Search error:', err);
+      setResults([]);
+    } finally {
       setIsLoading(false);
-    }, 300);
+    }
   }, [activeFilter, isAgeVerified]);
 
   // Debounced search
@@ -144,6 +181,16 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
     }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  const handleFollow = async (userId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await userAPI.followUser(userId);
+      setFollowingMap(prev => ({ ...prev, [userId]: !prev[userId] }));
+    } catch (err) {
+      console.warn('Follow failed:', err);
+    }
+  };
 
   const formatNumber = (num: number) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -264,6 +311,7 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
                   ) : (
                     <div className="w-12 h-12 rounded-lg bg-gray-800 flex items-center justify-center">
                       {result.type === 'tag' && <Hash size={20} className="text-[#39FF14]" />}
+                      {result.type === 'user' && <User size={20} className="text-gray-400" />}
                     </div>
                   )}
 
@@ -288,12 +336,27 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
                     )}
                   </div>
 
-                  {/* Stats */}
-                  {result.followers && (
-                    <p className="text-gray-500 text-xs">{formatNumber(result.followers)} followers</p>
+                  {/* Stats / Follow */}
+                  {result.type === 'user' ? (
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      {result.followers !== undefined && (
+                        <p className="text-gray-500 text-xs">{formatNumber(result.followers)} followers</p>
+                      )}
+                      <button
+                        onClick={(e) => handleFollow(result.id, e)}
+                        className={`flex items-center gap-1 px-2 py-1 text-[10px] font-bold border transition-all ${
+                          followingMap[result.id]
+                            ? 'bg-[#39FF14] text-black border-[#39FF14]'
+                            : 'text-[#39FF14] border-[#39FF14] hover:bg-[#39FF14] hover:text-black'
+                        }`}
+                      >
+                        <UserPlus size={10} />
+                        {followingMap[result.id] ? 'FOLLOWING' : 'FOLLOW'}
+                      </button>
+                    </div>
+                  ) : (
+                    <ArrowRight size={16} className="text-gray-600 group-hover:text-[#39FF14] transition-colors" />
                   )}
-
-                  <ArrowRight size={16} className="text-gray-600 group-hover:text-[#39FF14] transition-colors" />
                 </button>
               ))}
             </div>
@@ -333,50 +396,70 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
               </div>
 
               {/* Trending */}
-              <div>
-                <p className="text-xs text-gray-500 mb-3 font-mono flex items-center gap-2">
-                  <TrendingUp size={12} />
-                  TRENDING NOW
-                </p>
-                <div className="space-y-1">
-                  {TRENDING_SEARCHES.map((search, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setQuery(search)}
-                      className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors text-left"
-                    >
-                      <span className="text-[#39FF14] font-mono w-6">{idx + 1}</span>
-                      <span className="text-white">{search}</span>
-                    </button>
-                  ))}
+              {trendingSearches.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-3 font-mono flex items-center gap-2">
+                    <TrendingUp size={12} />
+                    TRENDING NOW
+                  </p>
+                  <div className="space-y-1">
+                    {trendingSearches.map((search, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setQuery(search)}
+                        className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors text-left"
+                      >
+                        <span className="text-[#39FF14] font-mono w-6">{idx + 1}</span>
+                        <span className="text-white">{search}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Suggested Users */}
-              <div>
-                <p className="text-xs text-gray-500 mb-3 font-mono flex items-center gap-2">
-                  <User size={12} />
-                  SUGGESTED CREATORS
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {MOCK_USERS.slice(0, 4).map((user) => (
-                    <button
-                      key={user.id}
-                      onClick={() => handleResultClick(user)}
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors text-left"
-                    >
-                      <img src={user.image} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                      <div className="min-w-0">
-                        <p className="text-white text-sm font-medium truncate flex items-center gap-1">
-                          {user.title}
-                          {user.verified && <Check size={12} className="text-[#39FF14] fill-[#39FF14]" />}
-                        </p>
-                        <p className="text-gray-500 text-xs">{formatNumber(user.followers || 0)} followers</p>
-                      </div>
-                    </button>
-                  ))}
+              {suggestedUsers.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-3 font-mono flex items-center gap-2">
+                    <User size={12} />
+                    SUGGESTED CREATORS
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {suggestedUsers.slice(0, 4).map((user) => (
+                      <button
+                        key={user.id}
+                        onClick={() => handleResultClick(user)}
+                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors text-left"
+                      >
+                        {user.image ? (
+                          <img src={user.image} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
+                            <User size={16} className="text-gray-500" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-white text-sm font-medium truncate flex items-center gap-1">
+                            {user.title}
+                            {user.verified && <Check size={12} className="text-[#39FF14] fill-[#39FF14]" />}
+                          </p>
+                          <p className="text-gray-500 text-xs">{formatNumber(user.followers || 0)} followers</p>
+                        </div>
+                        <button
+                          onClick={(e) => handleFollow(user.id, e)}
+                          className={`flex-shrink-0 p-1.5 border rounded transition-all ${
+                            followingMap[user.id]
+                              ? 'bg-[#39FF14] text-black border-[#39FF14]'
+                              : 'text-[#39FF14] border-[#39FF14] hover:bg-[#39FF14] hover:text-black'
+                          }`}
+                        >
+                          <UserPlus size={12} />
+                        </button>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>

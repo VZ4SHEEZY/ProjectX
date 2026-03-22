@@ -222,8 +222,14 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip }) => {
     }
   };
 
-  const handleFollow = () => {
-    setIsFollowing(!isFollowing);
+  const handleFollow = async () => {
+    try {
+      const userId = user.id;
+      await userAPI.followUser(userId);
+      setIsFollowing(!isFollowing);
+    } catch (err) {
+      console.warn('Follow failed:', err);
+    }
   };
 
   const handleSave = async () => {
