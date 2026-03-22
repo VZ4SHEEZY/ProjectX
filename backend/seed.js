@@ -230,8 +230,10 @@ const seedDatabase = async () => {
   try {
     await connectDB();
 
-    console.log('Clearing existing data...');
-    await User.deleteMany({});
+    // Only clear seed/demo data — never wipe real user accounts
+    console.log('Clearing existing seed data (preserving real accounts)...');
+    const seedEmails = sampleUsers.map(u => u.email);
+    await User.deleteMany({ email: { $in: seedEmails } });
     await Post.deleteMany({});
     await Comment.deleteMany({});
     await Notification.deleteMany({});
