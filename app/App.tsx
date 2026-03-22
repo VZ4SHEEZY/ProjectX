@@ -89,22 +89,45 @@ const App: React.FC = () => {
   
   const [activeCreatorAddress, setActiveCreatorAddress] = useState<string>('');
 
-  // Initial loading + session restore
+  // Initial loading + session restore (validates token against real API)
   useEffect(() => {
-    const token = localStorage.getItem('cdToken');
-    const storedUser = localStorage.getItem('cdUser');
-    if (token && storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(mapApiUser(parsedUser));
-        setOnboardingStep('app');
-      } catch (e) {
-        localStorage.removeItem('cdToken');
-        localStorage.removeItem('cdUser');
+    const restore = async () => {
+      const token = localStorage.getItem('cdToken');
+      const storedUser = localStorage.getItem('cdUser');
+      if (token && storedUser) {
+        try {
+          // Validate token is still good against the real backend
+          const res = await fetch(
+            `${import.meta.env.VITE_API_URL || 'https://cyberdope-api.onrender.com/api'}/auth/me`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            const freshUser = data.user || JSON.parse(storedUser);
+            // Persist fresh user data
+            localStorage.setItem('cdUser', JSON.stringify(freshUser));
+            setUser(mapApiUser(freshUser));
+            setOnboardingStep('app');
+          } else {
+            // Token invalid/expired — clear and send to auth
+            localStorage.removeItem('cdToken');
+            localStorage.removeItem('cdUser');
+          }
+        } catch (e) {
+          // Network error — trust localStorage as fallback so offline works
+          try {
+            const parsedUser = JSON.parse(storedUser);
+            setUser(mapApiUser(parsedUser));
+            setOnboardingStep('app');
+          } catch {
+            localStorage.removeItem('cdToken');
+            localStorage.removeItem('cdUser');
+          }
+        }
       }
-    }
-    const timer = setTimeout(() => setIsLoading(false), 1500);
-    return () => clearTimeout(timer);
+      setIsLoading(false);
+    };
+    restore();
   }, []);
 
   // 1. Auth Success -> Handle Routing based on user status
