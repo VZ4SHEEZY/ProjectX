@@ -148,13 +148,30 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
     const loadFeed = async () => {
       setFeedLoading(true);
       try {
+        // Try personalized feed first
         const response = await postAPI.getForYouFeed({ page: 1, limit: 20 });
         const posts = response.data?.data || [];
         if (posts.length > 0) {
           setApiVideos(posts.map(mapPostToVideo));
+        } else {
+          // New account or no faction matches — fall back to all public posts
+          const fallback = await postAPI.getPosts({ page: 1, limit: 20, sort: '-createdAt' });
+          const fallbackPosts = fallback.data?.data || [];
+          if (fallbackPosts.length > 0) {
+            setApiVideos(fallbackPosts.map(mapPostToVideo));
+          }
         }
       } catch (err) {
-        console.warn('Feed API unavailable:', err);
+        // Personalized feed failed entirely — try public feed
+        try {
+          const fallback = await postAPI.getPosts({ page: 1, limit: 20, sort: '-createdAt' });
+          const fallbackPosts = fallback.data?.data || [];
+          if (fallbackPosts.length > 0) {
+            setApiVideos(fallbackPosts.map(mapPostToVideo));
+          }
+        } catch (fallbackErr) {
+          console.warn('Feed unavailable:', fallbackErr);
+        }
       } finally {
         setFeedLoading(false);
       }
