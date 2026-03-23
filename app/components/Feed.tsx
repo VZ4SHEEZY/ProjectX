@@ -153,24 +153,26 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
         const posts = response.data?.data || [];
         if (posts.length > 0) {
           setApiVideos(posts.map(mapPostToVideo));
+          setFeedLoading(false);
+          return;
+        }
+        
+        // Empty personalized feed — try all public posts
+        const fallback = await postAPI.getPosts({ page: 1, limit: 20, sort: '-createdAt' });
+        const fallbackPosts = fallback.data?.data || [];
+        if (fallbackPosts.length > 0) {
+          setApiVideos(fallbackPosts.map(mapPostToVideo));
         } else {
-          // New account or no faction matches — fall back to all public posts
-          const fallback = await postAPI.getPosts({ page: 1, limit: 20, sort: '-createdAt' });
-          const fallbackPosts = fallback.data?.data || [];
-          if (fallbackPosts.length > 0) {
-            setApiVideos(fallbackPosts.map(mapPostToVideo));
-          }
+          setApiVideos([]);
         }
       } catch (err) {
-        // Personalized feed failed entirely — try public feed
+        // API error — try public feed as last resort
         try {
           const fallback = await postAPI.getPosts({ page: 1, limit: 20, sort: '-createdAt' });
           const fallbackPosts = fallback.data?.data || [];
-          if (fallbackPosts.length > 0) {
-            setApiVideos(fallbackPosts.map(mapPostToVideo));
-          }
+          setApiVideos(fallbackPosts.length > 0 ? fallbackPosts.map(mapPostToVideo) : []);
         } catch (fallbackErr) {
-          console.warn('Feed unavailable:', fallbackErr);
+          setApiVideos([]);
         }
       } finally {
         setFeedLoading(false);
@@ -308,12 +310,14 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
   if (visibleVideos.length === 0) {
       return (
           <div className="w-full h-full flex items-center justify-center bg-black text-center p-8">
-              <div className="border-2 border-red-500 p-6">
-                  <h2 className="text-red-500 font-bold mb-2">NO DATA STREAMS AVAILABLE</h2>
-                  <p className="text-gray-500 text-xs font-mono">
-                      Your current clearance level filters out all available feeds. 
-                      <br/>Please verify your identity settings.
+              <div className="border-2 border-[#39FF14] p-8 max-w-sm">
+                  <h2 className="text-[#39FF14] font-bold text-lg mb-3 tracking-wider">NO CONTENT YET</h2>
+                  <p className="text-gray-400 text-xs font-mono mb-6 leading-relaxed">
+                      The feed is empty. Be the first to post and shape the network.
                   </p>
+                  <button className="px-6 py-2 border border-[#39FF14] text-[#39FF14] text-xs font-bold hover:bg-[#39FF14] hover:text-black transition-all">
+                      CREATE POST
+                  </button>
               </div>
           </div>
       );
