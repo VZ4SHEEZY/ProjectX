@@ -26,9 +26,23 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:4173'],
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: (origin, callback) => {
+    const allowed = [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:4173',
+      'https://project-x-sage-nine.vercel.app',
+    ];
+    // Allow requests with no origin (mobile apps, curl, Render health checks)
+    if (!origin || allowed.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 app.use(express.json());
 
@@ -62,6 +76,22 @@ app.post('/api/auth/register', async (req, res) => {
     res.json({ token, user: { username: user.username, email: user.email, faction: user.faction, avatar: user.avatar, bio: user.bio, isAgeVerified: user.isAgeVerified } });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(decoded.id).select('-password');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ user });
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired token' });
   }
 });
 
