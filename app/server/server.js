@@ -18,12 +18,50 @@ const userSchema = new mongoose.Schema({
   email: String,
   password: String,
   faction: String,
+  factionColor: String,
+  zodiacSign: String,
+  dateOfBirth: String,
   avatar: String,
   bio: String,
   isAgeVerified: Boolean,
   createdAt: Date
 });
 const User = mongoose.model('User', userSchema);
+
+// Zodiac calculation
+function getZodiacSign(dateStr) {
+  const date = new Date(dateStr);
+  const month = date.getUTCMonth() + 1;
+  const day = date.getUTCDate();
+  if ((month === 3 && day >= 21) || (month === 4 && day <= 19)) return 'Aries';
+  if ((month === 4 && day >= 20) || (month === 5 && day <= 20)) return 'Taurus';
+  if ((month === 5 && day >= 21) || (month === 6 && day <= 20)) return 'Gemini';
+  if ((month === 6 && day >= 21) || (month === 7 && day <= 22)) return 'Cancer';
+  if ((month === 7 && day >= 23) || (month === 8 && day <= 22)) return 'Leo';
+  if ((month === 8 && day >= 23) || (month === 9 && day <= 22)) return 'Virgo';
+  if ((month === 9 && day >= 23) || (month === 10 && day <= 22)) return 'Libra';
+  if ((month === 10 && day >= 23) || (month === 11 && day <= 21)) return 'Scorpio';
+  if ((month === 11 && day >= 22) || (month === 12 && day <= 21)) return 'Sagittarius';
+  if ((month === 12 && day >= 22) || (month === 1 && day <= 19)) return 'Capricorn';
+  if ((month === 1 && day >= 20) || (month === 2 && day <= 18)) return 'Aquarius';
+  return 'Pisces';
+}
+
+// Zodiac -> Faction mapping
+const ZODIAC_FACTIONS = {
+  Aries:       { name: 'Inferno Grid',    color: '#FF4500' },
+  Taurus:      { name: 'Iron Veil',       color: '#8C8C8C' },
+  Gemini:      { name: 'Void Circuit',    color: '#00FFFF' },
+  Cancer:      { name: 'Steel Covenant',  color: '#4A7FA5' },
+  Leo:         { name: 'Gold Syndicate',  color: '#FFD700' },
+  Virgo:       { name: 'Toxic Bloom',     color: '#7FFF00' },
+  Libra:       { name: 'Azure Phantom',   color: '#00CCFF' },
+  Scorpio:     { name: 'Neon Wraith',     color: '#9B59B6' },
+  Sagittarius: { name: 'Nova Rift',       color: '#FF69B4' },
+  Capricorn:   { name: 'Obsidian Pact',   color: '#2C2C2C' },
+  Aquarius:    { name: 'Quantum Veil',    color: '#7DF9FF' },
+  Pisces:      { name: 'Phantom Signal',  color: '#F0F0F0' },
+};
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -66,14 +104,31 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, dateOfBirth } = req.body;
     const exists = await User.findOne({ email });
     if (exists) return res.status(400).json({ error: 'Email already registered' });
     const hashed = await bcrypt.hash(password, 10);
-    const user = new User({ username, email, password: hashed, faction: 'Unaffiliated', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`, bio: '', isAgeVerified: false, createdAt: new Date() });
+
+    // Faction assignment
+    let faction = 'Quantum Veil';
+    let factionColor = '#7DF9FF';
+    let zodiacSign = 'Aquarius';
+    if (dateOfBirth) {
+      zodiacSign = getZodiacSign(dateOfBirth);
+      const factionData = ZODIAC_FACTIONS[zodiacSign] || ZODIAC_FACTIONS['Aquarius'];
+      faction = factionData.name;
+      factionColor = factionData.color;
+    }
+
+    const user = new User({
+      username, email, password: hashed,
+      faction, factionColor, zodiacSign, dateOfBirth,
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+      bio: '', isAgeVerified: false, createdAt: new Date()
+    });
     await user.save();
     const token = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { username: user.username, email: user.email, faction: user.faction, avatar: user.avatar, bio: user.bio, isAgeVerified: user.isAgeVerified } });
+    res.json({ token, user: { username: user.username, email: user.email, faction: user.faction, factionColor: user.factionColor, zodiacSign: user.zodiacSign, avatar: user.avatar, bio: user.bio, isAgeVerified: user.isAgeVerified } });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }

@@ -13,6 +13,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [accessKey, setAccessKey] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [status, setStatus] = useState<AuthStatus>('idle');
   const [errorFlash, setErrorFlash] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -111,7 +112,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
       const body = mode === 'login'
         ? { email, password: accessKey }
-        : { username, email, password: accessKey };
+        : { username, email, password: accessKey, dateOfBirth };
       const res = await fetch(`https://cyberdope-api.onrender.com${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -186,19 +187,34 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
             {mode === 'register' && (
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                  <Terminal size={12} /> Username
-                </label>
-                <input 
-                  type="text" 
-                  value={username} 
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-black/60 border border-gray-700 text-[#39FF14] font-bold font-mono py-3 px-4 focus:outline-none focus:border-[#39FF14] focus:shadow-[0_0_15px_rgba(57,255,20,0.2)] transition-all placeholder-gray-800"
-                  placeholder="letters, numbers, underscores only"
-                  disabled={status !== 'idle' && status !== 'error'}
-                />
-              </div>
+              <>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <Terminal size={12} /> Username
+                  </label>
+                  <input 
+                    type="text" 
+                    value={username} 
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full bg-black/60 border border-gray-700 text-[#39FF14] font-bold font-mono py-3 px-4 focus:outline-none focus:border-[#39FF14] focus:shadow-[0_0_15px_rgba(57,255,20,0.2)] transition-all placeholder-gray-800"
+                    placeholder="letters, numbers, underscores only"
+                    disabled={status !== 'idle' && status !== 'error'}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <Terminal size={12} /> Birth_Date // Faction Assignment
+                  </label>
+                  <input 
+                    type="date" 
+                    value={dateOfBirth} 
+                    onChange={(e) => setDateOfBirth(e.target.value)}
+                    className="w-full bg-black/60 border border-gray-700 text-[#FF00FF] font-bold font-mono py-3 px-4 focus:outline-none focus:border-[#FF00FF] focus:shadow-[0_0_15px_rgba(255,0,255,0.2)] transition-all placeholder-gray-800 [color-scheme:dark]"
+                    disabled={status !== 'idle' && status !== 'error'}
+                  />
+                  <p className="text-[9px] text-gray-600 tracking-widest">ZODIAC DETERMINES YOUR FACTION</p>
+                </div>
+              </>
             )}
 
             <div className="space-y-1">
