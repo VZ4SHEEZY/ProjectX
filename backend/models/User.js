@@ -41,9 +41,19 @@ const userSchema = new mongoose.Schema({
   },
   faction: {
     type: String,
-    enum: ['Netrunners', 'Corporates', 'Street Samurai', 'Tech-Priests', 'Unaffiliated'],
+    enum: [
+      'Neon Wraith', 'Iron Veil', 'Crimson Static', 'Void Circuit',
+      'Gold Syndicate', 'Azure Phantom', 'Toxic Bloom', 'Scarlet Dominion',
+      'Chrome Legion', 'Phantom Signal', 'Obsidian Pact', 'Ember Protocol',
+      'Violet Surge', 'Steel Covenant', 'Binary Ghost', 'Copper Throne',
+      'Nova Rift', 'Silver Wraith', 'Inferno Grid', 'Quantum Veil',
+      'Unaffiliated'
+    ],
     default: 'Unaffiliated'
   },
+  factionColor: { type: String, default: '#39FF14' },
+  zodiacSign: { type: String, default: '' },
+  dateOfBirth: { type: String, default: '' },
   
   // Verification
   isVerified: { type: Boolean, default: false },
@@ -149,6 +159,8 @@ userSchema.methods.toPublicProfile = function() {
     avatar: this.avatar,
     bio: this.bio,
     faction: this.faction,
+    factionColor: this.factionColor,
+    zodiacSign: this.zodiacSign,
     isVerified: this.isVerified,
     isCreator: this.isCreator,
     followersCount: this.followersCount,
