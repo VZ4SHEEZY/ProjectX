@@ -156,24 +156,18 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
           setFeedLoading(false);
           return;
         }
-        
-        // Empty personalized feed — try all public posts
+      } catch (err) {
+        console.warn('Personalized feed error, trying fallback:', err);
+      }
+      
+      // Empty personalized feed or error — try all public posts
+      try {
         const fallback = await postAPI.getPosts({ page: 1, limit: 20, sort: '-createdAt' });
         const fallbackPosts = fallback.data?.data || [];
-        if (fallbackPosts.length > 0) {
-          setApiVideos(fallbackPosts.map(mapPostToVideo));
-        } else {
-          setApiVideos([]);
-        }
-      } catch (err) {
-        // API error — try public feed as last resort
-        try {
-          const fallback = await postAPI.getPosts({ page: 1, limit: 20, sort: '-createdAt' });
-          const fallbackPosts = fallback.data?.data || [];
-          setApiVideos(fallbackPosts.length > 0 ? fallbackPosts.map(mapPostToVideo) : []);
-        } catch (fallbackErr) {
-          setApiVideos([]);
-        }
+        setApiVideos(fallbackPosts.length > 0 ? fallbackPosts.map(mapPostToVideo) : []);
+      } catch (fallbackErr) {
+        console.error('Fallback feed error:', fallbackErr);
+        setApiVideos([]);
       } finally {
         setFeedLoading(false);
       }
