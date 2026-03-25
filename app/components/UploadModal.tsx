@@ -67,22 +67,61 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
       }
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
+    if (!file) return;
+    
     setUploading(true);
-    // Simulate upload progress
-    let current = 0;
-    const interval = setInterval(() => {
-      current += Math.random() * 10;
-      if (current >= 100) {
-        current = 100;
-        clearInterval(interval);
-        setComplete(true);
-        setTimeout(() => {
-          onClose();
-        }, 1500);
-      }
-      setProgress(current);
-    }, 200);
+    try {
+      const formData = new FormData();
+      formData.append('video', file);
+      formData.append('title', caption || 'Untitled Video');
+      formData.append('description', caption);
+      formData.append('isNSFW', isNSFW);
+      formData.append('isSensitive', isSensitive);
+      formData.append('monetizationType', isPremium ? 'ppv' : 'free');
+      formData.append('price', isPremium ? price : '0');
+      formData.append('duration', '0');
+
+      const token = localStorage.getItem('cdToken');
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://cyberdope-api.onrender.com/api';
+
+      // Upload with progress tracking
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = (event.loaded / event.total) * 100;
+          setProgress(percentComplete);
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 201) {
+          const response = JSON.parse(xhr.responseText);
+          console.log('Upload successful:', response);
+          setProgress(100);
+          setComplete(true);
+          setTimeout(() => {
+            onClose();
+          }, 1500);
+        } else {
+          throw new Error(`Upload failed with status ${xhr.status}`);
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        setUploading(false);
+        alert('Upload failed. Please try again.');
+      });
+
+      xhr.open('POST', `${apiUrl}/upload/video-gridfs`);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.send(formData);
+    } catch (error) {
+      console.error('Upload error:', error);
+      setUploading(false);
+      alert('Upload failed. Please try again.');
+    }
   };
 
   return (

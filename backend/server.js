@@ -62,6 +62,12 @@ const connectDB = async () => {
       useUnifiedTopology: true,
     });
     console.log(`MongoDB Connected: ${conn.connection.host}`);
+    
+    // Initialize GridFS after connection
+    const { initGridFS } = require('./utils/gridfs');
+    initGridFS(conn.connection);
+    
+    return conn;
   } catch (error) {
     console.error(`Error: ${error.message}`);
     process.exit(1);
@@ -78,6 +84,7 @@ app.use('/api/messages', require('./routes/messages'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/tips', require('./routes/tips'));
 app.use('/api/upload', require('./routes/upload'));
+app.use('/api/upload', require('./routes/upload-gridfs')); // GridFS uploads
 
 // NEW FEATURES - AI, Live Streams, Wallet, Stories, Voice, Groups
 app.use('/api/ai', require('./routes/ai'));
