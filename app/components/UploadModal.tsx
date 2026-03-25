@@ -125,23 +125,34 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl">
-      <div className="relative w-full max-w-lg mx-4 bg-[#050505] border-2 border-[#39FF14] p-6 shadow-[0_0_50px_rgba(57,255,20,0.1)] clip-path-polygon">
+    <div 
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="relative w-full max-w-[600px] bg-[#050505] border-2 border-[#39FF14] shadow-[0_0_50px_rgba(57,255,20,0.1)] rounded-lg flex flex-col max-h-[90vh] overflow-hidden">
         
         {/* Header */}
-        <div className="flex justify-between items-center mb-6 border-b border-[#39FF14]/30 pb-2">
+        <div className="flex justify-between items-center px-6 pt-6 pb-4 border-b border-[#39FF14]/30 flex-shrink-0">
           <div className="flex items-center gap-2 text-[#39FF14]">
             <Upload className="animate-pulse" size={20} />
             <span className="font-mono tracking-widest text-sm font-bold">INJECTION_PORT_V2</span>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
+          <button 
+            onClick={onClose} 
+            className="p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            title="Close"
+          >
             <X size={24} />
           </button>
         </div>
 
-        {/* Content */}
-        {!complete ? (
-          <div className="space-y-6">
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="space-y-6 p-6">
             
             {/* Drop Zone / Preview */}
             <div 
@@ -281,7 +292,10 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
 
             </div>
 
-            {/* Action Buttons */}
+          </div>
+          
+          {/* Action Buttons - Always Visible at Bottom */}
+          <div className="border-t border-[#39FF14]/30 px-6 py-4 flex-shrink-0 bg-[#050505]/80 backdrop-blur">
             {!uploading ? (
               <GlitchButton 
                 onClick={handleUpload} 
@@ -292,30 +306,33 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
                 INITIATE UPLOAD
               </GlitchButton>
             ) : (
-               <div className="space-y-2">
-                  <div className="flex justify-between text-[10px] font-mono text-[#39FF14]">
-                     <span>UPLOADING PACKETS...</span>
-                     <span>{Math.round(progress)}%</span>
-                  </div>
-                  <div className="h-2 w-full bg-gray-900 rounded-full overflow-hidden border border-gray-800 relative">
-                     <div 
-                        className="h-full bg-[#39FF14] shadow-[0_0_10px_#39FF14]" 
-                        style={{ width: `${progress}%` }}
-                     />
-                     {/* Scanline Effect on Progress Bar */}
-                     <div className="absolute inset-0 bg-white/20 w-full animate-pulse" />
-                  </div>
-               </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-[10px] font-mono text-[#39FF14]">
+                  <span>UPLOADING PACKETS...</span>
+                  <span>{Math.round(progress)}%</span>
+                </div>
+                <div className="h-2 w-full bg-gray-900 rounded-full overflow-hidden border border-gray-800 relative">
+                  <div 
+                    className="h-full bg-[#39FF14] shadow-[0_0_10px_#39FF14]" 
+                    style={{ width: `${progress}%` }}
+                  />
+                  {/* Scanline Effect on Progress Bar */}
+                  <div className="absolute inset-0 bg-white/20 w-full animate-pulse" />
+                </div>
+              </div>
             )}
-
           </div>
-        ) : (
-          // Completion State
-          <div className="flex flex-col items-center justify-center py-12 text-[#39FF14] space-y-4 animate-in zoom-in duration-300">
-             <CheckCircle size={64} className="drop-shadow-[0_0_20px_rgba(57,255,20,0.8)]" />
-             <h3 className="text-2xl font-bold tracking-widest font-mono">TRANSMISSION COMPLETE</h3>
-             <p className="text-xs text-gray-400 font-mono">Data successfully injected into the stream.</p>
-             <div className="text-[10px] font-mono mt-4 animate-pulse">CLOSING PORT...</div>
+        </div>
+
+        {/* Completion State - Full Modal */}
+        {complete && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#050505] rounded-lg z-50">
+            <div className="flex flex-col items-center justify-center py-12 text-[#39FF14] space-y-4 animate-in zoom-in duration-300">
+              <CheckCircle size={64} className="drop-shadow-[0_0_20px_rgba(57,255,20,0.8)]" />
+              <h3 className="text-2xl font-bold tracking-widest font-mono">TRANSMISSION COMPLETE</h3>
+              <p className="text-xs text-gray-400 font-mono">Data successfully injected into the stream.</p>
+              <div className="text-[10px] font-mono mt-4 animate-pulse">CLOSING PORT...</div>
+            </div>
           </div>
         )}
 
