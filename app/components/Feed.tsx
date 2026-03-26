@@ -14,6 +14,8 @@ interface FeedProps {
 
 type FeedTab = 'discover' | 'friends' | 'faction';
 
+// Feed tabs: Discover (algorithm), Friends (following), Faction (private)
+
 // Progress Indicator Component
 const ProgressIndicator: React.FC<{ total: number; current: number }> = ({ total, current }) => {
   // Limit visible indicators on mobile
@@ -126,6 +128,11 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
     const saved = localStorage.getItem('feedActiveTab');
     return (saved as FeedTab) || 'discover';
   });
+
+  // Debug: Feed tabs enabled
+  useEffect(() => {
+    console.log('Feed tabs initialized:', activeTab);
+  }, [activeTab]);
 
   const mapPostToVideo = (post: any): Video => ({
     id: post._id || post.id,
