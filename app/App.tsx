@@ -5,7 +5,7 @@ import ProfileGrid from './components/ProfileGrid';
 import AuthPage from './components/AuthPage';
 import TipModal from './components/TipModal';
 import UploadModal from './components/UploadModal';
-import CybotModal from './components/CybotModal';
+
 import BiometricScanner from './components/BiometricScanner';
 import FactionReveal from './components/FactionReveal';
 import AgeVerificationModal from './components/AgeVerificationModal';
@@ -60,7 +60,7 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<MainView>('feed');
   const [isTipModalOpen, setIsTipModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [isCybotOpen, setIsCybotOpen] = useState(false);
+
   
   // New modals
   const [isAgeVerificationOpen, setIsAgeVerificationOpen] = useState(false);
@@ -742,10 +742,7 @@ const App: React.FC = () => {
         currentUser={user}
       />
 
-      <CybotModal 
-        isOpen={isCybotOpen} 
-        onClose={() => setIsCybotOpen(false)} 
-      />
+
 
       <AgeVerificationModal 
         isOpen={isAgeVerificationOpen}
