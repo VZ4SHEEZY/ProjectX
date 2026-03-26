@@ -16,5 +16,15 @@ export default defineConfig({
   define: {
     'process.env.API_KEY': JSON.stringify(''),
     'process.env.GEMINI_API_KEY': JSON.stringify('')
+  },
+  build: {
+    manifest: true,
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash][extname]'
+      }
+    }
   }
 });
