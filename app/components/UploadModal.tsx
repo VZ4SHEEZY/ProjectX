@@ -126,7 +126,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
 
   return (
     <div 
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -293,35 +293,35 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
             </div>
 
           </div>
-          
-          {/* Action Buttons - Always Visible at Bottom */}
-          <div className="border-t border-[#39FF14]/30 px-6 py-4 flex-shrink-0 bg-[#050505]/80 backdrop-blur">
-            {!uploading ? (
-              <GlitchButton 
-                onClick={handleUpload} 
-                disabled={!file} 
-                fullWidth 
-                className="h-12"
-              >
-                INITIATE UPLOAD
-              </GlitchButton>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex justify-between text-[10px] font-mono text-[#39FF14]">
-                  <span>UPLOADING PACKETS...</span>
-                  <span>{Math.round(progress)}%</span>
-                </div>
-                <div className="h-2 w-full bg-gray-900 rounded-full overflow-hidden border border-gray-800 relative">
-                  <div 
-                    className="h-full bg-[#39FF14] shadow-[0_0_10px_#39FF14]" 
-                    style={{ width: `${progress}%` }}
-                  />
-                  {/* Scanline Effect on Progress Bar */}
-                  <div className="absolute inset-0 bg-white/20 w-full animate-pulse" />
-                </div>
+        </div>
+
+        {/* Action Buttons - Always Visible at Bottom */}
+        <div className="border-t border-[#39FF14]/30 px-6 py-4 flex-shrink-0 bg-[#050505]/80 backdrop-blur">
+          {!uploading ? (
+            <GlitchButton
+              onClick={handleUpload}
+              disabled={!file}
+              fullWidth
+              className="h-12"
+            >
+              INITIATE UPLOAD
+            </GlitchButton>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex justify-between text-[10px] font-mono text-[#39FF14]">
+                <span>UPLOADING PACKETS...</span>
+                <span>{Math.round(progress)}%</span>
               </div>
-            )}
-          </div>
+              <div className="h-2 w-full bg-gray-900 rounded-full overflow-hidden border border-gray-800 relative">
+                <div
+                  className="h-full bg-[#39FF14] shadow-[0_0_10px_#39FF14]"
+                  style={{ width: `${progress}%` }}
+                />
+                {/* Scanline Effect on Progress Bar */}
+                <div className="absolute inset-0 bg-white/20 w-full animate-pulse" />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Completion State - Full Modal */}
