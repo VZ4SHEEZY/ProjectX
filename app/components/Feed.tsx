@@ -344,7 +344,7 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
       <StatusBar systemMsg={systemMsg} />
 
       {/* Feed Tabs */}
-      <div className="absolute top-12 left-0 right-0 z-35 flex justify-center gap-2 px-3 sm:px-4 py-2">
+      <div className="absolute top-16 left-0 right-0 z-40 flex justify-center gap-2 px-3 sm:px-4 py-2">
         <button
           onClick={() => handleTabChange('discover')}
           className={`px-4 sm:px-6 py-1.5 sm:py-2 text-xs sm:text-sm font-mono transition-all border ${
