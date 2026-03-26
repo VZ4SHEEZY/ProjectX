@@ -12,6 +12,8 @@ interface FeedProps {
   currentUser: User;
 }
 
+type FeedTab = 'discover' | 'friends' | 'faction';
+
 // Progress Indicator Component
 const ProgressIndicator: React.FC<{ total: number; current: number }> = ({ total, current }) => {
   // Limit visible indicators on mobile
@@ -20,7 +22,7 @@ const ProgressIndicator: React.FC<{ total: number; current: number }> = ({ total
   const visibleIndicators = Array.from({ length: Math.min(total, maxVisible) }).map((_, i) => startIndex + i);
   
   return (
-    <div className="absolute top-20 left-3 sm:left-4 z-40 flex flex-col gap-1">
+    <div className="absolute top-32 left-3 sm:left-4 z-40 flex flex-col gap-1">
       {visibleIndicators.map((i) => (
         <div
           key={i}
@@ -120,6 +122,10 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
   const touchEndY = useRef(0);
   const [apiVideos, setApiVideos] = useState<Video[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<FeedTab>(() => {
+    const saved = localStorage.getItem('feedActiveTab');
+    return (saved as FeedTab) || 'discover';
+  });
 
   const mapPostToVideo = (post: any): Video => ({
     id: post._id || post.id,
@@ -147,33 +153,33 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
   useEffect(() => {
     const loadFeed = async () => {
       setFeedLoading(true);
+      setActiveIndex(0);
       try {
-        // Try personalized feed first
-        const response = await postAPI.getForYouFeed({ page: 1, limit: 20 });
-        const posts = response.data?.data || [];
-        if (posts.length > 0) {
-          setApiVideos(posts.map(mapPostToVideo));
-          setFeedLoading(false);
-          return;
+        let response;
+        
+        switch (activeTab) {
+          case 'friends':
+            response = await postAPI.getFollowingFeed({ page: 1, limit: 20 });
+            break;
+          case 'faction':
+            response = await postAPI.getFactionFeed({ page: 1, limit: 20 });
+            break;
+          case 'discover':
+          default:
+            response = await postAPI.getForYouFeed({ page: 1, limit: 20 });
         }
+        
+        const posts = response.data?.data || [];
+        setApiVideos(posts.length > 0 ? posts.map(mapPostToVideo) : []);
       } catch (err) {
-        console.warn('Personalized feed error, trying fallback:', err);
-      }
-      
-      // Empty personalized feed or error — try all public posts
-      try {
-        const fallback = await postAPI.getPosts({ page: 1, limit: 20, sort: '-createdAt' });
-        const fallbackPosts = fallback.data?.data || [];
-        setApiVideos(fallbackPosts.length > 0 ? fallbackPosts.map(mapPostToVideo) : []);
-      } catch (fallbackErr) {
-        console.error('Fallback feed error:', fallbackErr);
+        console.warn(`Error loading ${activeTab} feed:`, err);
         setApiVideos([]);
       } finally {
         setFeedLoading(false);
       }
     };
     loadFeed();
-  }, []);
+  }, [activeTab]);
 
   // Filter Videos: Remove NSFW if user is not age verified
   const visibleVideos = useMemo(() => {
@@ -317,14 +323,58 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
       );
   }
 
+  const handleTabChange = (tab: FeedTab) => {
+    setActiveTab(tab);
+    localStorage.setItem('feedActiveTab', tab);
+  };
+
+  const isFactionDisabled = !currentUser.faction || currentUser.faction === 'Unaffiliated';
+
   return (
     <div className="relative w-full h-full bg-[#050505] overflow-hidden">
       
       {/* Status Bar */}
       <StatusBar systemMsg={systemMsg} />
+
+      {/* Feed Tabs */}
+      <div className="absolute top-12 left-0 right-0 z-35 flex justify-center gap-2 px-3 sm:px-4 py-2">
+        <button
+          onClick={() => handleTabChange('discover')}
+          className={`px-4 sm:px-6 py-1.5 sm:py-2 text-xs sm:text-sm font-mono transition-all border ${
+            activeTab === 'discover'
+              ? 'border-[#39FF14] text-[#39FF14] bg-[#39FF14]/10'
+              : 'border-gray-600 text-gray-400 hover:border-[#39FF14] hover:text-[#39FF14]'
+          }`}
+        >
+          DISCOVER
+        </button>
+        <button
+          onClick={() => handleTabChange('friends')}
+          className={`px-4 sm:px-6 py-1.5 sm:py-2 text-xs sm:text-sm font-mono transition-all border ${
+            activeTab === 'friends'
+              ? 'border-[#39FF14] text-[#39FF14] bg-[#39FF14]/10'
+              : 'border-gray-600 text-gray-400 hover:border-[#39FF14] hover:text-[#39FF14]'
+          }`}
+        >
+          FRIENDS
+        </button>
+        <button
+          onClick={() => handleTabChange('faction')}
+          disabled={isFactionDisabled}
+          className={`px-4 sm:px-6 py-1.5 sm:py-2 text-xs sm:text-sm font-mono transition-all border ${
+            isFactionDisabled
+              ? 'border-gray-700 text-gray-600 cursor-not-allowed'
+              : activeTab === 'faction'
+                ? 'border-[#39FF14] text-[#39FF14] bg-[#39FF14]/10'
+                : 'border-gray-600 text-gray-400 hover:border-[#39FF14] hover:text-[#39FF14]'
+          }`}
+        >
+          FACTION
+        </button>
+      </div>
         
       {/* Top System Message */}
-      <div className="absolute top-8 left-0 w-full z-30 p-3 sm:p-4 pointer-events-none flex justify-center">
+      <div className="absolute top-24 left-0 w-full z-30 p-3 sm:p-4 pointer-events-none flex justify-center">
         <div className="bg-black/80 backdrop-blur border border-[#39FF14]/30 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full flex items-center gap-2">
             <div className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-[#39FF14] animate-pulse" />
             <span className="text-[9px] sm:text-[10px] text-[#39FF14] font-mono tracking-widest truncate max-w-[150px] sm:max-w-none">{systemMsg}</span>

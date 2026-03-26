@@ -93,6 +93,9 @@ export const postAPI = {
   getFollowingFeed: (params?: { page?: number; limit?: number }) =>
     api.get('/posts/feed/following', { params }),
 
+  getFactionFeed: (params?: { page?: number; limit?: number }) =>
+    api.get('/posts/feed/faction', { params }),
+
   getTrending: (params?: { page?: number; limit?: number; timeframe?: string }) =>
     api.get('/posts/feed/trending', { params }),
 
