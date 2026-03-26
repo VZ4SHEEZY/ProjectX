@@ -84,13 +84,12 @@ router.get('/', optionalAuth, async (req, res) => {
 });
 
 // @route   GET /api/posts/foryou
-// @desc    Get personalized "For You" feed
+// @desc    Get personalized "For You" feed (discovers public content or faction posts)
 // @access  Private
 router.get('/feed/foryou', protect, async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
 
-    // Get user's interests based on following and interactions
     const following = req.user.following;
     const userFaction = req.user.faction;
 
@@ -99,16 +98,18 @@ router.get('/feed/foryou', protect, async (req, res) => {
       status: 'published'
     };
 
-    // Include posts from followed users and faction posts (only if faction visibility)
+    // Build visibility + content rules
     if (following.length > 0) {
+      // User follows someone: show followed users' public content + faction posts
       query.$or = [
         { author: { $in: following }, visibility: { $in: ['public', 'subscribers'] } },
         { faction: userFaction, visibility: 'faction' }
       ];
     } else {
-      // If not following anyone, show public posts + faction-exclusive posts
+      // User doesn't follow anyone: show ALL public posts + faction posts
       query.$or = [
-        { visibility: { $in: ['public', 'subscribers'] } },
+        { visibility: 'public' },
+        { visibility: 'subscribers' },
         { faction: userFaction, visibility: 'faction' }
       ];
     }
