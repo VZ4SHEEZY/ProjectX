@@ -152,9 +152,15 @@ const App: React.FC = () => {
     }
   };
 
-  // 2. Scanner Success -> Go to Faction Reveal
+  // 2. Scanner Success -> Go to Faction Reveal (or skip if faction already assigned)
   const handleScanComplete = () => {
-    setOnboardingStep('reveal');
+    if (user && user.faction && user.faction !== 'Unaffiliated') {
+      // User already has a faction from backend, skip reveal
+      setOnboardingStep('app');
+    } else {
+      // User needs to select/confirm faction
+      setOnboardingStep('reveal');
+    }
   };
 
   // 3. Reveal Success -> Enter App
