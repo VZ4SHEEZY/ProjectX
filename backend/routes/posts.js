@@ -387,7 +387,8 @@ router.post('/', protect, async (req, res) => {
       tags: tags || [],
       location,
       duration,
-      status: 'published'
+      status: 'published',
+      faction: req.user.faction
     });
 
     await post.populate('author', 'username displayName avatar isVerified');
