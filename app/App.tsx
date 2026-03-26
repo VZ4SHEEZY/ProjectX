@@ -25,7 +25,7 @@ import ThemeEditor from './components/ThemeEditor';
 import LiveStream from './components/LiveStream';
 import { Stories, CreateStory } from './components/Stories';
 import { Groups } from './components/Groups';
-import { AIChatAssistant } from './components/AIGenerator';
+
 
 import { User } from './types';
 import { 
@@ -816,9 +816,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* AI Chat Assistant */}
-      <AIChatAssistant />
-      
     </div>
   );
 };

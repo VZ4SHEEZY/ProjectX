@@ -1,10 +1,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  X, Send, Search, MoreVertical, Phone, Video, Image as ImageIcon, 
+import {
+  X, Send, Search, MoreVertical, Phone, Video, Image as ImageIcon,
   Smile, Paperclip, Check, CheckCheck, Clock, PhoneOff, Mic,
-  ArrowLeft, UserPlus, Block, Flag, Trash2
+  ArrowLeft, UserPlus, Block, Flag, Trash2, Sparkles
 } from 'lucide-react';
+import { aiAPI } from '../services/ai';
 
 interface DMChatProps {
   isOpen: boolean;
@@ -39,9 +40,18 @@ interface Conversation {
   lastMessageTime: string;
   unreadCount: number;
   isTyping?: boolean;
+  isAI?: boolean;
 }
 
 const MOCK_CONVERSATIONS: Conversation[] = [
+  {
+    id: 'ai',
+    user: { id: 'ai', name: 'CyberDope AI', avatar: '', isOnline: true },
+    lastMessage: 'Hey! Need help with captions, bios, or anything?',
+    lastMessageTime: 'now',
+    unreadCount: 0,
+    isAI: true,
+  },
   {
     id: '1',
     user: { 
@@ -110,6 +120,9 @@ const MOCK_CONVERSATIONS: Conversation[] = [
 ];
 
 const MOCK_MESSAGES: Record<string, Message[]> = {
+  'ai': [
+    { id: 'ai-0', senderId: 'ai', text: "Hey there! I'm your CyberDope AI assistant. Need help with captions, bios, or just want to chat? 🔮", timestamp: new Date(), status: 'read', type: 'text' },
+  ],
   '1': [
     { id: 'm1', senderId: 'u1', text: 'Hey! Love your content!', timestamp: new Date(Date.now() - 3600000), status: 'read', type: 'text' },
     { id: 'm2', senderId: 'me', text: 'Thanks so much! 🙏', timestamp: new Date(Date.now() - 3500000), status: 'read', type: 'text' },
@@ -169,6 +182,7 @@ const DMChat: React.FC<DMChatProps> = ({ isOpen, onClose, currentUser }) => {
       [activeConversation]: [...(prev[activeConversation] || []), message]
     }));
 
+    const userMessage = newMessage.trim();
     setNewMessage('');
 
     // Simulate message status updates
@@ -190,21 +204,52 @@ const DMChat: React.FC<DMChatProps> = ({ isOpen, onClose, currentUser }) => {
       }));
     }, 1500);
 
-    // Simulate reply
-    setTimeout(() => {
-      const reply: Message = {
-        id: (Date.now() + 1).toString(),
-        senderId: activeConv?.user.id || '',
-        text: 'Thanks for reaching out! I\'ll get back to you soon.',
-        timestamp: new Date(),
-        status: 'read',
-        type: 'text'
-      };
-      setMessages(prev => ({
-        ...prev,
-        [activeConversation]: [...(prev[activeConversation] || []), reply]
-      }));
-    }, 3000);
+    if (activeConversation === 'ai') {
+      setIsTyping(true);
+      aiAPI.chatAssistant(userMessage).then((response) => {
+        setIsTyping(false);
+        setMessages(prev => ({
+          ...prev,
+          ai: [...(prev['ai'] || []), {
+            id: Date.now().toString(),
+            senderId: 'ai',
+            text: response.reply,
+            timestamp: new Date(),
+            status: 'read',
+            type: 'text',
+          }],
+        }));
+      }).catch(() => {
+        setIsTyping(false);
+        setMessages(prev => ({
+          ...prev,
+          ai: [...(prev['ai'] || []), {
+            id: Date.now().toString(),
+            senderId: 'ai',
+            text: 'Sorry, I had a glitch in the matrix. Try again! ⚡',
+            timestamp: new Date(),
+            status: 'read',
+            type: 'text',
+          }],
+        }));
+      });
+    } else {
+      // Simulate reply from real user
+      setTimeout(() => {
+        const reply: Message = {
+          id: (Date.now() + 1).toString(),
+          senderId: activeConv?.user.id || '',
+          text: 'Thanks for reaching out! I\'ll get back to you soon.',
+          timestamp: new Date(),
+          status: 'read',
+          type: 'text'
+        };
+        setMessages(prev => ({
+          ...prev,
+          [activeConversation]: [...(prev[activeConversation] || []), reply]
+        }));
+      }, 3000);
+    }
   };
 
   const formatTime = (date: Date) => {
@@ -282,11 +327,17 @@ const DMChat: React.FC<DMChatProps> = ({ isOpen, onClose, currentUser }) => {
                 }`}
               >
                 <div className="relative">
-                  <img 
-                    src={conv.user.avatar} 
-                    alt="" 
-                    className="w-12 h-12 rounded-full object-cover"
-                  />
+                  {conv.isAI ? (
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 flex items-center justify-center">
+                      <Sparkles className="w-5 h-5 text-white" />
+                    </div>
+                  ) : (
+                    <img
+                      src={conv.user.avatar}
+                      alt=""
+                      className="w-12 h-12 rounded-full object-cover"
+                    />
+                  )}
                   {conv.user.isOnline && (
                     <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#39FF14] rounded-full border-2 border-black" />
                   )}
@@ -328,11 +379,17 @@ const DMChat: React.FC<DMChatProps> = ({ isOpen, onClose, currentUser }) => {
                   <ArrowLeft size={20} />
                 </button>
                 <div className="relative">
-                  <img 
-                    src={activeConv.user.avatar} 
-                    alt="" 
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
+                  {activeConv.isAI ? (
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-white" />
+                    </div>
+                  ) : (
+                    <img
+                      src={activeConv.user.avatar}
+                      alt=""
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                  )}
                   {activeConv.user.isOnline && (
                     <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#39FF14] rounded-full border-2 border-black" />
                   )}
@@ -400,6 +457,20 @@ const DMChat: React.FC<DMChatProps> = ({ isOpen, onClose, currentUser }) => {
                   </div>
                 );
               })}
+              {isTyping && activeConversation === 'ai' && (
+                <div className="flex gap-3">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="w-3 h-3 text-white" />
+                  </div>
+                  <div className="bg-gray-800 px-4 py-3 rounded-2xl rounded-bl-sm">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:100ms]" />
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:200ms]" />
+                    </div>
+                  </div>
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
 
