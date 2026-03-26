@@ -88,7 +88,7 @@ const postSchema = new mongoose.Schema({
   },
   visibility: {
     type: String,
-    enum: ['public', 'subscribers', 'ppv'],
+    enum: ['public', 'subscribers', 'ppv', 'faction'],
     default: 'public'
   },
 

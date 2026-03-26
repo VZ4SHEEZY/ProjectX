@@ -29,8 +29,15 @@ router.get('/', optionalAuth, async (req, res) => {
       query.visibility = visibility;
     } else {
       // Default: only show public posts to non-logged in users
+      // Logged-in users can see public, subscribers, ppv, and faction (if in faction)
       if (!req.user) {
         query.visibility = 'public';
+      } else {
+        const userFaction = req.user.faction;
+        query.$or = [
+          { visibility: { $in: ['public', 'subscribers', 'ppv'] } },
+          { visibility: 'faction', faction: userFaction }
+        ];
       }
     }
 
@@ -89,18 +96,21 @@ router.get('/feed/foryou', protect, async (req, res) => {
 
     // Build query for personalized feed
     let query = {
-      status: 'published',
-      visibility: { $in: ['public', 'subscribers'] }
+      status: 'published'
     };
 
-    // Include posts from followed users
+    // Include posts from followed users and faction posts (only if faction visibility)
     if (following.length > 0) {
       query.$or = [
-        { author: { $in: following } },
-        { faction: userFaction }
+        { author: { $in: following }, visibility: { $in: ['public', 'subscribers'] } },
+        { faction: userFaction, visibility: 'faction' }
       ];
     } else {
-      query.faction = userFaction;
+      // If not following anyone, show public posts + faction-exclusive posts
+      query.$or = [
+        { visibility: { $in: ['public', 'subscribers'] } },
+        { faction: userFaction, visibility: 'faction' }
+      ];
     }
 
     // Exclude NSFW for non-verified
@@ -150,9 +160,15 @@ router.get('/feed/following', protect, async (req, res) => {
       });
     }
 
+    const userFaction = req.user.faction;
+
     const query = {
       status: 'published',
-      author: { $in: req.user.following }
+      author: { $in: req.user.following },
+      $or: [
+        { visibility: { $ne: 'faction' } },
+        { visibility: 'faction', faction: userFaction }
+      ]
     };
 
     if (!req.user.isAgeVerified) {
@@ -206,7 +222,8 @@ router.get('/feed/faction', protect, async (req, res) => {
 
     const query = {
       status: 'published',
-      faction: userFaction
+      faction: userFaction,
+      visibility: 'faction'
     };
 
     // Exclude NSFW for non-verified users
