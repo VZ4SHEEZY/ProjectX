@@ -6,7 +6,7 @@ let gridFSBucket;
 
 // Initialize GridFS bucket
 const initGridFS = (connection) => {
-  gridFSBucket = new GridFSBucket(connection.getClient().db(connection.getName()));
+  gridFSBucket = new GridFSBucket(connection.db);
   console.log('GridFS bucket initialized');
 };
 
