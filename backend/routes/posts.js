@@ -340,7 +340,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
 });
 
 // @route   POST /api/posts
-// @desc    Create a new post
+// @desc    Create a new post with auto-faction assignment
 // @access  Private
 router.post('/', protect, async (req, res) => {
   try {
