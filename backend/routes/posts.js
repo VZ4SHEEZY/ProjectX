@@ -185,6 +185,66 @@ router.get('/feed/following', protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/posts/feed/faction
+// @desc    Get faction-only feed (private to faction members)
+// @access  Private
+router.get('/feed/faction', protect, async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+
+    // Check if user is in a faction
+    if (!req.user.faction || req.user.faction === 'Unaffiliated') {
+      return res.json({
+        success: true,
+        count: 0,
+        data: [],
+        message: 'Join a faction to see faction-exclusive content'
+      });
+    }
+
+    const userFaction = req.user.faction;
+
+    const query = {
+      status: 'published',
+      faction: userFaction
+    };
+
+    // Exclude NSFW for non-verified users
+    if (!req.user.isAgeVerified) {
+      query.isNSFW = false;
+    }
+
+    const posts = await Post.find(query)
+      .populate('author', 'username displayName avatar isVerified')
+      .sort('-createdAt')
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const postsWithAccess = posts.map(post => {
+      const postObj = post.toObject();
+      postObj.canAccess = post.canAccess(req.user);
+      return postObj;
+    });
+
+    const count = await Post.countDocuments(query);
+
+    res.json({
+      success: true,
+      count: posts.length,
+      total: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: parseInt(page),
+      data: postsWithAccess
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+});
+
 // @route   GET /api/posts/trending
 // @desc    Get trending posts
 // @access  Public
