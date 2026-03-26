@@ -109,7 +109,14 @@ const postSchema = new mongoose.Schema({
   // Faction
   faction: {
     type: String,
-    enum: ['Netrunners', 'Corporates', 'Street Samurai', 'Tech-Priests', 'Unaffiliated', ''],
+    enum: [
+      'Neon Wraith', 'Iron Veil', 'Crimson Static', 'Void Circuit',
+      'Gold Syndicate', 'Azure Phantom', 'Toxic Bloom', 'Scarlet Dominion',
+      'Chrome Legion', 'Phantom Signal', 'Obsidian Pact', 'Ember Protocol',
+      'Violet Surge', 'Steel Covenant', 'Binary Ghost', 'Copper Throne',
+      'Nova Rift', 'Silver Wraith', 'Inferno Grid', 'Quantum Veil',
+      'Unaffiliated', ''
+    ],
     default: ''
   }
 }, {
