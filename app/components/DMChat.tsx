@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   X, Send, Search, MoreVertical, Phone, Video, Image as ImageIcon,
   Smile, Paperclip, Check, CheckCheck, Clock, PhoneOff, Mic,
-  ArrowLeft, UserPlus, Block, Flag, Trash2, Sparkles
+  ArrowLeft, UserPlus, Block, Flag, Trash2, Sparkles, MessageCircle
 } from 'lucide-react';
 import { aiAPI } from '../services/ai';
 
