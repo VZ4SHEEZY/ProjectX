@@ -36,6 +36,7 @@ import {
 
 type OnboardingStep = 'auth' | 'scanning' | 'reveal' | 'app';
 type MainView = 'feed' | 'profile' | 'explore' | 'creator';
+// Cache bust: force redeploy
 
 const mapApiUser = (apiUser: any): User => ({
   id: apiUser.id || apiUser._id,
