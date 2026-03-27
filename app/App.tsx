@@ -583,7 +583,7 @@ const App: React.FC = () => {
         {/* PROFILE VIEW */}
         {currentView === 'profile' && (
           <div className="h-full w-full overflow-y-auto">
-             <ProfileGrid user={user} onTip={handleTipClick} />
+             <ProfileGrid user={user} onTip={handleTipClick} onProfileUpdate={handleProfileUpdate} />
           </div>
         )}
       </main>

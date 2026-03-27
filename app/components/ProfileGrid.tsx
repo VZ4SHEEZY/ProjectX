@@ -17,6 +17,7 @@ import { userAPI } from '../services/api';
 interface ProfileGridProps {
   user: User;
   onTip?: (address: string) => void;
+  onProfileUpdate?: (updates: Partial<User>) => void;
 }
 
 const SparkleTrail: React.FC = () => {
@@ -186,7 +187,7 @@ const ContactButtons: React.FC<{ onMessage?: () => void; onAddFriend?: () => voi
   </div>
 );
 
-const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip }) => {
+const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -252,6 +253,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip }) => {
         u.theme = localTheme;
         localStorage.setItem('cdUser', JSON.stringify(u));
       }
+      onProfileUpdate?.({ bio, theme: localTheme });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
       setIsEditing(false);
