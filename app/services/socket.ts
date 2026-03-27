@@ -13,7 +13,7 @@ class SocketService {
 
     this.userId = userId;
     this.socket = io(SOCKET_URL, {
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       autoConnect: true,
     });
 

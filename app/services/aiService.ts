@@ -31,29 +31,20 @@ const FALLBACK_RESPONSES = {
 };
 
 interface ChatResponse {
-  choices: Array<{
-    message: {
-      content: string;
-    };
-  }>;
+  reply: string;
 }
 
 // Secure API call through our backend proxy
-const callSecureAPI = async (systemPrompt: string, userMessage: string): Promise<string> => {
+const callSecureAPI = async (_systemPrompt: string, userMessage: string): Promise<string> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/chat`, {
+    const token = localStorage.getItem('cdToken');
+    const response = await fetch(`${API_BASE_URL}/api/ai/chat-assistant`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage }
-        ],
-        max_tokens: 150,
-        temperature: 0.9,
-      }),
+      body: JSON.stringify({ message: userMessage }),
     });
 
     if (!response.ok) {
@@ -61,7 +52,7 @@ const callSecureAPI = async (systemPrompt: string, userMessage: string): Promise
     }
 
     const data: ChatResponse = await response.json();
-    return data.choices[0]?.message?.content?.trim() || '';
+    return data.reply?.trim() || '';
   } catch (error) {
     console.warn('Secure API unavailable, using fallback:', error);
     return '';

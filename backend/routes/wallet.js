@@ -70,9 +70,7 @@ router.post('/verify', async (req, res) => {
     // This is a simplified verification
     const expectedMessage = generateAuthMessage(user.walletNonce);
     
-    // For demo purposes, we'll accept any signature
-    // In production: verify using ethers.utils.verifyMessage(message, signature)
-    const isValid = message === expectedMessage || true; // Demo mode
+    const isValid = message === expectedMessage;
     
     if (!isValid) {
       return res.status(401).json({ error: 'Invalid signature' });
