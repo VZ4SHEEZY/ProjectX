@@ -312,6 +312,16 @@ const App: React.FC = () => {
   }
 
   // Step 4: Main Application
+  if (!user) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-black">
+        <div className="text-center">
+          <div className="text-[#39FF14] font-mono animate-pulse">INITIALIZING...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[var(--background-color,#050505)] text-[var(--primary-color,#39FF14)] font-mono flex flex-col relative overflow-hidden">
       {/* Scanlines Effect */}
