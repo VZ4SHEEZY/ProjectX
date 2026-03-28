@@ -113,11 +113,18 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       const body = mode === 'login'
         ? { email, password: accessKey }
         : { username, email, password: accessKey, dateOfBirth };
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+
       const res = await fetch(`https://cyberdope-api.onrender.com${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: controller.signal
       });
+      clearTimeout(timeout);
+
       const data = await res.json();
       if (!res.ok) {
         const msg = data.error || (data.errors && data.errors[0]?.msg) || 'AUTH_FAILED';
@@ -129,8 +136,12 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       setStatus('verifying');
       setTimeout(() => setStatus('granted'), 1500);
       setTimeout(() => onLoginSuccess(mode === 'register'), 2500);
-    } catch (err) {
-      triggerError('CONNECTION_FAILED');
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        triggerError('SERVER_TIMEOUT — TRY AGAIN');
+      } else {
+        triggerError('CONNECTION_FAILED');
+      }
     }
   };
 
@@ -259,8 +270,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
               <div className="h-14 mt-2 border border-[#39FF14] bg-[#39FF14]/10 flex items-center justify-center font-bold tracking-widest text-[#39FF14] animate-pulse relative overflow-hidden">
                 <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,#39FF1422_10px,#39FF1422_20px)] animate-[spin_4s_linear_infinite]" />
                 <span className="relative z-10">
-                  {status === 'handshake' && "HANDSHAKE..."}
-                  {status === 'verifying' && "VERIFYING BIOMETRICS..."}
+                  {status === 'handshake' && "CONNECTING TO SERVER..."}
+                  {status === 'verifying' && "VERIFYING CREDENTIALS..."}
                   {status === 'granted' && "ACCESS GRANTED"}
                 </span>
               </div>
