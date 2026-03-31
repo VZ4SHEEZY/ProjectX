@@ -1,7 +1,8 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 
 // API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://cyberdope-api.onrender.com/api';
+const _rawBase = import.meta.env.VITE_API_URL || 'https://cyberdope-api.onrender.com/api';
+const API_BASE_URL = _rawBase.endsWith('/api') ? _rawBase : _rawBase.replace(/\/$/, '') + '/api';
 
 // Create axios instance
 const api: AxiosInstance = axios.create({
