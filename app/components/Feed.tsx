@@ -124,6 +124,7 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
   const touchEndY = useRef(0);
   const [apiVideos, setApiVideos] = useState<Video[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
+  const [feedError, setFeedError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<FeedTab>(() => {
     const saved = localStorage.getItem('feedActiveTab');
     return (saved as FeedTab) || 'discover';
@@ -178,8 +179,10 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
         
         const posts = response.data?.data || [];
         setApiVideos(posts.length > 0 ? posts.map(mapPostToVideo) : []);
-      } catch (err) {
-        console.warn(`Error loading ${activeTab} feed:`, err);
+      } catch (err: any) {
+        const msg = err?.response?.data?.message || err?.message || 'Unknown error';
+        console.error(`Feed error [${activeTab}]:`, err);
+        setFeedError(`${err?.response?.status || 'ERR'}: ${msg}`);
         setApiVideos([]);
       } finally {
         setFeedLoading(false);
@@ -319,6 +322,9 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
           <div className="w-full h-full flex items-center justify-center bg-black text-center p-8">
               <div className="border-2 border-[#39FF14] p-8 max-w-sm">
                   <h2 className="text-[#39FF14] font-bold text-lg mb-3 tracking-wider">NO CONTENT YET</h2>
+                  {feedError && (
+                    <p className="text-red-400 text-[10px] font-mono mb-3 break-all">{feedError}</p>
+                  )}
                   <p className="text-gray-400 text-xs font-mono mb-6 leading-relaxed">
                       The feed is empty. Be the first to post and shape the network.
                   </p>
