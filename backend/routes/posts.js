@@ -90,38 +90,20 @@ router.get('/feed/foryou', protect, async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
 
-    const following = req.user.following;
-    const userFaction = req.user.faction;
-
-    // Build query for personalized feed
+    // Simple feed: show all published public posts
     let query = {
-      status: 'published'
+      status: 'published',
+      visibility: 'public'
     };
 
-    // Build visibility + content rules
-    if (following.length > 0) {
-      // User follows someone: show followed users' public content + faction posts
-      query.$or = [
-        { author: { $in: following }, visibility: { $in: ['public', 'subscribers'] } },
-        { faction: userFaction, visibility: 'faction' }
-      ];
-    } else {
-      // User doesn't follow anyone: show ALL public posts + faction posts
-      query.$or = [
-        { visibility: 'public' },
-        { visibility: 'subscribers' },
-        { faction: userFaction, visibility: 'faction' }
-      ];
-    }
-
-    // Exclude NSFW for non-verified
+    // Exclude NSFW for non-verified users
     if (!req.user.isAgeVerified) {
       query.isNSFW = false;
     }
 
     const posts = await Post.find(query)
       .populate('author', 'username displayName avatar isVerified')
-      .sort('-stats.views -createdAt')
+      .sort('-createdAt')
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
