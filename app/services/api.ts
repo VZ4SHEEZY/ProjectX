@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 
-// API Configuration
-const API_BASE_URL = 'https://cyberdope-api.onrender.com/api/';
+// API Configuration - Hardcoded URL with trailing slash
+const API_BASE_URL = 'https://cyberdope-api.onrender.com/api/'
 
 // Create axios instance
 const api: AxiosInstance = axios.create({
