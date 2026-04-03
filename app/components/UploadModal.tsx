@@ -83,7 +83,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
       formData.append('duration', '0');
 
       const token = localStorage.getItem('cdToken');
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://cyberdope-api.onrender.com/api';
+      const apiUrl = 'https://cyberdope-api.onrender.com/api';
 
       // Upload with progress tracking
       const xhr = new XMLHttpRequest();

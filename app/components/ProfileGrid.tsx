@@ -271,7 +271,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
         const token = localStorage.getItem('cdToken');
         if (!token) return;
         const res = await fetch(
-          `${import.meta.env.VITE_API_URL || 'https://cyberdope-api.onrender.com/api'}/auth/me`,
+          'https://cyberdope-api.onrender.com/api/auth/me',
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (res.ok) {

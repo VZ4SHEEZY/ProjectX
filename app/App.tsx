@@ -108,7 +108,7 @@ const App: React.FC = () => {
         const timeout = setTimeout(() => controller.abort(), 8000);
 
         const res = await fetch(
-          `${import.meta.env.VITE_API_URL || 'https://cyberdope-api.onrender.com/api'}/auth/me`,
+          'https://cyberdope-api.onrender.com/api/auth/me',
           { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal }
         );
         clearTimeout(timeout);
