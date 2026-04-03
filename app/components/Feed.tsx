@@ -178,8 +178,12 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
         }
         
         const posts = response.data?.data || [];
-        console.log('Feed response:', response.data);
-        console.log('Posts extracted:', posts.length);
+        console.log('Feed response full:', JSON.stringify(response.data));
+        console.log('Posts array:', posts);
+        console.log('Posts count:', posts.length);
+        if (posts.length === 0) {
+          console.warn('No posts returned from API');
+        }
         setApiVideos(posts.length > 0 ? posts.map(mapPostToVideo) : []);
       } catch (err: any) {
         const msg = err?.response?.data?.message || err?.message || 'Unknown error';
