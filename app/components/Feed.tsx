@@ -162,6 +162,9 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
     const loadFeed = async () => {
       setFeedLoading(true);
       setActiveIndex(0);
+      setIsTransitioning(true);
+      setFeedError(null);
+      
       try {
         let response;
         
@@ -182,7 +185,7 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
         console.log('Posts array:', posts);
         console.log('Posts count:', posts.length);
         if (posts.length === 0) {
-          console.warn('No posts returned from API');
+          console.warn(`No posts returned from API for tab: ${activeTab}`);
         }
         setApiVideos(posts.length > 0 ? posts.map(mapPostToVideo) : []);
       } catch (err: any) {
@@ -192,6 +195,11 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
         setApiVideos([]);
       } finally {
         setFeedLoading(false);
+        setIsTransitioning(false);
+        // Force scroll to top when tab changes
+        if (containerRef.current) {
+          containerRef.current.scrollTop = 0;
+        }
       }
     };
     loadFeed();
@@ -343,6 +351,9 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
   }
 
   const handleTabChange = (tab: FeedTab) => {
+    if (activeTab === tab) return; // Prevent re-loading same tab
+    setActiveIndex(0);
+    setIsTransitioning(false);
     setActiveTab(tab);
     localStorage.setItem('feedActiveTab', tab);
   };
