@@ -103,6 +103,68 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Seed endpoint - populate feed with test videos
+app.post('/api/seed-feed', async (req, res) => {
+  try {
+    const Post = require('./models/Post');
+    const User = require('./models/User');
+    const seedVideos = require('./seed-feed-videos');
+
+    // Clear old posts
+    await Post.deleteMany({});
+    console.log('Cleared old posts');
+
+    let created = 0;
+    const userCache = {};
+
+    // Create/update posts with video URLs
+    for (const videoData of seedVideos) {
+      // Find or create user
+      if (!userCache[videoData.username]) {
+        userCache[videoData.username] = await User.findOne({ username: videoData.username });
+      }
+      const user = userCache[videoData.username];
+      
+      if (!user) {
+        console.log('User not found:', videoData.username);
+        continue;
+      }
+
+      const { username, views, likes, comments, ...postFields } = videoData;
+      
+      await Post.create({
+        author: user._id,
+        status: 'published',
+        visibility: 'public',
+        monetizationType: 'free',
+        description: postFields.content,
+        stats: { 
+          views: views || 0, 
+          likes: likes || 0, 
+          comments: comments || 0, 
+          shares: 0 
+        },
+        ...postFields,
+      });
+      created++;
+    }
+
+    const total = await Post.countDocuments();
+    res.json({
+      success: true,
+      message: `Seeded ${created} posts with videos`,
+      total: total
+    });
+  } catch (error) {
+    console.error('Seed error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Seed failed',
+      error: error.message
+    });
+  }
+});
+
 // Socket.io for real-time features
 const connectedUsers = new Map();
 
