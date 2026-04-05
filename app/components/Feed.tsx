@@ -367,7 +367,7 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
       <StatusBar systemMsg={systemMsg} />
 
       {/* Feed Tabs */}
-      <div className="absolute top-16 left-0 right-0 z-40 flex justify-center gap-2 px-3 sm:px-4 py-2">
+      <div className="fixed top-16 left-0 right-0 z-50 flex justify-center gap-2 px-3 sm:px-4 py-2 bg-gradient-to-b from-black to-black/80 pointer-events-auto">
         <button
           onClick={() => handleTabChange('discover')}
           className={`px-4 sm:px-6 py-1.5 sm:py-2 text-xs sm:text-sm font-mono transition-all border ${
@@ -428,7 +428,7 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
       {/* Snap Scroll Container */}
       <div 
         ref={containerRef}
-        className="w-full h-full overflow-y-scroll snap-y snap-mandatory no-scrollbar"
+        className="w-full h-full overflow-y-scroll snap-y snap-mandatory no-scrollbar pt-24"
         onScroll={handleScroll}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
