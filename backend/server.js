@@ -93,7 +93,6 @@ app.use('/api/wallet', require('./routes/wallet'));
 app.use('/api/stories', require('./routes/stories'));
 app.use('/api/voice', require('./routes/voice'));
 app.use('/api/groups', require('./routes/groups'));
-app.use('/api/seed', require('./routes/seed')); // Seed test data
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
