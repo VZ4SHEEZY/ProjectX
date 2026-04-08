@@ -544,14 +544,14 @@ const App: React.FC = () => {
       {/* 2. Main Content Area - Switches based on currentView */}
       <main className="flex-1 relative overflow-hidden pt-14 md:pt-16 pb-16 md:pb-10">
         
-        {/* FEED VIEW */}
-        {currentView === 'feed' && (
+        {/* FEED - ALWAYS MOUNTED, stays visible in background */}
+        <div className={`absolute inset-0 transition-opacity duration-300 ${currentView === 'feed' ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
           <VideoFeed 
             onTipClick={handleTipClick} 
             onCommentClick={() => setIsCommentsOpen(true)}
             currentUser={user} 
           />
-        )}
+        </div>
         
         {/* EXPLORE VIEW */}
         {currentView === 'explore' && (
