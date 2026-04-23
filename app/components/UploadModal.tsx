@@ -73,6 +73,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
     setUploading(true);
     try {
       const formData = new FormData();
+      // Use 'video' for upload endpoint (multer expects 'video' field)
       formData.append('video', file);
       formData.append('title', caption || 'Untitled Video');
       formData.append('description', caption);
@@ -114,7 +115,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
         alert('Upload failed. Please try again.');
       });
 
-      xhr.open('POST', `${apiUrl}/upload/video-gridfs`);
+      xhr.open('POST', `${apiUrl}/upload/video`);
       xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       xhr.send(formData);
     } catch (error) {
