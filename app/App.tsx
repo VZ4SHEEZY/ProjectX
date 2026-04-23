@@ -35,7 +35,8 @@ import {
 } from 'lucide-react';
 
 type OnboardingStep = 'auth' | 'scanning' | 'reveal' | 'app';
-type MainView = 'feed' | 'profile' | 'explore' | 'creator';
+type MainView = 'feed' | 'explore' | 'messages' | 'profile';
+type FeedTab = 'discover' | 'friends' | 'faction';
 // Cache bust: force redeploy
 
 const mapApiUser = (apiUser: any): User => ({
@@ -59,6 +60,8 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   
   const [currentView, setCurrentView] = useState<MainView>('feed');
+  const [feedTab, setFeedTab] = useState<FeedTab>('discover');
+  const [creatorModeEnabled, setCreatorModeEnabled] = useState(false);
   const [isTipModalOpen, setIsTipModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
@@ -260,6 +263,11 @@ const App: React.FC = () => {
     setCurrentView(view);
   };
 
+  // Handle creator mode toggle from Settings
+  const handleCreatorModeToggle = (enabled: boolean) => {
+    setCreatorModeEnabled(enabled);
+  };
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -368,11 +376,10 @@ const App: React.FC = () => {
             label="EXPLORE"
           />
           <NavButton 
-            active={currentView === 'creator'}
-            onClick={() => navigateTo('creator')}
-            icon={BarChart3}
-            label="CREATOR"
-            accent="var(--secondary-color,#FF00FF)"
+            active={currentView === 'messages'}
+            onClick={() => navigateTo('messages')}
+            icon={Mail}
+            label="MESSAGES"
           />
           <NavButton 
             active={currentView === 'profile'}
@@ -464,79 +471,7 @@ const App: React.FC = () => {
       {isMobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-30 bg-black/95 backdrop-blur-xl pt-14">
           <div className="p-4 space-y-2">
-            {/* Mobile Navigation Items */}
-            <MobileMenuItem
-              active={currentView === 'feed'}
-              onClick={() => { navigateTo('feed'); setIsMobileMenuOpen(false); }}
-              icon={Home}
-              label="Feed"
-            />
-            <MobileMenuItem
-              active={currentView === 'explore'}
-              onClick={() => { navigateTo('explore'); setIsMobileMenuOpen(false); }}
-              icon={Compass}
-              label="Explore"
-            />
-            <MobileMenuItem
-              active={currentView === 'creator'}
-              onClick={() => { navigateTo('creator'); setIsMobileMenuOpen(false); }}
-              icon={BarChart3}
-              label="Creator Dashboard"
-              accent="var(--secondary-color,#FF00FF)"
-            />
-            <MobileMenuItem
-              active={currentView === 'profile'}
-              onClick={() => { navigateTo('profile'); setIsMobileMenuOpen(false); }}
-              icon={UserIcon}
-              label="Profile"
-            />
-            
-            <div className="border-t border-gray-800 my-4" />
-            
-            {/* Quick Actions */}
-            <MobileMenuItem
-              onClick={() => { setIsStoriesOpen(true); setIsMobileMenuOpen(false); }}
-              icon={Image}
-              label="Stories"
-              color="text-pink-400"
-            />
-            <MobileMenuItem
-              onClick={() => { setIsGroupsOpen(true); setIsMobileMenuOpen(false); }}
-              icon={Users}
-              label="Communities"
-              color="text-cyan-400"
-            />
-            <MobileMenuItem
-              onClick={() => { setIsNotificationsOpen(true); setIsMobileMenuOpen(false); }}
-              icon={Bell}
-              label="Notifications"
-              badge={true}
-            />
-            <MobileMenuItem
-              onClick={() => { setIsDMOpen(true); setIsMobileMenuOpen(false); }}
-              icon={Mail}
-              label="Messages"
-            />
-            <MobileMenuItem
-              onClick={() => { setIsWalletOpen(true); setIsMobileMenuOpen(false); }}
-              icon={Wallet}
-              label={walletAddress ? `Wallet: ${walletAddress.slice(0, 6)}...` : 'Connect Wallet'}
-              color="text-[var(--primary-color,#39FF14)]"
-            />
-            
-            <div className="border-t border-gray-800 my-4" />
-            
-            <MobileMenuItem
-              onClick={() => { setIsSettingsOpen(true); setIsMobileMenuOpen(false); }}
-              icon={Settings}
-              label="Settings"
-            />
-            <MobileMenuItem
-              onClick={handleLogout}
-              icon={LogOut}
-              label="Logout"
-              color="text-red-400"
-            />
+            {/* Mobile Navigation - simplified, moved to bottom nav */}
           </div>
         </div>
       )}
@@ -544,14 +479,53 @@ const App: React.FC = () => {
       {/* 2. Main Content Area - Switches based on currentView */}
       <main className="flex-1 relative overflow-hidden pt-14 md:pt-16 pb-16 md:pb-10">
         
-        {/* FEED - ALWAYS MOUNTED, stays visible in background */}
-        <div className={`absolute inset-0 transition-opacity duration-300 ${currentView === 'feed' ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-          <VideoFeed 
-            onTipClick={handleTipClick} 
-            onCommentClick={() => setIsCommentsOpen(true)}
-            currentUser={user} 
-          />
-        </div>
+        {/* FEED VIEW - with 3 tabs (Discover, Friends, Faction) */}
+        {currentView === 'feed' && (
+          <div className="h-full w-full flex flex-col">
+            {/* Feed Tab Navigation */}
+            <div className="flex items-center gap-2 px-3 md:px-4 py-3 border-b border-[var(--primary-color,#39FF14)]/20 bg-black/50">
+              <button
+                onClick={() => setFeedTab('discover')}
+                className={`px-4 py-2 rounded-lg font-mono text-sm transition-all ${
+                  feedTab === 'discover'
+                    ? 'bg-[var(--primary-color,#39FF14)] text-black'
+                    : 'bg-black/50 border border-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                DISCOVER
+              </button>
+              <button
+                onClick={() => setFeedTab('friends')}
+                className={`px-4 py-2 rounded-lg font-mono text-sm transition-all ${
+                  feedTab === 'friends'
+                    ? 'bg-[var(--primary-color,#39FF14)] text-black'
+                    : 'bg-black/50 border border-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                FRIENDS
+              </button>
+              <button
+                onClick={() => setFeedTab('faction')}
+                className={`px-4 py-2 rounded-lg font-mono text-sm transition-all ${
+                  feedTab === 'faction'
+                    ? 'bg-[var(--primary-color,#39FF14)] text-black'
+                    : 'bg-black/50 border border-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                FACTION
+              </button>
+            </div>
+            {/* Feed Content */}
+            <div className="flex-1 overflow-y-auto">
+              <VideoFeed 
+                onTipClick={handleTipClick} 
+                onCommentClick={() => setIsCommentsOpen(true)}
+                currentUser={user}
+                activeTab={feedTab}
+              />
+            </div>
+          </div>
+        )}
         
         {/* EXPLORE VIEW */}
         {currentView === 'explore' && (
@@ -569,34 +543,39 @@ const App: React.FC = () => {
           </div>
         )}
         
-        {/* CREATOR VIEW */}
-        {currentView === 'creator' && (
-          <div className="h-full w-full overflow-y-auto bg-[var(--background-color,#050505)]">
-            <CreatorDashboard 
+        {/* MESSAGES VIEW */}
+        {currentView === 'messages' && (
+          <div className="h-full w-full overflow-y-auto">
+            <DMChat 
               isOpen={true}
               onClose={() => navigateTo('feed')}
-              onCreatePost={() => setIsPostComposerOpen(true)}
+              currentUser={{ name: user.username, avatar: user.avatar }}
             />
           </div>
         )}
         
-        {/* PROFILE VIEW */}
+        {/* PROFILE VIEW - with conditional Creator tab */}
         {currentView === 'profile' && (
           <div className="h-full w-full overflow-y-auto">
-             <ProfileGrid user={user} onTip={handleTipClick} onProfileUpdate={handleProfileUpdate} />
+             <ProfileGrid 
+               user={user} 
+               onTip={handleTipClick} 
+               onProfileUpdate={handleProfileUpdate}
+               creatorModeEnabled={creatorModeEnabled}
+             />
           </div>
         )}
       </main>
 
-      {/* 3. Mobile Bottom Navigation Bar */}
+      {/* 3. Mobile Bottom Navigation Bar - 5 items: Home, Explore, Create, Messages, Profile */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 h-[calc(3.5rem+var(--sab))] bg-black/95 backdrop-blur-xl border-t border-[var(--primary-color,#39FF14)]/30 grid grid-cols-5 items-start pt-2 safe-bottom">
         
-        {/* FEED */}
+        {/* HOME (Feed) */}
         <MobileNavButton 
           active={currentView === 'feed'}
           onClick={() => navigateTo('feed')}
           icon={Home}
-          label="FEED"
+          label="HOME"
         />
 
         {/* EXPLORE */}
@@ -617,13 +596,12 @@ const App: React.FC = () => {
           </button>
         </div>
         
-        {/* CREATOR */}
+        {/* MESSAGES */}
         <MobileNavButton 
-          active={currentView === 'creator'}
-          onClick={() => navigateTo('creator')}
-          icon={BarChart3}
-          label="CREATOR"
-          accent="var(--secondary-color,#FF00FF)"
+          active={currentView === 'messages'}
+          onClick={() => navigateTo('messages')}
+          icon={Mail}
+          label="MESSAGES"
         />
 
         {/* PROFILE */}
@@ -731,6 +709,7 @@ const App: React.FC = () => {
           isAgeVerified: user.isAgeVerified 
         }}
         onVerify={handleVerificationUpdate}
+        onCreatorModeToggle={handleCreatorModeToggle}
       />
 
       {/* Theme Editor */}
