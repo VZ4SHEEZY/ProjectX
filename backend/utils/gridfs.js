@@ -6,15 +6,27 @@ let gridFSBucket;
 
 // Initialize GridFS bucket
 const initGridFS = (connection) => {
-  gridFSBucket = new GridFSBucket(connection.db);
-  console.log('GridFS bucket initialized');
+  try {
+    // connection.db works with newer mongoose versions
+    const db = connection.db || connection;
+    gridFSBucket = new GridFSBucket(db, { bucketName: 'files' });
+    console.log('GridFS bucket initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize GridFS:', error.message);
+    throw error;
+  }
 };
 
 // Upload file to GridFS
 const uploadToGridFS = (buffer, filename, metadata = {}) => {
   return new Promise((resolve, reject) => {
     if (!gridFSBucket) {
-      return reject(new Error('GridFS not initialized. MongoDB connection may have failed.'));
+      console.error('GridFS not initialized when upload attempted');
+      return reject(new Error('GridFS bucket not initialized. Please check MongoDB connection and server logs.'));
+    }
+    
+    if (!buffer || buffer.length === 0) {
+      return reject(new Error('Empty file buffer'));
     }
     const uploadStream = gridFSBucket.openUploadStream(filename, {
       metadata: {
@@ -83,11 +95,15 @@ const deleteFromGridFS = (fileId) => {
   });
 };
 
+// Helper to check if GridFS is initialized
+const isGridFSInitialized = () => !!gridFSBucket;
+
 module.exports = {
   initGridFS,
   uploadToGridFS,
   downloadFromGridFS,
   getFileInfo,
   deleteFromGridFS,
-  getGridFSBucket: () => gridFSBucket
+  getGridFSBucket: () => gridFSBucket,
+  isGridFSInitialized
 };
