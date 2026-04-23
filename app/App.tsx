@@ -367,13 +367,19 @@ const App: React.FC = () => {
             active={currentView === 'feed'}
             onClick={() => navigateTo('feed')}
             icon={Home}
-            label="FEED"
+            label="HOME"
           />
           <NavButton 
             active={currentView === 'explore'}
             onClick={() => navigateTo('explore')}
             icon={Compass}
             label="EXPLORE"
+          />
+          <NavButton 
+            active={currentView === 'messages'}
+            onClick={() => setIsUploadModalOpen(true)}
+            icon={Plus}
+            label="CREATE"
           />
           <NavButton 
             active={currentView === 'messages'}
@@ -400,55 +406,7 @@ const App: React.FC = () => {
              <Search size={18} />
           </button>
 
-          {/* Notifications - Desktop only */}
-          <button 
-            onClick={() => setIsNotificationsOpen(true)}
-            className="hidden sm:flex w-9 h-9 md:w-10 md:h-10 items-center justify-center text-gray-500 hover:text-[var(--secondary-color,#FF00FF)] hover:bg-[var(--secondary-color,#FF00FF)]/10 rounded-lg transition-colors relative btn-touch"
-          >
-             <Bell size={18} />
-             <span className="absolute top-1 right-1 w-2 h-2 bg-[var(--secondary-color,#FF00FF)] rounded-full animate-pulse" />
-          </button>
-
-          {/* Messages - Desktop only */}
-          <button 
-            onClick={() => setIsDMOpen(true)}
-            className="hidden sm:flex w-9 h-9 md:w-10 md:h-10 items-center justify-center text-gray-500 hover:text-[var(--primary-color,#39FF14)] hover:bg-[var(--primary-color,#39FF14)]/10 rounded-lg transition-colors btn-touch"
-          >
-             <Mail size={18} />
-          </button>
-
-          {/* Stories - Desktop only */}
-          <button 
-            onClick={() => setIsStoriesOpen(true)}
-            className="hidden md:flex w-9 h-9 md:w-10 md:h-10 items-center justify-center text-gray-500 hover:text-pink-500 hover:bg-pink-500/10 rounded-lg transition-colors btn-touch"
-          >
-             <Image size={18} />
-          </button>
-
-          {/* Groups - Desktop only */}
-          <button 
-            onClick={() => setIsGroupsOpen(true)}
-            className="hidden md:flex w-9 h-9 md:w-10 md:h-10 items-center justify-center text-gray-500 hover:text-cyan-500 hover:bg-cyan-500/10 rounded-lg transition-colors btn-touch"
-          >
-             <Users size={18} />
-          </button>
-
-          <div className="hidden md:block w-[1px] h-6 bg-gray-800 mx-1" />
-
-          {/* Wallet Connect - Desktop only */}
-          <button 
-            onClick={() => setIsWalletOpen(true)}
-            className={`hidden md:flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all btn-touch ${
-              walletAddress 
-                ? 'bg-[var(--primary-color,#39FF14)]/20 text-[var(--primary-color,#39FF14)] border border-[var(--primary-color,#39FF14)]/50' 
-                : 'border border-[var(--primary-color,#39FF14)] text-[var(--primary-color,#39FF14)] hover:bg-[var(--primary-color,#39FF14)] hover:text-black'
-            }`}
-          >
-            <Wallet size={14} />
-            {walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : 'CONNECT'}
-          </button>
-
-          {/* Settings - Desktop only */}
+          {/* Settings */}
           <button 
             onClick={() => setIsSettingsOpen(true)}
             className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
@@ -456,10 +414,10 @@ const App: React.FC = () => {
              <Settings size={18} />
           </button>
 
-          {/* Logout - Desktop only */}
+          {/* Logout */}
           <button 
             onClick={handleLogout}
-            className="hidden md:flex w-10 h-10 items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+            className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
             title="Logout"
           >
              <LogOut size={18} />
