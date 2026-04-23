@@ -198,6 +198,42 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
     loadFeed();
   }, [activeTab]);
 
+  // Refetch feed when user logs in (currentUser changes)
+  useEffect(() => {
+    if (apiVideos.length === 0 && !feedLoading) {
+      const loadFeed = async () => {
+        setFeedLoading(true);
+        setFeedError(null);
+        
+        try {
+          let response;
+          
+          switch (activeTab) {
+            case 'friends':
+              response = await postAPI.getFollowingFeed({ page: 1, limit: 20 });
+              break;
+            case 'faction':
+              response = await postAPI.getFactionFeed({ page: 1, limit: 20 });
+              break;
+            case 'discover':
+            default:
+              response = await postAPI.getForYouFeed({ page: 1, limit: 20 });
+          }
+          
+          const posts = response.data?.data || [];
+          setApiVideos(posts.length > 0 ? posts.map(mapPostToVideo) : []);
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || err?.message || 'Unknown error';
+          setFeedError(`${err?.response?.status || 'ERR'}: ${msg}`);
+          setApiVideos([]);
+        } finally {
+          setFeedLoading(false);
+        }
+      };
+      loadFeed();
+    }
+  }, [currentUser.id]);
+
   // Filter Videos: Remove NSFW if user is not age verified
   const visibleVideos = useMemo(() => {
     return apiVideos.filter(video => {
