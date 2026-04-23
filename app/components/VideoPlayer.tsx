@@ -23,7 +23,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false); // Start unmuted for sound
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<NodeJS.Timeout>();
   
@@ -218,7 +218,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         src={video.url}
         loop
         playsInline
+        autoPlay={isActive}
         muted={isMuted}
+        controls={false}
         className={`w-full h-full object-cover transition-all duration-500 ${(!decrypted || !unlocked) ? 'blur-2xl opacity-50 scale-110' : 'opacity-100 scale-100'}`}
       />
 
