@@ -18,6 +18,9 @@ api.interceptors.request.use(
     const token = localStorage.getItem('cdToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log(`[API] Token attached to ${config.url}`);
+    } else {
+      console.warn(`[API] No token found for ${config.url}`);
     }
     return config;
   },
@@ -29,6 +32,7 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
+      console.error('[API] 401 Unauthorized - clearing auth');
       localStorage.removeItem('cdToken');
       localStorage.removeItem('cdUser');
       window.location.href = '/';
@@ -87,14 +91,20 @@ export const postAPI = {
   getPosts: (params?: { type?: string; visibility?: string; sort?: string; page?: number; limit?: number; following?: boolean }) =>
     api.get('/posts', { params }),
 
-  getForYouFeed: (params?: { page?: number; limit?: number }) =>
-    api.get('/posts/feed/foryou', { params }),
+  getForYouFeed: (params?: { page?: number; limit?: number }) => {
+    console.log('[API] Fetching ForYouFeed', params);
+    return api.get('/posts/feed/foryou', { params });
+  },
 
-  getFollowingFeed: (params?: { page?: number; limit?: number }) =>
-    api.get('/posts/feed/following', { params }),
+  getFollowingFeed: (params?: { page?: number; limit?: number }) => {
+    console.log('[API] Fetching FollowingFeed', params);
+    return api.get('/posts/feed/following', { params });
+  },
 
-  getFactionFeed: (params?: { page?: number; limit?: number }) =>
-    api.get('/posts/feed/faction', { params }),
+  getFactionFeed: (params?: { page?: number; limit?: number }) => {
+    console.log('[API] Fetching FactionFeed', params);
+    return api.get('/posts/feed/faction', { params });
+  },
 
   getTrending: (params?: { page?: number; limit?: number; timeframe?: string }) =>
     api.get('/posts/feed/trending', { params }),
