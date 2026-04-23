@@ -4,6 +4,7 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
+const Post = require('../models/Post');
 
 // Configure Cloudinary
 cloudinary.config({
@@ -60,14 +61,54 @@ router.post('/image', protect, upload.single('image'), async (req, res) => {
 router.post('/video', protect, upload.single('video'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
+    
+    // Upload to Cloudinary
     const result = await uploadToCloudinary(req.file.buffer, {
       folder: 'cyberdope/videos',
       resource_type: 'video',
     });
+    
     // Generate thumbnail
     const thumbnailUrl = result.secure_url.replace('/upload/', '/upload/so_0,w_400,h_600,c_fill/').replace(/\.\w+$/, '.jpg');
-    res.json({ success: true, data: { url: result.secure_url, thumbnailUrl, publicId: result.public_id, duration: result.duration } });
+    
+    // Get user details for faction
+    const user = await User.findById(req.user._id);
+    
+    // Create Post document in MongoDB
+    const post = await require('../models/Post').create({
+      author: req.user._id,
+      type: 'video',
+      title: req.body.title || 'Untitled Video',
+      description: req.body.description || '',
+      mediaUrl: result.secure_url,
+      thumbnailUrl,
+      duration: result.duration || 0,
+      visibility: 'public',
+      faction: user?.faction || 'Unaffiliated',
+      isNSFW: req.body.isNSFW === 'true' || req.body.isNSFW === true,
+      isSensitive: req.body.isSensitive === 'true' || req.body.isSensitive === true,
+      monetizationType: req.body.monetizationType || 'free',
+      price: req.body.price ? parseFloat(req.body.price) : 0,
+      isPublished: true,
+      status: 'published'
+    });
+    
+    // Populate author details
+    await post.populate('author', 'username avatar walletAddress isVerified');
+    
+    res.status(201).json({ 
+      success: true, 
+      data: { 
+        url: result.secure_url, 
+        thumbnailUrl, 
+        publicId: result.public_id, 
+        duration: result.duration,
+        post
+      },
+      message: 'Video uploaded and posted successfully'
+    });
   } catch (error) {
+    console.error('Video upload error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -82,6 +123,7 @@ router.post('/audio', protect, upload.single('audio'), async (req, res) => {
     });
     res.json({ success: true, data: { url: result.secure_url, publicId: result.public_id, duration: result.duration } });
   } catch (error) {
+    console.error('Audio upload error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
