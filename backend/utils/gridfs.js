@@ -13,6 +13,9 @@ const initGridFS = (connection) => {
 // Upload file to GridFS
 const uploadToGridFS = (buffer, filename, metadata = {}) => {
   return new Promise((resolve, reject) => {
+    if (!gridFSBucket) {
+      return reject(new Error('GridFS not initialized. MongoDB connection may have failed.'));
+    }
     const uploadStream = gridFSBucket.openUploadStream(filename, {
       metadata: {
         ...metadata,
@@ -56,6 +59,9 @@ const downloadFromGridFS = (fileId) => {
 // Get file info from GridFS
 const getFileInfo = (fileId) => {
   return new Promise((resolve, reject) => {
+    if (!gridFSBucket) {
+      return reject(new Error('GridFS not initialized. MongoDB connection may have failed.'));
+    }
     gridFSBucket.find({ _id: fileId }).toArray((err, files) => {
       if (err) reject(err);
       else if (files.length === 0) reject(new Error('File not found'));
@@ -67,6 +73,9 @@ const getFileInfo = (fileId) => {
 // Delete file from GridFS
 const deleteFromGridFS = (fileId) => {
   return new Promise((resolve, reject) => {
+    if (!gridFSBucket) {
+      return reject(new Error('GridFS not initialized. MongoDB connection may have failed.'));
+    }
     gridFSBucket.delete(fileId, (err) => {
       if (err) reject(err);
       else resolve();

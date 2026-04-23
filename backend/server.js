@@ -64,8 +64,14 @@ const connectDB = async () => {
     console.log(`MongoDB Connected: ${conn.connection.host}`);
     
     // Initialize GridFS after connection
-    const { initGridFS } = require('./utils/gridfs');
-    initGridFS(conn.connection);
+    try {
+      const { initGridFS } = require('./utils/gridfs');
+      initGridFS(conn.connection);
+      console.log('GridFS initialized successfully');
+    } catch (gridfsError) {
+      console.error('Failed to initialize GridFS:', gridfsError.message);
+      // Continue anyway - GridFS errors will be caught at upload time
+    }
     
     return conn;
   } catch (error) {
