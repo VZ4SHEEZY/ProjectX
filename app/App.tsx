@@ -522,6 +522,7 @@ const App: React.FC = () => {
                 onCommentClick={() => setIsCommentsOpen(true)}
                 currentUser={user}
                 activeTab={feedTab}
+                onTabChange={setFeedTab}
               />
             </div>
           </div>

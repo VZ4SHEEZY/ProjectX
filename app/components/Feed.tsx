@@ -10,6 +10,8 @@ interface FeedProps {
   onTipClick: (address: string) => void;
   onCommentClick: () => void;
   currentUser: User;
+  activeTab: 'discover' | 'friends' | 'faction';
+  onTabChange?: (tab: 'discover' | 'friends' | 'faction') => void;
 }
 
 type FeedTab = 'discover' | 'friends' | 'faction';
@@ -115,7 +117,7 @@ const VideoCounter: React.FC<{ current: number; total: number }> = ({ current, t
   );
 };
 
-const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) => {
+const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, activeTab, onTabChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [systemMsg, setSystemMsg] = useState("SYSTEM_ONLINE");
@@ -125,15 +127,6 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
   const [apiVideos, setApiVideos] = useState<Video[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedError, setFeedError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<FeedTab>(() => {
-    const saved = localStorage.getItem('feedActiveTab');
-    return (saved as FeedTab) || 'discover';
-  });
-
-  // Debug: Feed tabs enabled
-  useEffect(() => {
-    console.log('Feed tabs initialized:', activeTab);
-  }, [activeTab]);
 
   const mapPostToVideo = (post: any): Video => ({
     id: post._id || post.id,
@@ -354,8 +347,9 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
     if (activeTab === tab) return; // Prevent re-loading same tab
     setActiveIndex(0);
     setIsTransitioning(false);
-    setActiveTab(tab);
-    localStorage.setItem('feedActiveTab', tab);
+    if (onTabChange) {
+      onTabChange(tab);
+    }
   };
 
   const isFactionDisabled = !currentUser.faction || currentUser.faction === 'Unaffiliated';
@@ -366,45 +360,10 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
       {/* Status Bar */}
       <StatusBar systemMsg={systemMsg} />
 
-      {/* Feed Tabs - Always Visible */}
-      <div className="absolute top-16 left-0 right-0 z-50 flex justify-center gap-2 px-3 sm:px-4 py-2 bg-gradient-to-b from-black to-black/80 pointer-events-auto">
-        <button
-          onClick={() => handleTabChange('discover')}
-          className={`px-4 sm:px-6 py-1.5 sm:py-2 text-xs sm:text-sm font-mono transition-all border ${
-            activeTab === 'discover'
-              ? 'border-[#39FF14] text-[#39FF14] bg-[#39FF14]/10'
-              : 'border-gray-600 text-gray-400 hover:border-[#39FF14] hover:text-[#39FF14]'
-          }`}
-        >
-          DISCOVER
-        </button>
-        <button
-          onClick={() => handleTabChange('friends')}
-          className={`px-4 sm:px-6 py-1.5 sm:py-2 text-xs sm:text-sm font-mono transition-all border ${
-            activeTab === 'friends'
-              ? 'border-[#39FF14] text-[#39FF14] bg-[#39FF14]/10'
-              : 'border-gray-600 text-gray-400 hover:border-[#39FF14] hover:text-[#39FF14]'
-          }`}
-        >
-          FRIENDS
-        </button>
-        <button
-          onClick={() => handleTabChange('faction')}
-          disabled={isFactionDisabled}
-          className={`px-4 sm:px-6 py-1.5 sm:py-2 text-xs sm:text-sm font-mono transition-all border ${
-            isFactionDisabled
-              ? 'border-gray-700 text-gray-600 cursor-not-allowed'
-              : activeTab === 'faction'
-                ? 'border-[#39FF14] text-[#39FF14] bg-[#39FF14]/10'
-                : 'border-gray-600 text-gray-400 hover:border-[#39FF14] hover:text-[#39FF14]'
-          }`}
-        >
-          FACTION
-        </button>
-      </div>
+      {/* Feed Tabs - Now controlled by App.tsx */}
         
       {/* Top System Message */}
-      <div className="absolute top-24 left-0 w-full z-30 p-3 sm:p-4 pointer-events-none flex justify-center">
+      <div className="absolute top-16 left-0 w-full z-30 p-3 sm:p-4 pointer-events-none flex justify-center">
         <div className="bg-black/80 backdrop-blur border border-[#39FF14]/30 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full flex items-center gap-2">
             <div className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-[#39FF14] animate-pulse" />
             <span className="text-[9px] sm:text-[10px] text-[#39FF14] font-mono tracking-widest truncate max-w-[150px] sm:max-w-none">{systemMsg}</span>
@@ -428,7 +387,7 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser }) 
       {/* Snap Scroll Container */}
       <div 
         ref={containerRef}
-        className="w-full h-full overflow-y-scroll snap-y snap-mandatory no-scrollbar pt-40"
+        className="w-full h-full overflow-y-scroll snap-y snap-mandatory no-scrollbar pt-20"
         onScroll={handleScroll}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
