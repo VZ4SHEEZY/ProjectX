@@ -97,22 +97,40 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
       });
 
       xhr.addEventListener('load', () => {
-        if (xhr.status === 201) {
-          const response = JSON.parse(xhr.responseText);
-          console.log('Upload successful:', response);
-          setProgress(100);
-          setComplete(true);
-          setTimeout(() => {
-            onClose();
-          }, 1500);
+        setUploading(false);
+        if (xhr.status === 201 || xhr.status === 200) {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            console.log('Upload successful:', response);
+            setProgress(100);
+            setComplete(true);
+            setTimeout(() => {
+              onClose();
+            }, 1500);
+          } catch (e) {
+            console.error('Parse error:', e);
+            alert('Upload successful but response parse failed');
+          }
         } else {
-          throw new Error(`Upload failed with status ${xhr.status}`);
+          try {
+            const errorResponse = JSON.parse(xhr.responseText);
+            console.error('Upload error response:', errorResponse);
+            alert(`Upload failed: ${errorResponse.message || xhr.status}`);
+          } catch (e) {
+            alert(`Upload failed with status ${xhr.status}`);
+          }
         }
       });
 
       xhr.addEventListener('error', () => {
         setUploading(false);
-        alert('Upload failed. Please try again.');
+        console.error('XHR error event');
+        alert('Upload failed - network error. Please try again.');
+      });
+      
+      xhr.addEventListener('abort', () => {
+        setUploading(false);
+        alert('Upload cancelled.');
       });
 
       xhr.open('POST', `${apiUrl}/upload/video`);
@@ -121,7 +139,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
     } catch (error) {
       console.error('Upload error:', error);
       setUploading(false);
-      alert('Upload failed. Please try again.');
+      alert(`Upload error: ${error.message}`);
     }
   };
 
