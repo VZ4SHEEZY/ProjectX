@@ -12,12 +12,23 @@ import CustomCodeWidget from './CustomCodeWidget';
 import ProfileDesignModal from './ProfileDesignModal';
 import { Copy, Wallet, Edit, Save, PaintBucket, Layers, Crown, Eye, EyeOff, Sparkles, MessageSquare, UserPlus, Heart, Eye as EyeIcon, Zap, Music } from 'lucide-react';
 import { generateBio } from '../services/aiService';
-import { userAPI } from '../services/api';
+import { userAPI, postAPI } from '../services/api';
 
 interface ProfileGridProps {
   user: User;
   onTip?: (address: string) => void;
   onProfileUpdate?: (updates: Partial<User>) => void;
+  creatorModeEnabled?: boolean;
+}
+
+interface Post {
+  _id: string;
+  title: string;
+  mediaUrl: string;
+  thumbnailUrl: string;
+  author: { _id: string; username: string; avatar: string };
+  createdAt: string;
+  type: string;
 }
 
 const SparkleTrail: React.FC = () => {
@@ -196,6 +207,9 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
   const [isHudVisible, setIsHudVisible] = useState(true);
   const [isFollowing, setIsFollowing] = useState(user.isFollowing || false);
+  const [userPosts, setUserPosts] = useState<Post[]>([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [localTheme, setLocalTheme] = useState<ProfileTheme>(user.theme || {
     backgroundImage: '',
     backgroundColor: '#0a0a0a',
@@ -287,6 +301,25 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
     };
     fetchProfile();
   }, []);
+
+  // Load user's posts
+  useEffect(() => {
+    const loadUserPosts = async () => {
+      setIsLoadingPosts(true);
+      try {
+        const response = await postAPI.getPosts({ limit: 50 });
+        const allPosts = response.data?.data || [];
+        // Filter posts by this user
+        const filtered = allPosts.filter((post: any) => post.author?._id === user._id);
+        setUserPosts(filtered);
+      } catch (err) {
+        console.error('Failed to load user posts:', err);
+      } finally {
+        setIsLoadingPosts(false);
+      }
+    };
+    if (user._id) loadUserPosts();
+  }, [user._id]);
 
   return (
     <div
@@ -488,6 +521,67 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
           </div>
         </div>
       </div>
+
+      {/* POSTS GRID */}
+      <div className="mt-8">
+        <div className="mb-4 text-center">
+          <h2 className="text-[#39FF14] font-bold text-lg tracking-widest border-b-2 border-[#39FF14]/30 pb-2">USER POSTS</h2>
+        </div>
+        {isLoadingPosts ? (
+          <div className="text-center text-gray-500 py-8">LOADING POSTS...</div>
+        ) : userPosts.length === 0 ? (
+          <div className="text-center text-gray-500 py-8 border border-gray-800 rounded p-4">NO POSTS YET</div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {userPosts.map((post) => (
+              <div
+                key={post._id}
+                onClick={() => setSelectedPost(post)}
+                className="relative group cursor-pointer overflow-hidden border-2 border-[#39FF14]/50 hover:border-[#39FF14] transition-all duration-300 aspect-square"
+              >
+                <img
+                  src={post.thumbnailUrl || post.mediaUrl}
+                  alt={post.title}
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center">
+                  <div className="text-[#39FF14] text-3xl">▶</div>
+                  <div className="text-[10px] text-white font-mono mt-2 text-center px-2 truncate">{post.title}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* VIDEO MODAL */}
+      {selectedPost && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4"
+          onClick={() => setSelectedPost(null)}
+        >
+          <div className="relative w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setSelectedPost(null)}
+              className="absolute -top-10 right-0 text-white hover:text-[#39FF14] text-2xl"
+            >
+              ✕
+            </button>
+            <div className="border-2 border-[#39FF14] overflow-hidden">
+              <video
+                src={selectedPost.mediaUrl}
+                controls
+                autoPlay
+                className="w-full h-auto max-h-[70vh] bg-black"
+              />
+            </div>
+            <div className="mt-4 border border-[#39FF14]/30 p-4 bg-black/50">
+              <h3 className="text-[#39FF14] font-bold text-sm">{selectedPost.title}</h3>
+              <p className="text-gray-400 text-xs mt-2">{new Date(selectedPost.createdAt).toLocaleDateString()}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className={`mt-8 text-center transition-opacity ${isHudVisible ? 'opacity-100' : 'opacity-0'}`}>
         <div className="text-[9px] text-gray-600 font-mono bg-black/50 px-4 py-2 rounded">
