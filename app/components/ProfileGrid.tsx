@@ -305,28 +305,41 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
   // Load user's posts
   useEffect(() => {
     const loadUserPosts = async () => {
+      if (!user?.id && !user?.username) {
+        setUserPosts([]);
+        return;
+      }
+      
       setIsLoadingPosts(true);
       try {
-        const response = await postAPI.getPosts({ limit: 50 });
-        const allPosts = response.data?.data || [];
-        console.log('All posts:', allPosts.length);
-        console.log('Current user ID:', user.id);
-        // Filter posts by this user
+        const response = await postAPI.getPosts({ limit: 100 });
+        const allPosts = response.data?.data || response.data || [];
+        
+        if (!Array.isArray(allPosts)) {
+          setUserPosts([]);
+          return;
+        }
+        
         const filtered = allPosts.filter((post: any) => {
-          // Compare with user.id (not _id)
-          const match = post.author?._id === user.id || post.author?.username === user.username;
-          return match;
+          if (!post?.author) return false;
+          return post.author?._id === user.id || post.author?.username === user.username;
         });
-        console.log('Filtered posts:', filtered.length, 'from', allPosts.length);
-        setUserPosts(filtered);
+        
+        setUserPosts(filtered || []);
       } catch (err) {
-        console.error('Failed to load user posts:', err, 'User:', user);
+        console.error('Failed to load user posts:', err);
+        setUserPosts([]);
       } finally {
         setIsLoadingPosts(false);
       }
     };
-    if (user.id) loadUserPosts();
-  }, [user.id]);
+    
+    if (user?.id || user?.username) {
+      loadUserPosts();
+    } else {
+      setUserPosts([]);
+    }
+  }, [user?.id, user?.username]);
 
   return (
     <div
@@ -535,8 +548,8 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
           <h2 className="text-[#39FF14] font-bold text-lg tracking-widest border-b-2 border-[#39FF14]/30 pb-2">UPLOADS ({userPosts.length})</h2>
         </div>
         {isLoadingPosts ? (
-          <div className="text-center text-gray-500 py-8">LOADING POSTS...</div>
-        ) : userPosts.length === 0 ? (
+          <div className="text-center text-gray-500 py-8 font-mono">LOADING POSTS...</div>
+        ) : !userPosts || userPosts.length === 0 ? (
           <div className="text-center text-gray-500 py-8 border border-gray-800 rounded p-4">NO POSTS YET</div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
