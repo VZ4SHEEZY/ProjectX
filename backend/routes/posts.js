@@ -16,10 +16,16 @@ router.get('/', optionalAuth, async (req, res) => {
       sort = '-createdAt',
       page = 1,
       limit = 50,
-      following = false
+      following = false,
+      author
     } = req.query;
 
     const query = { status: 'published' };
+
+    // Filter by author (for user profile posts)
+    if (author) {
+      query.author = author;
+    }
 
     // Filter by post type
     if (type) query.type = type;

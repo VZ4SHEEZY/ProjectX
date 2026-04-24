@@ -312,7 +312,11 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
       
       setIsLoadingPosts(true);
       try {
-        const response = await postAPI.getPosts({ limit: 100 });
+        // Pass author ID to backend for server-side filtering
+        const response = await postAPI.getPosts({ 
+          author: user.id,
+          limit: 100 
+        });
         const allPosts = response.data?.data || response.data || [];
         
         if (!Array.isArray(allPosts)) {
@@ -320,14 +324,10 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
           return;
         }
         
-        const filtered = allPosts.filter((post: any) => {
-          if (!post?.author) return false;
-          return post.author?._id === user.id || post.author?.username === user.username;
-        });
-        
-        setUserPosts(filtered || []);
+        // Backend already filters by author, no need to filter again
+        setUserPosts(allPosts || []);
       } catch (err) {
-        console.error('Failed to load user posts:', err);
+        console.error('Failed to load user posts:', err, 'User ID:', user.id);
         setUserPosts([]);
       } finally {
         setIsLoadingPosts(false);
