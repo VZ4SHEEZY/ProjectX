@@ -305,7 +305,12 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
   // Load user's posts
   useEffect(() => {
     const loadUserPosts = async () => {
+      console.log('PROFILE GRID: user object =', user);
+      console.log('PROFILE GRID: user.id =', user?.id);
+      console.log('PROFILE GRID: user.username =', user?.username);
+      
       if (!user?.id && !user?.username) {
+        console.log('PROFILE GRID: No user ID or username, skipping fetch');
         setUserPosts([]);
         return;
       }
@@ -313,17 +318,19 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
       setIsLoadingPosts(true);
       try {
         // Pass author ID to backend for server-side filtering
+        console.log('PROFILE GRID: Fetching posts with author =', user.id);
         const response = await postAPI.getPosts({ 
           author: user.id,
           limit: 100 
         });
         console.log('POSTS RESPONSE:', response);
-        console.log('POSTS RESPONSE DATA:', response.data);
-        console.log('POSTS RESPONSE DATA.DATA:', response.data?.data);
+        console.log('POSTS RESPONSE.data:', response.data);
+        console.log('POSTS RESPONSE.data.data:', response.data?.data);
         
         const allPosts = response.data?.data || response.data || [];
-        console.log('ALL POSTS ARRAY:', allPosts);
-        console.log('IS ARRAY?', Array.isArray(allPosts));
+        console.log('ALL POSTS EXTRACTED:', allPosts);
+        console.log('ALL POSTS - IS ARRAY?', Array.isArray(allPosts));
+        console.log('ALL POSTS LENGTH:', allPosts.length);
         
         if (!Array.isArray(allPosts)) {
           console.log('NOT AN ARRAY - setting empty');
