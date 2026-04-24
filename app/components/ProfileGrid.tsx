@@ -560,9 +560,9 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
       </div>
 
       {/* POSTS GRID */}
-      <div className="mt-8 border-t border-[#39FF14]/20 pt-8">
+      <div className="mt-8 border-t-4 border-[#39FF14] pt-8 w-full max-w-5xl bg-black/50 p-4 mx-auto">
         <div className="mb-4 text-center">
-          <h2 className="text-[#39FF14] font-bold text-lg tracking-widest border-b-2 border-[#39FF14]/30 pb-2">UPLOADS ({userPosts.length})</h2>
+          <h2 className="text-[#39FF14] font-bold text-2xl tracking-widest border-b-4 border-[#39FF14] pb-4 animate-pulse">🎬 UPLOADS ({userPosts.length}) 🎬</h2>
         </div>
         {isLoadingPosts ? (
           <div className="text-center text-gray-500 py-8 font-mono">LOADING POSTS...</div>
