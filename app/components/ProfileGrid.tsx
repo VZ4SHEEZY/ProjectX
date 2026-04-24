@@ -443,7 +443,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
       <div className={`
         relative z-10 w-full max-w-5xl transition-all duration-700
         ${isEditing ? 'shadow-[0_0_30px_rgba(57,255,20,0.1)] border-dashed border-2 border-[#39FF14]/40 rounded-lg p-2 md:p-4' : ''}
-        ${isHudVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}
+        opacity-100 scale-100
       `}>
         <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
 
