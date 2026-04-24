@@ -317,17 +317,27 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
           author: user.id,
           limit: 100 
         });
+        console.log('POSTS RESPONSE:', response);
+        console.log('POSTS RESPONSE DATA:', response.data);
+        console.log('POSTS RESPONSE DATA.DATA:', response.data?.data);
+        
         const allPosts = response.data?.data || response.data || [];
+        console.log('ALL POSTS ARRAY:', allPosts);
+        console.log('IS ARRAY?', Array.isArray(allPosts));
         
         if (!Array.isArray(allPosts)) {
+          console.log('NOT AN ARRAY - setting empty');
           setUserPosts([]);
           return;
         }
         
         // Backend already filters by author, no need to filter again
+        console.log('SETTING USER POSTS:', allPosts.length, 'posts');
         setUserPosts(allPosts || []);
       } catch (err) {
-        console.error('Failed to load user posts:', err, 'User ID:', user.id);
+        console.error('POSTS FETCH ERROR:', err);
+        console.error('User ID:', user.id);
+        console.error('User object:', user);
         setUserPosts([]);
       } finally {
         setIsLoadingPosts(false);
