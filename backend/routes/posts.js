@@ -15,7 +15,7 @@ router.get('/', optionalAuth, async (req, res) => {
       visibility,
       sort = '-createdAt',
       page = 1,
-      limit = 10,
+      limit = 50,
       following = false
     } = req.query;
 
@@ -57,12 +57,17 @@ router.get('/', optionalAuth, async (req, res) => {
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
-    // Check access for each post
+    // Check access for each post - skip if canAccess fails
     const postsWithAccess = posts.map(post => {
-      const postObj = post.toObject();
-      postObj.canAccess = post.canAccess(req.user);
-      return postObj;
-    });
+      try {
+        const postObj = post.toObject();
+        postObj.canAccess = post.canAccess(req.user);
+        return postObj;
+      } catch (err) {
+        console.error('Error processing post:', post._id, err);
+        return null; // Return null for posts that fail
+      }
+    }).filter(post => post !== null); // Remove null entries
 
     const count = await Post.countDocuments(query);
 
