@@ -310,23 +310,23 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
         const response = await postAPI.getPosts({ limit: 50 });
         const allPosts = response.data?.data || [];
         console.log('All posts:', allPosts.length);
-        console.log('Current user ID:', user._id);
+        console.log('Current user ID:', user.id);
         // Filter posts by this user
         const filtered = allPosts.filter((post: any) => {
-          const match = post.author?._id === user._id;
-          if (!match) console.log('Post author:', post.author?._id, 'User ID:', user._id);
+          // Compare with user.id (not _id)
+          const match = post.author?._id === user.id || post.author?.username === user.username;
           return match;
         });
-        console.log('Filtered posts:', filtered.length);
+        console.log('Filtered posts:', filtered.length, 'from', allPosts.length);
         setUserPosts(filtered);
       } catch (err) {
-        console.error('Failed to load user posts:', err);
+        console.error('Failed to load user posts:', err, 'User:', user);
       } finally {
         setIsLoadingPosts(false);
       }
     };
-    if (user._id) loadUserPosts();
-  }, [user._id]);
+    if (user.id) loadUserPosts();
+  }, [user.id]);
 
   return (
     <div
@@ -532,7 +532,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
       {/* POSTS GRID */}
       <div className="mt-8 border-t border-[#39FF14]/20 pt-8">
         <div className="mb-4 text-center">
-          <h2 className="text-[#39FF14] font-bold text-lg tracking-widest border-b-2 border-[#39FF14]/30 pb-2">USER POSTS ({userPosts.length})</h2>
+          <h2 className="text-[#39FF14] font-bold text-lg tracking-widest border-b-2 border-[#39FF14]/30 pb-2">UPLOADS ({userPosts.length})</h2>
         </div>
         {isLoadingPosts ? (
           <div className="text-center text-gray-500 py-8">LOADING POSTS...</div>
