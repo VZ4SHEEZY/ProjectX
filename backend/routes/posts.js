@@ -88,7 +88,8 @@ router.get('/', optionalAuth, async (req, res) => {
 // @access  Private
 router.get('/feed/foryou', protect, async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    // Return ALL posts (no page/limit filtering)
+    const { limit = 1000 } = req.query;
 
     // Simple feed: show all published public posts
     let query = {
@@ -104,8 +105,7 @@ router.get('/feed/foryou', protect, async (req, res) => {
     const posts = await Post.find(query)
       .populate('author', 'username displayName avatar isVerified')
       .sort('-createdAt')
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+      .limit(limit);
 
     const postsWithAccess = posts.map(post => {
       const postObj = post.toObject();
@@ -116,9 +116,11 @@ router.get('/feed/foryou', protect, async (req, res) => {
     res.json({
       success: true,
       count: posts.length,
+      total: posts.length,
       data: postsWithAccess
     });
   } catch (error) {
+    console.error('Feed error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',
