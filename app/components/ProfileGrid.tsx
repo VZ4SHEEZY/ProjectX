@@ -309,8 +309,15 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
       try {
         const response = await postAPI.getPosts({ limit: 50 });
         const allPosts = response.data?.data || [];
+        console.log('All posts:', allPosts.length);
+        console.log('Current user ID:', user._id);
         // Filter posts by this user
-        const filtered = allPosts.filter((post: any) => post.author?._id === user._id);
+        const filtered = allPosts.filter((post: any) => {
+          const match = post.author?._id === user._id;
+          if (!match) console.log('Post author:', post.author?._id, 'User ID:', user._id);
+          return match;
+        });
+        console.log('Filtered posts:', filtered.length);
         setUserPosts(filtered);
       } catch (err) {
         console.error('Failed to load user posts:', err);
@@ -523,9 +530,9 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
       </div>
 
       {/* POSTS GRID */}
-      <div className="mt-8">
+      <div className="mt-8 border-t border-[#39FF14]/20 pt-8">
         <div className="mb-4 text-center">
-          <h2 className="text-[#39FF14] font-bold text-lg tracking-widest border-b-2 border-[#39FF14]/30 pb-2">USER POSTS</h2>
+          <h2 className="text-[#39FF14] font-bold text-lg tracking-widest border-b-2 border-[#39FF14]/30 pb-2">USER POSTS ({userPosts.length})</h2>
         </div>
         {isLoadingPosts ? (
           <div className="text-center text-gray-500 py-8">LOADING POSTS...</div>
