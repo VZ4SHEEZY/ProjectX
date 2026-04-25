@@ -73,7 +73,13 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
         ]);
 
         if (postsRes.status === 'fulfilled') {
-          const rawPosts: any[] = postsRes.value?.data?.posts || postsRes.value?.data || [];
+          // API returns { data: { data: [...posts], count, total, ... } }
+          const rawPosts: any[] = Array.isArray(postsRes.value?.data?.data) 
+            ? postsRes.value.data.data 
+            : Array.isArray(postsRes.value?.data) 
+            ? postsRes.value.data 
+            : [];
+          
           const mapped: ContentItem[] = rawPosts.map((post: any) => ({
             id: post._id,
             type: post.type || 'post',
@@ -96,7 +102,11 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
         }
 
         if (usersRes.status === 'fulfilled') {
-          const rawUsers: any[] = usersRes.value?.data?.users || usersRes.value?.data || [];
+          const rawUsers: any[] = Array.isArray(usersRes.value?.data?.users)
+            ? usersRes.value.data.users
+            : Array.isArray(usersRes.value?.data)
+            ? usersRes.value.data
+            : [];
           setSuggestedUsers(rawUsers);
         }
       } catch (err) {
