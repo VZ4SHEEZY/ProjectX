@@ -114,6 +114,9 @@ export const postAPI = {
   likePost: (id: string) =>
     api.post(`/posts/${id}/like`),
 
+  unlikePost: (id: string) =>
+    api.delete(`/posts/${id}/like`),
+
   viewPost: (id: string) =>
     api.post(`/posts/${id}/view`),
 };

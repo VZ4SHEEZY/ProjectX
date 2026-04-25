@@ -3,6 +3,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Video } from '../types';
 import { Play, AlertTriangle, ShieldCheck, Cpu, ArrowBigUp, MessageSquare, Share2, Lock, Unlock, EyeOff, Heart, Check, Volume2, VolumeX, Bookmark, MoreHorizontal } from 'lucide-react';
 import GlitchButton from './GlitchButton';
+import { postAPI } from '../services/api';
 
 interface VideoPlayerProps {
   video: Video;
@@ -106,27 +107,40 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // --- INTERACTION HANDLERS ---
 
-  const handleLike = (e: React.MouseEvent) => {
+  const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isLiked) {
-        setLikeCount(prev => prev - 1);
+    try {
+      if (isLiked) {
+        // Unlike: call backend to remove like
+        await postAPI.unlikePost(video.id);
+        setLikeCount(prev => Math.max(0, prev - 1));
         setIsLiked(false);
-    } else {
+      } else {
+        // Like: call backend to add like
+        await postAPI.likePost(video.id);
         setLikeCount(prev => prev + 1);
         setIsLiked(true);
         // Show like animation
         setShowLikeAnimation(true);
         setTimeout(() => setShowLikeAnimation(false), 800);
+      }
+    } catch (error) {
+      console.error('Like error:', error);
     }
   };
 
-  const handleDoubleClick = (e: React.MouseEvent) => {
+  const handleDoubleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isLiked) {
-      setLikeCount(prev => prev + 1);
-      setIsLiked(true);
-      setShowLikeAnimation(true);
-      setTimeout(() => setShowLikeAnimation(false), 800);
+      try {
+        await postAPI.likePost(video.id);
+        setLikeCount(prev => prev + 1);
+        setIsLiked(true);
+        setShowLikeAnimation(true);
+        setTimeout(() => setShowLikeAnimation(false), 800);
+      } catch (error) {
+        console.error('Like error:', error);
+      }
     }
   };
 
