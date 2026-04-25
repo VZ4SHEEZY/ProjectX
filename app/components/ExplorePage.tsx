@@ -5,6 +5,7 @@ import {
   MessageSquare, Music, Mic, Link2, Loader2, UserPlus
 } from 'lucide-react';
 import { postAPI, userAPI } from '../services/api';
+import VideoModal from './VideoModal';
 
 interface ExplorePageProps {
   isAgeVerified: boolean;
@@ -50,7 +51,7 @@ const CATEGORIES = [
   { id: 'nsfw', label: 'NSFW 🔞', icon: EyeOff },
 ];
 
-const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick }) => {
+const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick, currentUser }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -62,6 +63,7 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
   const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
   const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedVideo, setSelectedVideo] = useState<any>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -311,7 +313,16 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
             {filteredContent.map((item) => (
               <div
                 key={item.id}
-                onClick={() => onContentClick(item)}
+                onClick={() => setSelectedVideo({
+                  id: item.id,
+                  url: item.thumbnail,
+                  mediaUrl: item.thumbnail,
+                  title: item.title,
+                  description: '',
+                  user: { username: item.creator.name, avatar: item.creator.avatar, displayName: item.creator.name },
+                  likes: item.likes,
+                  comments: 0
+                })}
                 className={`group cursor-pointer overflow-hidden bg-black border border-gray-800 hover:border-[#39FF14]/50 transition-all ${
                   viewMode === 'grid' ? 'rounded-lg' : 'rounded-lg flex'
                 }`}
@@ -464,6 +475,14 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
           )}
         </>
       )}
+
+      {/* Video Modal */}
+      <VideoModal
+        isOpen={!!selectedVideo}
+        onClose={() => setSelectedVideo(null)}
+        video={selectedVideo}
+        currentUser={currentUser}
+      />
     </div>
   );
 };

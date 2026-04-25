@@ -13,6 +13,7 @@ import ProfileDesignModal from './ProfileDesignModal';
 import { Copy, Wallet, Edit, Save, PaintBucket, Layers, Crown, Eye, EyeOff, Sparkles, MessageSquare, UserPlus, Heart, Eye as EyeIcon, Zap, Music } from 'lucide-react';
 import { generateBio } from '../services/aiService';
 import { userAPI, postAPI } from '../services/api';
+import VideoModal from './VideoModal';
 
 interface ProfileGridProps {
   user: User;
@@ -210,6 +211,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
   const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [selectedVideoForModal, setSelectedVideoForModal] = useState<any>(null);
   const [localTheme, setLocalTheme] = useState<ProfileTheme>(user.theme || {
     backgroundImage: '',
     backgroundColor: '#0a0a0a',
@@ -502,7 +504,16 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
                   {userPosts.map((post) => (
                     <div
                       key={post._id}
-                      onClick={() => setSelectedPost(post)}
+                      onClick={() => setSelectedVideoForModal({
+                        id: post._id,
+                        url: post.mediaUrl,
+                        mediaUrl: post.mediaUrl,
+                        title: post.title,
+                        description: post.description || '',
+                        user: post.author,
+                        likes: post.likesCount || 0,
+                        comments: post.commentsCount || 0
+                      })}
                       className="relative group cursor-pointer overflow-hidden border-2 border-[#39FF14]/50 hover:border-[#39FF14] transition-all duration-300 aspect-square"
                     >
                       <img
@@ -653,6 +664,14 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
             console.warn('Failed to save theme:', err);
           }
         }}
+      />
+
+      {/* Video Modal */}
+      <VideoModal
+        isOpen={!!selectedVideoForModal}
+        onClose={() => setSelectedVideoForModal(null)}
+        video={selectedVideoForModal}
+        currentUser={user}
       />
     </div>
   );
