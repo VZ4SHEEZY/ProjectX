@@ -488,6 +488,38 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
               </div>
             </div>
 
+            {/* UPLOADS SECTION - MOVED TO TOP */}
+            <div className="mt-6 border-t-4 border-[#39FF14] pt-6 w-full bg-black/50 p-4">
+              <div className="mb-4 text-center">
+                <h2 className="text-[#39FF14] font-bold text-xl tracking-widest border-b-4 border-[#39FF14] pb-4 animate-pulse">🎬 UPLOADS ({userPosts.length}) 🎬</h2>
+              </div>
+              {isLoadingPosts ? (
+                <div className="text-center text-gray-500 py-8 font-mono">LOADING POSTS...</div>
+              ) : !userPosts || userPosts.length === 0 ? (
+                <div className="text-center text-gray-500 py-8 border border-gray-800 rounded p-4">NO POSTS YET</div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {userPosts.map((post) => (
+                    <div
+                      key={post._id}
+                      onClick={() => setSelectedPost(post)}
+                      className="relative group cursor-pointer overflow-hidden border-2 border-[#39FF14]/50 hover:border-[#39FF14] transition-all duration-300 aspect-square"
+                    >
+                      <img
+                        src={post.thumbnailUrl || post.mediaUrl}
+                        alt={post.title}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center">
+                        <div className="text-[#39FF14] text-3xl">▶</div>
+                        <div className="text-[10px] text-white font-mono mt-2 text-center px-2 truncate">{post.title}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <ContactButtons onMessage={() => {}} onAddFriend={handleFollow} isFollowing={isFollowing} />
 
             <div className="h-48"><MusicPlayerWidget /></div>
@@ -559,37 +591,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate 
         </div>
       </div>
 
-      {/* POSTS GRID */}
-      <div className="mt-8 border-t-4 border-[#39FF14] pt-8 w-full max-w-5xl bg-black/50 p-4 mx-auto">
-        <div className="mb-4 text-center">
-          <h2 className="text-[#39FF14] font-bold text-2xl tracking-widest border-b-4 border-[#39FF14] pb-4 animate-pulse">🎬 UPLOADS ({userPosts.length}) 🎬</h2>
-        </div>
-        {isLoadingPosts ? (
-          <div className="text-center text-gray-500 py-8 font-mono">LOADING POSTS...</div>
-        ) : !userPosts || userPosts.length === 0 ? (
-          <div className="text-center text-gray-500 py-8 border border-gray-800 rounded p-4">NO POSTS YET</div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {userPosts.map((post) => (
-              <div
-                key={post._id}
-                onClick={() => setSelectedPost(post)}
-                className="relative group cursor-pointer overflow-hidden border-2 border-[#39FF14]/50 hover:border-[#39FF14] transition-all duration-300 aspect-square"
-              >
-                <img
-                  src={post.thumbnailUrl || post.mediaUrl}
-                  alt={post.title}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center">
-                  <div className="text-[#39FF14] text-3xl">▶</div>
-                  <div className="text-[10px] text-white font-mono mt-2 text-center px-2 truncate">{post.title}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+
 
       {/* VIDEO MODAL */}
       {selectedPost && (
