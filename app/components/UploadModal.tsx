@@ -13,7 +13,8 @@ interface UploadModalProps {
 const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [caption, setCaption] = useState('');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [isSensitive, setIsSensitive] = useState(false);
   const [isNSFW, setIsNSFW] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
@@ -27,7 +28,8 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
   useEffect(() => {
     if (!isOpen) {
       setFile(null);
-      setCaption('');
+      setTitle('');
+      setDescription('');
       setIsSensitive(false);
       setIsNSFW(false);
       setIsPremium(false);
@@ -75,8 +77,8 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
       const formData = new FormData();
       // Use 'video' for upload endpoint (multer expects 'video' field)
       formData.append('video', file);
-      formData.append('title', caption || 'Untitled Video');
-      formData.append('description', caption);
+      formData.append('title', title || 'Untitled Video');
+      formData.append('description', description);
       formData.append('isNSFW', isNSFW);
       formData.append('isSensitive', isSensitive);
       formData.append('monetizationType', isPremium ? 'ppv' : 'free');
@@ -218,9 +220,17 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
                   <label className="text-[10px] text-[#39FF14] font-mono uppercase tracking-widest">Data Manifest</label>
                   <input 
                     type="text" 
-                    value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
-                    placeholder="Describe your transmission..."
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Video Title"
+                    className="w-full bg-transparent border-b border-gray-700 text-white font-mono py-2 focus:outline-none focus:border-[#39FF14] transition-colors placeholder-gray-800"
+                    disabled={uploading}
+                  />
+                  <input
+                    type="text" 
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Description (optional)"
                     className="w-full bg-transparent border-b border-gray-700 text-white font-mono py-2 focus:outline-none focus:border-[#39FF14] transition-colors placeholder-gray-800"
                     disabled={uploading}
                   />
