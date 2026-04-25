@@ -60,6 +60,7 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
   const [sortBy, setSortBy] = useState<'trending' | 'newest' | 'popular'>('trending');
 
   const [content, setContent] = useState<ContentItem[]>([]);
+  const [rawPosts, setRawPosts] = useState<any[]>([]);
   const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
   const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -82,6 +83,7 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
             ? postsRes.value.data 
             : [];
           
+          setRawPosts(rawPosts);
           const mapped: ContentItem[] = rawPosts.map((post: any) => ({
             id: post._id,
             type: post.type || 'post',
@@ -313,16 +315,22 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
             {filteredContent.map((item) => (
               <div
                 key={item.id}
-                onClick={() => setSelectedVideo({
-                  id: item.id,
-                  url: item.thumbnail,
-                  mediaUrl: item.thumbnail,
-                  title: item.title,
-                  description: '',
-                  user: { username: item.creator.name, avatar: item.creator.avatar, displayName: item.creator.name },
-                  likes: item.likes,
-                  comments: 0
-                })}
+                onClick={() => {
+                  // Find the original post to get actual video URL
+                  const originalPost = rawPosts.find((p: any) => p._id === item.id);
+                  if (originalPost) {
+                    setSelectedVideo({
+                      id: originalPost._id,
+                      url: originalPost.mediaUrl,
+                      mediaUrl: originalPost.mediaUrl,
+                      title: originalPost.title,
+                      description: originalPost.description || '',
+                      user: originalPost.author,
+                      likes: originalPost.likesCount || 0,
+                      comments: originalPost.commentsCount || 0
+                    });
+                  }
+                }}
                 className={`group cursor-pointer overflow-hidden bg-black border border-gray-800 hover:border-[#39FF14]/50 transition-all ${
                   viewMode === 'grid' ? 'rounded-lg' : 'rounded-lg flex'
                 }`}
