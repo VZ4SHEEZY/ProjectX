@@ -368,6 +368,13 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
                     </div>
                   )}
 
+                  {/* Play Button Overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/40">
+                    <div className="w-16 h-16 rounded-full bg-[#39FF14]/80 flex items-center justify-center">
+                      <Video className="w-8 h-8 text-black ml-1" fill="currentColor" />
+                    </div>
+                  </div>
+
                   {/* NSFW Blur Overlay */}
                   {item.isNSFW && nsfwFilter === 'blur' && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
