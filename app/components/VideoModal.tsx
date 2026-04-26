@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Heart, MessageSquare, Share2, Cpu, Volume2, VolumeX } from 'lucide-react';
-import { postAPI, commentAPI } from '../services/api';
+import { postAPI, commentAPI, userAPI } from '../services/api';
 import { Video, User } from '../types';
 
 interface VideoModalProps {
@@ -20,11 +20,28 @@ const VideoModal: React.FC<VideoModalProps> = ({ isOpen, onClose, video, current
   const [commentText, setCommentText] = useState('');
   const [isCommentLoading, setIsCommentLoading] = useState(false);
   const [showShareToast, setShowShareToast] = useState(false);
+  const [comments, setComments] = useState<any[]>([]);
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
   
-  // Debug: log when modal opens with video
+  // Load comments when modal opens
   useEffect(() => {
-    console.log('VideoModal opened with video:', video);
-  }, [isOpen, video]);
+    if (isOpen && video?.id) {
+      loadComments();
+    }
+  }, [isOpen, video?.id]);
+
+  const loadComments = async () => {
+    setIsLoadingComments(true);
+    try {
+      const res = await commentAPI.getComments(video.id);
+      setComments(res.data?.data || []);
+    } catch (error) {
+      console.error('Load comments error:', error);
+    } finally {
+      setIsLoadingComments(false);
+    }
+  };
 
   if (!video) return null;
 
@@ -49,13 +66,48 @@ const VideoModal: React.FC<VideoModalProps> = ({ isOpen, onClose, video, current
     
     setIsCommentLoading(true);
     try {
-      await commentAPI.createComment(video.id, { content: commentText });
+      const res = await commentAPI.createComment(video.id, { content: commentText });
       setCommentText('');
+      // Reload comments to show new one
+      await loadComments();
     } catch (error) {
       console.error('Comment error:', error);
     } finally {
       setIsCommentLoading(false);
     }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      await commentAPI.deleteComment(commentId);
+      // Reload comments
+      await loadComments();
+    } catch (error) {
+      console.error('Delete comment error:', error);
+    }
+  };
+
+  const handleFollow = async () => {
+    try {
+      if (isFollowing) {
+        // Unfollow
+        await userAPI.unfollowUser(video.user.id);
+        setIsFollowing(false);
+      } else {
+        // Follow
+        await userAPI.followUser(video.user.id);
+        setIsFollowing(true);
+      }
+    } catch (error) {
+      console.error('Follow error:', error);
+    }
+  };
+
+  const canDeleteComment = (comment: any) => {
+    // Check if current user is the comment author
+    return currentUser?.id === comment.author?._id || 
+           currentUser?.id === comment.author?.id || 
+           currentUser?.username === comment.author?.username;
   };
 
   const handleShare = async () => {
@@ -127,8 +179,15 @@ const VideoModal: React.FC<VideoModalProps> = ({ isOpen, onClose, video, current
               <p className="text-white font-bold">{video.user.username}</p>
               <p className="text-gray-400 text-sm">{video.user.displayName || '@' + video.user.username}</p>
             </div>
-            <button className="px-4 py-2 border border-[#39FF14] text-[#39FF14] rounded hover:bg-[#39FF14] hover:text-black transition-all text-sm">
-              FOLLOW
+            <button
+              onClick={handleFollow}
+              className={`px-4 py-2 rounded transition-all text-sm font-bold ${
+                isFollowing
+                  ? 'bg-[#39FF14] text-black border border-[#39FF14]'
+                  : 'border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black'
+              }`}
+            >
+              {isFollowing ? 'FOLLOWING' : 'FOLLOW'}
             </button>
           </div>
 
@@ -168,9 +227,38 @@ const VideoModal: React.FC<VideoModalProps> = ({ isOpen, onClose, video, current
             )}
           </div>
 
-          {/* Comment Section */}
+          {/* Comments List */}
+          <div className="border-y border-gray-700 py-4 max-h-48 overflow-y-auto">
+            <h4 className="text-white font-bold mb-3 text-sm">Comments ({comments.length})</h4>
+            {isLoadingComments ? (
+              <div className="text-gray-500 text-sm">Loading comments...</div>
+            ) : comments.length === 0 ? (
+              <div className="text-gray-500 text-sm">No comments yet</div>
+            ) : (
+              <div className="space-y-3">
+                {comments.map((comment) => (
+                  <div key={comment._id} className="bg-gray-900/50 p-3 rounded text-sm">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-white font-bold text-xs">{comment.author?.username || 'Anonymous'}</p>
+                      {canDeleteComment(comment) && (
+                        <button
+                          onClick={() => handleDeleteComment(comment._id)}
+                          className="text-red-400 hover:text-red-300 text-xs"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-gray-300 text-xs">{comment.content}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Comment Input */}
           {currentUser && (
-            <div className="space-y-3">
+            <div className="space-y-3 pt-4">
               <div className="flex gap-3">
                 <input
                   type="text"
