@@ -6,27 +6,27 @@ import { Video, User } from '../types';
 interface VideoModalProps {
   isOpen: boolean;
   onClose: () => void;
-  video: Video;
+  video: Video | null | undefined;
   currentUser?: User;
 }
 
 const VideoModal: React.FC<VideoModalProps> = ({ isOpen, onClose, video, currentUser }) => {
+  if (!isOpen || !video) return null;
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isMuted, setIsMuted] = useState(false);
-  
-  // Debug: log when modal opens with video
-  useEffect(() => {
-    if (isOpen && video) {
-      console.log('VideoModal opened with video:', video);
-    }
-  }, [isOpen, video]);
   const [isLiked, setIsLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(video.likes || 0);
+  const [likeCount, setLikeCount] = useState(video?.likes || 0);
   const [commentText, setCommentText] = useState('');
   const [isCommentLoading, setIsCommentLoading] = useState(false);
   const [showShareToast, setShowShareToast] = useState(false);
+  
+  // Debug: log when modal opens with video
+  useEffect(() => {
+    console.log('VideoModal opened with video:', video);
+  }, [isOpen, video]);
 
-  if (!isOpen || !video) return null;
+  if (!video) return null;
 
   const handleLike = async () => {
     try {
