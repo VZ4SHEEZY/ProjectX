@@ -527,7 +527,7 @@ const App: React.FC = () => {
       </main>
 
       {/* 3. Mobile Bottom Navigation Bar - 5 items: Home, Explore, Create, Messages, Profile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 h-[calc(3.5rem+var(--sab))] bg-black/95 backdrop-blur-xl border-t border-[var(--primary-color,#39FF14)]/30 grid grid-cols-5 items-start pt-2 safe-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[9999] h-[calc(3.5rem+var(--sab))] bg-black/95 backdrop-blur-xl border-t border-[var(--primary-color,#39FF14)]/30 grid grid-cols-5 items-start pt-2 safe-bottom will-change-transform">
         
         {/* HOME (Feed) */}
         <MobileNavButton 
