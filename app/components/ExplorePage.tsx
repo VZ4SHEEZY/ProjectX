@@ -51,7 +51,7 @@ const CATEGORIES = [
   { id: 'nsfw', label: 'NSFW 🔞', icon: EyeOff },
 ];
 
-const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick, currentUser }) => {
+const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick, currentUser, onUsernameClick }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -501,6 +501,7 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
         onClose={() => setSelectedVideo(null)}
         video={selectedVideo}
         currentUser={currentUser}
+        onUsernameClick={onUsernameClick}
       />
     </div>
   );

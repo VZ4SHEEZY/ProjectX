@@ -20,6 +20,7 @@ interface ProfileGridProps {
   onTip?: (address: string) => void;
   onProfileUpdate?: (updates: Partial<User>) => void;
   creatorModeEnabled?: boolean;
+  onUsernameClick?: (userId: string) => void;
 }
 
 interface Post {
@@ -199,7 +200,7 @@ const ContactButtons: React.FC<{ onMessage?: () => void; onAddFriend?: () => voi
   </div>
 );
 
-const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate }) => {
+const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate, onUsernameClick }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);

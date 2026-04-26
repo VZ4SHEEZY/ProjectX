@@ -12,6 +12,7 @@ import AgeVerificationModal from './components/AgeVerificationModal';
 import CreatorDashboard from './components/CreatorDashboard';
 import PostComposer from './components/PostComposer';
 import ExplorePage from './components/ExplorePage';
+import UserProfilePage from './components/UserProfilePage';
 import SubscriptionTiers from './components/SubscriptionTiers';
 
 // New Components
@@ -35,7 +36,7 @@ import {
 } from 'lucide-react';
 
 type OnboardingStep = 'auth' | 'scanning' | 'reveal' | 'app';
-type MainView = 'feed' | 'explore' | 'messages' | 'profile';
+type MainView = 'feed' | 'explore' | 'messages' | 'profile' | 'userprofile';
 type FeedTab = 'discover' | 'friends' | 'faction';
 // Cache bust: force redeploy
 
@@ -60,6 +61,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   
   const [currentView, setCurrentView] = useState<MainView>('feed');
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [feedTab, setFeedTab] = useState<FeedTab>('discover');
   const [creatorModeEnabled, setCreatorModeEnabled] = useState(false);
   const [isTipModalOpen, setIsTipModalOpen] = useState(false);
@@ -259,8 +261,15 @@ const App: React.FC = () => {
   };
 
   // Navigation handler - switches between main views
-  const navigateTo = (view: MainView) => {
+  const navigateTo = (view: MainView, userId?: string) => {
+    if (view === 'userprofile' && userId) {
+      setSelectedUserId(userId);
+    }
     setCurrentView(view);
+  };
+
+  const handleViewUserProfile = (userId: string) => {
+    navigateTo('userprofile', userId);
   };
 
   // Handle creator mode toggle from Settings
@@ -491,6 +500,8 @@ const App: React.FC = () => {
           <div className="h-full w-full overflow-y-auto">
             <ExplorePage 
               isAgeVerified={user.isAgeVerified || false}
+              currentUser={user}
+              onUsernameClick={handleViewUserProfile}
               onContentClick={(content) => {
                 if (content.isNSFW && !user.isAgeVerified) {
                   setIsAgeVerificationOpen(true);
@@ -521,7 +532,18 @@ const App: React.FC = () => {
                onTip={handleTipClick} 
                onProfileUpdate={handleProfileUpdate}
                creatorModeEnabled={creatorModeEnabled}
+               onUsernameClick={handleViewUserProfile}
              />
+          </div>
+        )}
+
+        {currentView === 'userprofile' && selectedUserId && (
+          <div className="h-full w-full overflow-y-auto">
+            <UserProfilePage
+              userId={selectedUserId}
+              currentUser={user}
+              onBack={() => setCurrentView('feed')}
+            />
           </div>
         )}
       </main>
