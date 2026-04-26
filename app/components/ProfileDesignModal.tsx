@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Code, Image as ImageIcon, Save, Terminal, RefreshCw, Palette, Type, MousePointer, Layout } from 'lucide-react';
 import GlitchButton from './GlitchButton';
+import ProfileBuilder from './ProfileBuilder';
 import { ProfileTheme } from '../types';
 
 interface ProfileDesignModalProps {
@@ -67,7 +68,7 @@ const ProfileDesignModal: React.FC<ProfileDesignModalProps> = ({ isOpen, onClose
   const [fontFamily, setFontFamily] = useState<'mono' | 'sans' | 'serif' | 'cyber'>('mono');
   const [cursorEffect, setCursorEffect] = useState<'sparkles' | 'trails' | 'none'>('sparkles');
   const [cssCode, setCssCode] = useState(DEFAULT_CSS);
-  const [activeTab, setActiveTab] = useState<'appearance' | 'css'>('appearance');
+  const [activeTab, setActiveTab] = useState<'appearance' | 'layout' | 'css'>('appearance');
 
   useEffect(() => {
     if (isOpen) {
@@ -123,6 +124,13 @@ const ProfileDesignModal: React.FC<ProfileDesignModalProps> = ({ isOpen, onClose
           </button>
           <div className="w-[2px] bg-[#39FF14]/20" />
           <button 
+            onClick={() => setActiveTab('layout')}
+            className={`flex-1 py-4 text-sm font-mono font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'layout' ? 'bg-[#39FF14]/20 text-[#39FF14] border-b-2 border-[#39FF14]' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+          >
+            <Layout size={16} /> LAYOUT
+          </button>
+          <div className="w-[2px] bg-[#39FF14]/20" />
+          <button 
             onClick={() => setActiveTab('css')}
             className={`flex-1 py-4 text-sm font-mono font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'css' ? 'bg-[#39FF14]/20 text-[#39FF14] border-b-2 border-[#39FF14]' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
           >
@@ -133,6 +141,17 @@ const ProfileDesignModal: React.FC<ProfileDesignModalProps> = ({ isOpen, onClose
         {/* Editor Area */}
         <div className="flex-1 bg-black/80 relative overflow-hidden overflow-y-auto">
           
+          {activeTab === 'layout' && (
+            <ProfileBuilder
+              userId=""
+              currentLayout={undefined}
+              onSave={(layout) => {
+                onClose();
+              }}
+              onCancel={() => setActiveTab('appearance')}
+            />
+          )}
+
           {activeTab === 'appearance' && (
             <div className="p-6 space-y-8 animate-in fade-in slide-in-from-left-4 duration-300">
               
