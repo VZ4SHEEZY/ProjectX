@@ -156,7 +156,8 @@ router.put('/profile', protect, async (req, res) => {
       socialLinks,
       theme,
       isCreator,
-      creatorSettings
+      creatorSettings,
+      profileLayout
     } = req.body;
 
     const updateFields = {};
@@ -177,6 +178,7 @@ router.put('/profile', protect, async (req, res) => {
     }
     if (isCreator !== undefined) updateFields.isCreator = isCreator;
     if (creatorSettings) updateFields.creatorSettings = creatorSettings;
+    if (profileLayout) updateFields.profileLayout = profileLayout;
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
