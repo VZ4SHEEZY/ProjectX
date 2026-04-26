@@ -13,7 +13,7 @@ interface ProfileBuilderProps {
   onCancel: () => void;
 }
 
-const DraggableWidget: React.FC<{ id: string; name: string }> = ({ id, name }) => {
+const DraggableWidget: React.FC<{ id: string; name: string; onRemove?: () => void }> = ({ id, name, onRemove }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const style = {
@@ -26,12 +26,22 @@ const DraggableWidget: React.FC<{ id: string; name: string }> = ({ id, name }) =
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-gray-900 border border-gray-700 p-4 rounded flex items-center gap-3 cursor-grab active:cursor-grabbing hover:border-[#39FF14]/50 transition-colors"
+      className="bg-gray-900 border border-gray-700 p-4 rounded flex items-center justify-between gap-3 cursor-grab active:cursor-grabbing hover:border-[#39FF14]/50 transition-colors"
       {...attributes}
       {...listeners}
     >
-      <GripVertical size={18} className="text-gray-500" />
-      <span className="text-white font-mono text-sm">{name}</span>
+      <div className="flex items-center gap-3 flex-1">
+        <GripVertical size={18} className="text-gray-500 flex-shrink-0" />
+        <span className="text-white font-mono text-sm">{name}</span>
+      </div>
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          className="text-gray-500 hover:text-red-400 transition-colors text-xs font-bold"
+        >
+          ✕ HIDE
+        </button>
+      )}
     </div>
   );
 };
@@ -60,17 +70,38 @@ const ProfileBuilder: React.FC<ProfileBuilderProps> = ({ userId, currentLayout, 
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (!over) return;
 
-    // Determine which zone the items belong to
-    if (active.data.current?.zone === 'left') {
-      const oldIndex = leftZone.indexOf(active.id);
-      const newIndex = leftZone.indexOf(over.id);
-      setLeftZone(arrayMove(leftZone, oldIndex, newIndex));
-    } else if (active.data.current?.zone === 'right') {
-      const oldIndex = rightZone.indexOf(active.id);
-      const newIndex = rightZone.indexOf(over.id);
-      setRightZone(arrayMove(rightZone, oldIndex, newIndex));
+    const activeId = active.id;
+    const overId = over.id;
+
+    // Check if dragging from left to right
+    if (leftZone.includes(activeId) && rightZone.includes(overId)) {
+      setLeftZone(leftZone.filter(id => id !== activeId));
+      const newIndex = rightZone.indexOf(overId);
+      setRightZone([...rightZone.slice(0, newIndex), activeId, ...rightZone.slice(newIndex)]);
+    }
+    // Check if dragging from right to left
+    else if (rightZone.includes(activeId) && leftZone.includes(overId)) {
+      setRightZone(rightZone.filter(id => id !== activeId));
+      const newIndex = leftZone.indexOf(overId);
+      setLeftZone([...leftZone.slice(0, newIndex), activeId, ...leftZone.slice(newIndex)]);
+    }
+    // Reorder within left zone
+    else if (leftZone.includes(activeId) && leftZone.includes(overId)) {
+      const oldIndex = leftZone.indexOf(activeId);
+      const newIndex = leftZone.indexOf(overId);
+      if (oldIndex !== newIndex) {
+        setLeftZone(arrayMove(leftZone, oldIndex, newIndex));
+      }
+    }
+    // Reorder within right zone
+    else if (rightZone.includes(activeId) && rightZone.includes(overId)) {
+      const oldIndex = rightZone.indexOf(activeId);
+      const newIndex = rightZone.indexOf(overId);
+      if (oldIndex !== newIndex) {
+        setRightZone(arrayMove(rightZone, oldIndex, newIndex));
+      }
     }
   };
 
@@ -120,39 +151,65 @@ const ProfileBuilder: React.FC<ProfileBuilderProps> = ({ userId, currentLayout, 
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        {/* Left Zone */}
-        <div className="bg-gray-950 border-2 border-dashed border-gray-700 p-4 rounded">
-          <h3 className="text-white font-bold mb-4">LEFT COLUMN</h3>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <div className="grid grid-cols-2 gap-6">
+          {/* Left Zone */}
+          <div className="bg-gray-950 border-2 border-dashed border-gray-700 p-4 rounded">
+            <h3 className="text-white font-bold mb-4">LEFT COLUMN</h3>
             <SortableContext items={leftZone} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
                 {leftZone.map((widgetId) => {
                   const widget = availableWidgets.find((w) => w.id === widgetId);
                   return widget ? (
-                    <DraggableWidget key={widgetId} id={widgetId} name={widget.name} />
+                    <DraggableWidget 
+                      key={widgetId} 
+                      id={widgetId} 
+                      name={widget.name}
+                      onRemove={() => setLeftZone(leftZone.filter(id => id !== widgetId))}
+                    />
                   ) : null;
                 })}
               </div>
             </SortableContext>
-          </DndContext>
-        </div>
+          </div>
 
-        {/* Right Zone */}
-        <div className="bg-gray-950 border-2 border-dashed border-gray-700 p-4 rounded">
-          <h3 className="text-white font-bold mb-4">RIGHT COLUMN</h3>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          {/* Right Zone */}
+          <div className="bg-gray-950 border-2 border-dashed border-gray-700 p-4 rounded">
+            <h3 className="text-white font-bold mb-4">RIGHT COLUMN</h3>
             <SortableContext items={rightZone} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
                 {rightZone.map((widgetId) => {
                   const widget = availableWidgets.find((w) => w.id === widgetId);
                   return widget ? (
-                    <DraggableWidget key={widgetId} id={widgetId} name={widget.name} />
+                    <DraggableWidget 
+                      key={widgetId} 
+                      id={widgetId} 
+                      name={widget.name}
+                      onRemove={() => setRightZone(rightZone.filter(id => id !== widgetId))}
+                    />
                   ) : null;
                 })}
               </div>
             </SortableContext>
-          </DndContext>
+          </div>
+        </div>
+      </DndContext>
+
+      {/* Available Widgets Section */}
+      <div className="mt-6 bg-gray-950 border-2 border-dashed border-gray-700 p-4 rounded">
+        <h3 className="text-white font-bold mb-4">AVAILABLE WIDGETS (Click to Add)</h3>
+        <div className="grid grid-cols-2 gap-2">
+          {availableWidgets
+            .filter(w => !leftZone.includes(w.id) && !rightZone.includes(w.id))
+            .map(widget => (
+              <button
+                key={widget.id}
+                onClick={() => setLeftZone([...leftZone, widget.id])}
+                className="bg-gray-900 border border-gray-700 p-3 rounded text-left hover:border-[#39FF14] hover:bg-gray-800 transition-all text-white font-mono text-sm"
+              >
+                + {widget.name}
+              </button>
+            ))}
         </div>
       </div>
 
@@ -161,8 +218,11 @@ const ProfileBuilder: React.FC<ProfileBuilderProps> = ({ userId, currentLayout, 
         <p className="text-gray-400 text-sm">📌 Posts Grid is always here</p>
       </div>
 
-      <div className="mt-4 text-xs text-gray-500 font-mono">
-        💡 Drag widgets to reorder. Save when done. Mobile will stack vertically.
+      <div className="mt-4 text-xs text-gray-500 font-mono space-y-1">
+        <p>💡 Drag widgets between columns to move them</p>
+        <p>💡 Click ✕ HIDE to remove a widget</p>
+        <p>💡 Click + to add hidden widgets back</p>
+        <p>💡 Mobile will stack all widgets vertically</p>
       </div>
     </div>
   );
