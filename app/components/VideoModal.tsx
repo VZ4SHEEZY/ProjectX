@@ -175,8 +175,8 @@ const VideoModal: React.FC<VideoModalProps> = ({ isOpen, onClose, video, current
               alt={video.user.username}
               className="w-12 h-12 rounded-full border border-[#39FF14]"
             />
-            <div className="flex-1">
-              <p className="text-white font-bold">{video.user.username}</p>
+            <div className="flex-1 cursor-pointer hover:opacity-80 transition-opacity">
+              <p className="text-white font-bold hover:text-[#39FF14]">{video.user.username}</p>
               <p className="text-gray-400 text-sm">{video.user.displayName || '@' + video.user.username}</p>
             </div>
             <button
