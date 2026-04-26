@@ -13,8 +13,11 @@ interface ProfileBuilderProps {
   onCancel: () => void;
 }
 
-const DraggableWidget: React.FC<{ id: string; name: string; onRemove?: () => void }> = ({ id, name, onRemove }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+const DraggableWidget: React.FC<{ id: string; name: string; onRemove?: () => void; zone?: string }> = ({ id, name, onRemove, zone }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
+    id,
+    data: { zone }
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -36,8 +39,11 @@ const DraggableWidget: React.FC<{ id: string; name: string; onRemove?: () => voi
       </div>
       {onRemove && (
         <button
-          onClick={onRemove}
-          className="text-gray-500 hover:text-red-400 transition-colors text-xs font-bold"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="text-gray-500 hover:text-red-400 transition-colors text-xs font-bold flex-shrink-0"
         >
           ✕ HIDE
         </button>
@@ -74,32 +80,36 @@ const ProfileBuilder: React.FC<ProfileBuilderProps> = ({ userId, currentLayout, 
 
     const activeId = active.id;
     const overId = over.id;
+    const activeZone = active.data.current?.zone;
+    const overZone = over.data.current?.zone;
 
-    // Check if dragging from left to right
-    if (leftZone.includes(activeId) && rightZone.includes(overId)) {
+    // Cross-zone drag: left → right
+    if (activeZone === 'left' && overZone === 'right') {
       setLeftZone(leftZone.filter(id => id !== activeId));
       const newIndex = rightZone.indexOf(overId);
-      setRightZone([...rightZone.slice(0, newIndex), activeId, ...rightZone.slice(newIndex)]);
+      const insertIndex = newIndex >= 0 ? newIndex : rightZone.length;
+      setRightZone([...rightZone.slice(0, insertIndex), activeId, ...rightZone.slice(insertIndex)]);
     }
-    // Check if dragging from right to left
-    else if (rightZone.includes(activeId) && leftZone.includes(overId)) {
+    // Cross-zone drag: right → left
+    else if (activeZone === 'right' && overZone === 'left') {
       setRightZone(rightZone.filter(id => id !== activeId));
       const newIndex = leftZone.indexOf(overId);
-      setLeftZone([...leftZone.slice(0, newIndex), activeId, ...leftZone.slice(newIndex)]);
+      const insertIndex = newIndex >= 0 ? newIndex : leftZone.length;
+      setLeftZone([...leftZone.slice(0, insertIndex), activeId, ...leftZone.slice(insertIndex)]);
     }
     // Reorder within left zone
-    else if (leftZone.includes(activeId) && leftZone.includes(overId)) {
+    else if (activeZone === 'left' && overZone === 'left') {
       const oldIndex = leftZone.indexOf(activeId);
       const newIndex = leftZone.indexOf(overId);
-      if (oldIndex !== newIndex) {
+      if (oldIndex !== newIndex && oldIndex >= 0 && newIndex >= 0) {
         setLeftZone(arrayMove(leftZone, oldIndex, newIndex));
       }
     }
     // Reorder within right zone
-    else if (rightZone.includes(activeId) && rightZone.includes(overId)) {
+    else if (activeZone === 'right' && overZone === 'right') {
       const oldIndex = rightZone.indexOf(activeId);
       const newIndex = rightZone.indexOf(overId);
-      if (oldIndex !== newIndex) {
+      if (oldIndex !== newIndex && oldIndex >= 0 && newIndex >= 0) {
         setRightZone(arrayMove(rightZone, oldIndex, newIndex));
       }
     }
@@ -154,7 +164,7 @@ const ProfileBuilder: React.FC<ProfileBuilderProps> = ({ userId, currentLayout, 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="grid grid-cols-2 gap-6">
           {/* Left Zone */}
-          <div className="bg-gray-950 border-2 border-dashed border-gray-700 p-4 rounded">
+          <div className="bg-gray-950 border-2 border-dashed border-gray-700 p-4 rounded min-h-96">
             <h3 className="text-white font-bold mb-4">LEFT COLUMN</h3>
             <SortableContext items={leftZone} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
@@ -165,6 +175,7 @@ const ProfileBuilder: React.FC<ProfileBuilderProps> = ({ userId, currentLayout, 
                       key={widgetId} 
                       id={widgetId} 
                       name={widget.name}
+                      zone="left"
                       onRemove={() => setLeftZone(leftZone.filter(id => id !== widgetId))}
                     />
                   ) : null;
@@ -174,7 +185,7 @@ const ProfileBuilder: React.FC<ProfileBuilderProps> = ({ userId, currentLayout, 
           </div>
 
           {/* Right Zone */}
-          <div className="bg-gray-950 border-2 border-dashed border-gray-700 p-4 rounded">
+          <div className="bg-gray-950 border-2 border-dashed border-gray-700 p-4 rounded min-h-96">
             <h3 className="text-white font-bold mb-4">RIGHT COLUMN</h3>
             <SortableContext items={rightZone} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
@@ -185,6 +196,7 @@ const ProfileBuilder: React.FC<ProfileBuilderProps> = ({ userId, currentLayout, 
                       key={widgetId} 
                       id={widgetId} 
                       name={widget.name}
+                      zone="right"
                       onRemove={() => setRightZone(rightZone.filter(id => id !== widgetId))}
                     />
                   ) : null;
