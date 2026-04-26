@@ -649,6 +649,8 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
         isOpen={isDesignOpen}
         onClose={() => setIsDesignOpen(false)}
         currentTheme={localTheme}
+        userId={user.id}
+        profileLayout={user.profileLayout}
         onSave={async (theme) => {
           setLocalTheme(theme);
           setIsDesignOpen(false);

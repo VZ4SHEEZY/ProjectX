@@ -10,6 +10,8 @@ interface ProfileDesignModalProps {
   onClose: () => void;
   currentTheme?: ProfileTheme;
   onSave: (theme: ProfileTheme) => void;
+  userId?: string;
+  profileLayout?: any;
 }
 
 const PRESET_BACKGROUNDS = [
@@ -61,7 +63,7 @@ const DEFAULT_CSS = `/* CYBERDOPE PROFILE CSS OVERRIDE */
 }
 `;
 
-const ProfileDesignModal: React.FC<ProfileDesignModalProps> = ({ isOpen, onClose, currentTheme, onSave }) => {
+const ProfileDesignModal: React.FC<ProfileDesignModalProps> = ({ isOpen, onClose, currentTheme, onSave, userId, profileLayout }) => {
   const [bgUrl, setBgUrl] = useState('');
   const [bgColor, setBgColor] = useState('#0a0a0a');
   const [accentColor, setAccentColor] = useState('#39FF14');
@@ -143,8 +145,8 @@ const ProfileDesignModal: React.FC<ProfileDesignModalProps> = ({ isOpen, onClose
           
           {activeTab === 'layout' && (
             <ProfileBuilder
-              userId=""
-              currentLayout={undefined}
+              userId={userId || ''}
+              currentLayout={profileLayout}
               onSave={(layout) => {
                 onClose();
               }}
