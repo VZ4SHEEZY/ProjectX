@@ -60,6 +60,9 @@ const userSchema = new mongoose.Schema({
   isAgeVerified: { type: Boolean, default: false },
   ageVerifiedAt: Date,
   
+  // Privacy settings
+  profilePrivacy: { type: String, enum: ['public', 'private'], default: 'public' },
+  
   // Wallet
   walletAddress: { type: String, default: '' },
   btcAddress: { type: String, default: '' },
