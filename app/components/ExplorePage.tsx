@@ -318,6 +318,7 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
                 onClick={() => {
                   // Find the original post to get actual video URL
                   const originalPost = rawPosts.find((p: any) => p._id === item.id);
+                  console.log('Clicked video:', item.id, 'Found post:', originalPost);
                   if (originalPost) {
                     setSelectedVideo({
                       id: originalPost._id,
@@ -329,6 +330,9 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
                       likes: originalPost.likesCount || 0,
                       comments: originalPost.commentsCount || 0
                     });
+                    console.log('Set selectedVideo');
+                  } else {
+                    console.log('Post not found in rawPosts. rawPosts length:', rawPosts.length);
                   }
                 }}
                 className={`group cursor-pointer overflow-hidden bg-black border border-gray-800 hover:border-[#39FF14]/50 transition-all ${
