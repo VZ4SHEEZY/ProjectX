@@ -145,12 +145,13 @@ router.get('/feed/foryou', protect, async (req, res) => {
 // @access  Private
 router.get('/feed/following', protect, async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 50 } = req.query;
 
     if (req.user.following.length === 0) {
       return res.json({
         success: true,
         count: 0,
+        total: 0,
         data: [],
         message: 'Follow some creators to see their posts here'
       });
@@ -174,18 +175,23 @@ router.get('/feed/following', protect, async (req, res) => {
     const posts = await Post.find(query)
       .populate('author', 'username displayName avatar isVerified')
       .sort('-createdAt')
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+      .limit(limit);
 
     const postsWithAccess = posts.map(post => {
-      const postObj = post.toObject();
-      postObj.canAccess = post.canAccess(req.user);
-      return postObj;
-    });
+      try {
+        const postObj = post.toObject();
+        postObj.canAccess = post.canAccess(req.user);
+        return postObj;
+      } catch (err) {
+        console.error('Error processing post:', post._id, err);
+        return null;
+      }
+    }).filter(post => post !== null);
 
     res.json({
       success: true,
-      count: posts.length,
+      count: postsWithAccess.length,
+      total: postsWithAccess.length,
       data: postsWithAccess
     });
   } catch (error) {
@@ -202,7 +208,7 @@ router.get('/feed/following', protect, async (req, res) => {
 // @access  Private
 router.get('/feed/faction', protect, async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 50 } = req.query;
 
     // Check if user is in a faction
     if (!req.user.faction || req.user.faction === 'Unaffiliated') {
@@ -230,14 +236,18 @@ router.get('/feed/faction', protect, async (req, res) => {
     const posts = await Post.find(query)
       .populate('author', 'username displayName avatar isVerified')
       .sort('-createdAt')
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+      .limit(limit);
 
     const postsWithAccess = posts.map(post => {
-      const postObj = post.toObject();
-      postObj.canAccess = post.canAccess(req.user);
-      return postObj;
-    });
+      try {
+        const postObj = post.toObject();
+        postObj.canAccess = post.canAccess(req.user);
+        return postObj;
+      } catch (err) {
+        console.error('Error processing post:', post._id, err);
+        return null;
+      }
+    }).filter(post => post !== null);
 
     const count = await Post.countDocuments(query);
 
