@@ -63,6 +63,15 @@ const userSchema = new mongoose.Schema({
   // Privacy settings
   profilePrivacy: { type: String, enum: ['public', 'private'], default: 'public' },
   
+  // Profile customization layout
+  profileLayout: {
+    leftZone: [String],      // Widget names in left column
+    rightZone: [String],     // Widget names in right column
+    bottomZone: [String],    // Widget names in bottom (posts grid locked here)
+    hiddenWidgets: [String], // Widgets user hid
+    mobileOrder: [String]    // Mobile vertical stack order
+  },
+  
   // Wallet
   walletAddress: { type: String, default: '' },
   btcAddress: { type: String, default: '' },
