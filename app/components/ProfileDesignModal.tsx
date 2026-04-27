@@ -12,6 +12,7 @@ interface ProfileDesignModalProps {
   onSave: (theme: ProfileTheme) => void;
   userId?: string;
   profileLayout?: any;
+  onLayoutUpdate?: (layout: any) => void;
 }
 
 const PRESET_BACKGROUNDS = [
@@ -63,7 +64,7 @@ const DEFAULT_CSS = `/* CYBERDOPE PROFILE CSS OVERRIDE */
 }
 `;
 
-const ProfileDesignModal: React.FC<ProfileDesignModalProps> = ({ isOpen, onClose, currentTheme, onSave, userId, profileLayout }) => {
+const ProfileDesignModal: React.FC<ProfileDesignModalProps> = ({ isOpen, onClose, currentTheme, onSave, userId, profileLayout, onLayoutUpdate }) => {
   const [bgUrl, setBgUrl] = useState('');
   const [bgColor, setBgColor] = useState('#0a0a0a');
   const [accentColor, setAccentColor] = useState('#39FF14');
@@ -148,6 +149,7 @@ const ProfileDesignModal: React.FC<ProfileDesignModalProps> = ({ isOpen, onClose
               userId={userId || ''}
               currentLayout={profileLayout}
               onSave={(layout) => {
+                onLayoutUpdate?.(layout);
                 onClose();
               }}
               onCancel={() => setActiveTab('appearance')}
