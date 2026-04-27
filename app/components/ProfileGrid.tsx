@@ -10,6 +10,7 @@ import DataLogWidget from './DataLogWidget';
 import GeoNodeWidget from './GeoNodeWidget';
 import CustomCodeWidget from './CustomCodeWidget';
 import ProfileDesignModal from './ProfileDesignModal';
+import { renderWidget, ProfileWidgetColumn } from './ProfileWidgetRenderer';
 import { Copy, Wallet, Edit, Save, PaintBucket, Layers, Crown, Eye, EyeOff, Sparkles, MessageSquare, UserPlus, Heart, Eye as EyeIcon, Zap, Music } from 'lucide-react';
 import { generateBio } from '../services/aiService';
 import { userAPI, postAPI } from '../services/api';
@@ -534,8 +535,13 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
 
             <ContactButtons onMessage={() => {}} onAddFriend={handleFollow} isFollowing={isFollowing} />
 
-            <div className="h-48"><MusicPlayerWidget /></div>
-            <div className="h-48"><GeoNodeWidget /></div>
+            <ProfileWidgetColumn
+              widgets={user.profileLayout?.leftZone}
+              defaultWidgets={[
+                <div key="music" className="h-48"><MusicPlayerWidget /></div>,
+                <div key="geo" className="h-48"><GeoNodeWidget /></div>
+              ]}
+            />
           </div>
 
           {/* RIGHT COLUMN */}
@@ -553,12 +559,16 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
               </button>
             </div>
 
-            <div className="h-72"><TopFriendsWidget /></div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="h-64"><AssetGalleryWidget /></div>
-              <div className="h-64"><DataLogWidget /></div>
-            </div>
+            <ProfileWidgetColumn
+              widgets={user.profileLayout?.rightZone}
+              defaultWidgets={[
+                <div key="topfriends" className="h-72"><TopFriendsWidget /></div>,
+                <div key="assetgrid" className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="h-64"><AssetGalleryWidget /></div>
+                  <div className="h-64"><DataLogWidget /></div>
+                </div>
+              ]}
+            />
 
             <div className="h-48"><CustomCodeWidget /></div>
 
