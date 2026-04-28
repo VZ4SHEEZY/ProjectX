@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import VideoPlayer from './VideoPlayer';
+import DesktopFeed from './DesktopFeed';
 import { postAPI } from '../services/api';
 import { generateSystemMessage } from '../services/aiService';
 import { User, Video } from '../types';
@@ -127,6 +128,29 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
   const [apiVideos, setApiVideos] = useState<Video[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedError, setFeedError] = useState<string | null>(null);
+  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' && window.innerWidth >= 1024);
+
+  // Check if desktop on mount and on resize
+  useEffect(() => {
+    const checkDesktop = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+    window.addEventListener('resize', checkDesktop);
+    checkDesktop();
+    return () => window.removeEventListener('resize', checkDesktop);
+  }, []);
+
+  // If desktop, show DesktopFeed instead of mobile TikTok feed
+  if (isDesktop && apiVideos.length > 0) {
+    return (
+      <DesktopFeed
+        videos={apiVideos}
+        currentUser={currentUser}
+        activeTab={activeTab}
+        onTipClick={onTipClick}
+      />
+    );
+  }
 
   const mapPostToVideo = (post: any): Video => ({
     id: post._id || post.id,
