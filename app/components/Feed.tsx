@@ -405,18 +405,6 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
         video={visibleVideos[activeIndex]}
         currentUser={currentUser}
         onTipClick={onTipClick}
-        onVideoSelect={(selectedVideo) => {
-          // Find the index of the selected video and jump to it
-          const index = visibleVideos.findIndex(v => v.id === selectedVideo.id);
-          if (index !== -1) {
-            setActiveIndex(index);
-          }
-        }}
-        onCreatorClick={(username) => {
-          // This will be wired to App.tsx to navigate to profile
-          // For now, just log it
-          console.log('Navigate to profile:', username);
-        }}
       />
     );
   }

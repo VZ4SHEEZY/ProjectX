@@ -1,31 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import VideoPlayer from './VideoPlayer';
 import { Video, User } from '../types';
-import { postAPI } from '../services/api';
 
 interface DesktopFeedWrapperProps {
   video: Video;
   currentUser: User;
   onTipClick: (address: string) => void;
-  onVideoSelect?: (video: Video) => void;
-  onCreatorClick?: (username: string) => void;
 }
 
-const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({ video, currentUser, onTipClick, onVideoSelect, onCreatorClick }) => {
-  const [creatorVideos, setCreatorVideos] = useState<Video[]>([]);
-  const [loadingVideos, setLoadingVideos] = useState(false);
-
-  useEffect(() => {
-    if (!video.user?.id) return;
-    
-    setLoadingVideos(true);
-    postAPI.getUserPosts(video.user.id, { page: 1, limit: 4 })
-      .then(res => {
-        setCreatorVideos(res.data?.posts || []);
-      })
-      .catch(err => console.error('Failed to load creator videos:', err))
-      .finally(() => setLoadingVideos(false));
-  }, [video.user?.id]);
+/**
+ * STEP 1: Just the layout container
+ * - Left: 65% video player
+ * - Right: 35% sidebar (placeholder for now)
+ */
+const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({ video, currentUser, onTipClick }) => {
   return (
     <div className="w-full h-full bg-black flex gap-4 p-4">
       {/* LEFT: Video Player (65%) */}
@@ -44,14 +32,14 @@ const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({ video, currentU
       <div className="flex-[0.35] bg-gray-950 border border-[#39FF14]/20 rounded-lg p-4 flex flex-col gap-4 overflow-y-auto">
         {/* Creator Card */}
         <div className="border-b border-[#39FF14]/20 pb-4">
-          <div className="flex items-center gap-3 mb-3 cursor-pointer" onClick={() => onCreatorClick?.(video.user?.username || '')}>
+          <div className="flex items-center gap-3 mb-3">
             <img
               src={video.user?.avatar}
               alt="creator"
-              className="w-12 h-12 rounded-full border border-[#39FF14] hover:opacity-80 transition-opacity"
+              className="w-12 h-12 rounded-full border border-[#39FF14]"
             />
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-white truncate hover:text-[#39FF14] transition-colors">{video.user?.username}</p>
+              <p className="font-bold text-white truncate">{video.user?.username}</p>
               <p className="text-xs text-gray-400">{video.user?.followersCount || 0} followers</p>
             </div>
           </div>
@@ -78,25 +66,12 @@ const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({ video, currentU
         <div>
           <h3 className="text-white font-bold text-sm mb-3">Latest Videos</h3>
           <div className="grid grid-cols-2 gap-2">
-            {loadingVideos ? (
-              <div className="col-span-2 text-center text-gray-400 text-xs py-4">Loading...</div>
-            ) : creatorVideos.length === 0 ? (
-              <div className="col-span-2 text-center text-gray-400 text-xs py-4">No videos</div>
-            ) : (
-              creatorVideos.map(v => (
-                <div
-                  key={v.id}
-                  onClick={() => onVideoSelect?.(v)}
-                  className="aspect-video bg-gray-800 rounded border border-gray-700 cursor-pointer hover:border-[#39FF14] transition-colors overflow-hidden group"
-                >
-                  <img
-                    src={v.thumbnail || v.user?.avatar}
-                    alt="video"
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                  />
-                </div>
-              ))
-            )}
+            {/* Placeholder thumbnails */}
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="aspect-video bg-gray-800 rounded border border-gray-700 cursor-pointer hover:border-[#39FF14] transition-colors flex items-center justify-center text-gray-400 text-xs">
+                Video {i}
+              </div>
+            ))}
           </div>
         </div>
 
