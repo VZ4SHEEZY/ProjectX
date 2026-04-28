@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import VideoPlayer from './VideoPlayer';
+import DesktopFeedLayout from './DesktopFeedLayout';
 import { postAPI } from '../services/api';
 import { generateSystemMessage } from '../services/aiService';
 import { User, Video } from '../types';
@@ -127,6 +128,26 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
   const [apiVideos, setApiVideos] = useState<Video[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedError, setFeedError] = useState<string | null>(null);
+  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' && window.innerWidth >= 1024);
+
+  // Track desktop/mobile on resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // DESKTOP: Show sidebar layout instead of full-screen mobile feed
+  if (isDesktop && apiVideos.length > 0 && !feedLoading) {
+    return <DesktopFeedLayout videos={apiVideos} currentUser={currentUser} onTipClick={onTipClick} />;
+  }
+
+  // Show loading while videos load on desktop
+  if (feedLoading && isDesktop) {
+    return <div className="w-full h-full flex items-center justify-center text-gray-400">Loading...</div>;
+  }
 
   const mapPostToVideo = (post: any): Video => ({
     id: post._id || post.id,
