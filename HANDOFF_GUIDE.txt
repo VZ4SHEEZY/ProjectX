@@ -1,0 +1,318 @@
+================================================================================
+                    CYBERDOPE V1 - DEVELOPMENT HANDOFF
+================================================================================
+
+PROJECT STATUS: Profile Customization COMPLETE ✅
+Latest Commit: 888238f (README.md handoff guide)
+Deployed: https://project-x-sage-nine.vercel.app
+
+================================================================================
+WHERE YOUR CODE IS
+================================================================================
+
+REAL CODEBASE LOCATION:
+  /Users/bojackson/ProjectX/
+
+DO NOT USE:
+  /Users/bojackson/Desktop/ProjectX (old copy - DELETE if you see it)
+
+VERIFY IT'S THERE:
+  - Open Finder
+  - Go to: Users > bojackson > ProjectX
+  - You should see: app/, backend/, .git/, package.json
+
+================================================================================
+WHAT'S BUILT ✅
+================================================================================
+
+PROFILE CUSTOMIZATION (JUST COMPLETED):
+  ✅ Drag-drop widget layout editor
+  ✅ 9 widgets available (Music, TopFriends, SocialHub, GeoNode, Assets, DataLog, etc)
+  ✅ Left/Right/Bottom zones
+  ✅ Hide/Show widgets
+  ✅ Save layout to database
+  ✅ Persists on page refresh
+  ✅ Full callback chain working
+
+SOCIAL FEATURES:
+  ✅ Feed (Discover, Friends, Faction tabs)
+  ✅ Video upload via Cloudinary
+  ✅ Like/Unlike
+  ✅ Comments (post, delete, display)
+  ✅ Follow/Unfollow
+  ✅ User profiles (public/private)
+  ✅ Clickable usernames
+
+NAVIGATION & AUTH:
+  ✅ 5-item nav (HOME, EXPLORE, CREATE, MESSAGES, PROFILE)
+  ✅ Auth tokens
+  ✅ User login/signup
+
+================================================================================
+HOW TO TEST IT
+================================================================================
+
+1. Go to live site:
+   https://project-x-sage-nine.vercel.app
+
+2. Click your profile (top right)
+
+3. Click DESIGN button
+
+4. Click LAYOUT tab (3rd tab)
+
+5. DRAG a widget from LEFT column to RIGHT column
+   → Should move immediately
+
+6. Click SAVE LAYOUT button
+
+7. Refresh the page
+   → Widget should stay in RIGHT column ✅
+
+8. Try:
+   - Dragging to reorder widgets
+   - Clicking "✕ HIDE" to remove a widget
+   - Clicking "+ ADD WIDGET" to add it back
+
+================================================================================
+NEXT PHASE (When You Resume)
+================================================================================
+
+PRIORITY 1: STRIPE PAYMENTS
+  - Subscriptions (monthly/annual)
+  - Tips/donations
+  - PPV content
+  - Creator payouts
+
+PRIORITY 2: VANISHING DMS
+  - 4-layer messaging (Standard/Vanish/Locked/Vault)
+  - 7-day auto-delete
+  - Screenshot alerts
+
+PRIORITY 3: REFERRAL SYSTEM
+  - Tier structure (Spark → Sovereign)
+  - Tracking
+  - Payouts
+
+PRIORITY 4: CREATOR DASHBOARD
+  - Earnings analytics
+  - Subscriber management
+
+================================================================================
+FILE LOCATIONS
+================================================================================
+
+MAIN CODE:
+  /Users/bojackson/ProjectX/
+    ├── app/                    (React frontend)
+    ├── backend/                (Node.js API)
+    └── .git/                   (All commits)
+
+DOCUMENTATION:
+  /Users/bojackson/ProjectX/README.md
+    → COMPREHENSIVE GUIDE with all architecture details
+
+MEMORY/SESSION NOTES:
+  /Users/bojackson/.openclaw/workspace/memory/
+    → Daily session notes
+
+DESKTOP DOCS (FOR REFERENCE):
+  /Users/bojackson/Desktop/
+    - CyberDope_Master_Blueprint_V3.docx  (Full system design)
+    - CYBERDOPE_DM_SYSTEM.md              (Messaging spec)
+    - PROFILE_CUSTOMIZATION_SPEC.md       (Widget layout spec)
+
+================================================================================
+HOW TO PICK UP NEXT TIME
+================================================================================
+
+STEP 1: CHECK WHAT WAS DONE
+  cd /Users/bojackson/ProjectX
+  git log --oneline -10
+
+STEP 2: READ THE GUIDE
+  Open: /Users/bojackson/ProjectX/README.md
+  (Full architecture, file structure, API endpoints)
+
+STEP 3: TEST LIVE SITE
+  Go to: https://project-x-sage-nine.vercel.app
+  Test profile customization
+
+STEP 4: RUN LOCALLY (if making changes)
+  Frontend:
+    cd /Users/bojackson/ProjectX/app
+    npm install
+    npm run dev
+    (opens at http://localhost:5173)
+
+  Backend:
+    cd /Users/bojackson/ProjectX/backend
+    npm install
+    npm start
+    (runs at http://localhost:5000)
+
+STEP 5: MAKE CHANGES & PUSH
+  git add .
+  git commit -m "your message"
+  git push origin master
+  (Vercel auto-deploys frontend)
+
+================================================================================
+CRITICAL TECHNICAL DETAILS
+================================================================================
+
+PROFILE LAYOUT SYSTEM:
+
+Database Field:
+  User.profileLayout = {
+    leftZone: ['music', 'topfriends'],
+    rightZone: ['assets', 'socialhub'],
+    bottomZone: ['posts'],
+    mobileOrder: ['music', 'topfriends', 'posts', 'assets', 'socialhub']
+  }
+
+Frontend Files:
+  - ProfileBuilder.tsx        → Drag-drop editor component
+  - ProfileDesignModal.tsx    → DESIGN modal (has LAYOUT tab)
+  - ProfileWidgetRenderer.tsx → Maps widget IDs to React components
+  - ProfileGrid.tsx           → Renders widgets based on layout
+
+Backend Files:
+  - backend/routes/users.js   → PUT /users/profile endpoint
+  - backend/models/User.js    → profileLayout field in schema
+
+Save Flow:
+  1. User drags widget in ProfileBuilder
+  2. Clicks SAVE LAYOUT
+  3. Frontend calls: userAPI.updateProfile({ profileLayout: layout })
+  4. Backend receives PUT request, saves to MongoDB
+  5. onProfileUpdate callback fires
+  6. ProfileGrid re-renders with new layout
+  7. Layout persists on refresh
+
+Available Widgets:
+  - music        → MusicPlayerWidget
+  - topfriends   → TopFriendsWidget
+  - socialhub    → SocialHubWidget
+  - geonode      → GeoNodeWidget
+  - assets       → AssetGalleryWidget
+  - datalog      → DataLogWidget
+  - customcode   → CustomCodeWidget (stub)
+  - checkins     → CheckinsWidget (stub)
+  - trophies     → TrophiesWidget (stub)
+
+================================================================================
+TEST ACCOUNTS
+================================================================================
+
+TEST USER:
+  Email: test@cyberdope.com
+  Password: CyberDope2026
+  Faction: Iron Veil
+
+CREATOR ACCOUNT:
+  Username: vz4sheezy
+  ID: 69c03c1f50bf927b744dd5d9
+  Has 2 uploaded videos
+
+================================================================================
+DEPLOYMENT INFO
+================================================================================
+
+Frontend:
+  Deployed at: https://project-x-sage-nine.vercel.app
+  How: Auto-deploys on git push
+  Code location: /Users/bojackson/ProjectX/app/
+
+Backend:
+  Deployed at: https://cyberdope-api.onrender.com
+  Code location: /Users/bojackson/ProjectX/backend/
+
+Database:
+  MongoDB Atlas (cloud)
+  Connection in: backend/.env (NOT in git)
+
+================================================================================
+IMPORTANT REMINDERS
+================================================================================
+
+⚠️  PROFILE CUSTOMIZATION IS 100% DONE
+    - Drag-drop works ✅
+    - Save works ✅
+    - Persist works ✅
+    - All tested ✅
+
+⚠️  NEXT PRIORITY IS STRIPE PAYMENTS
+    - This is the monetization blocker
+    - Needed for V1 launch
+
+⚠️  CODE LOCATION
+    Real: /Users/bojackson/ProjectX/
+    DO NOT use Desktop copy if it exists
+
+⚠️  ALWAYS PUSH TO GITHUB AFTER CHANGES
+    git push origin master
+    (Vercel auto-deploys)
+
+⚠️  IF YOU NEED CONTEXT
+    Check these files:
+    1. /Users/bojackson/ProjectX/README.md (COMPREHENSIVE)
+    2. /Users/bojackson/.openclaw/workspace/memory/ (session notes)
+    3. git log --oneline (commit history)
+
+================================================================================
+QUICK REFERENCE - COMMON TASKS
+================================================================================
+
+Check latest commits:
+  cd /Users/bojackson/ProjectX
+  git log --oneline -5
+
+See what changed in a commit:
+  git show 888238f
+
+Run frontend dev server:
+  cd /Users/bojackson/ProjectX/app
+  npm run dev
+
+Run backend dev server:
+  cd /Users/bojackson/ProjectX/backend
+  npm start
+
+Deploy changes:
+  git add .
+  git commit -m "your message"
+  git push origin master
+
+Test live site:
+  https://project-x-sage-nine.vercel.app
+
+Test profile customization:
+  1. Go to profile (click avatar top right)
+  2. Click DESIGN button
+  3. Click LAYOUT tab
+  4. Drag widgets around
+  5. Click SAVE LAYOUT
+  6. Refresh page to verify
+
+================================================================================
+YOU'RE ALL SET!
+================================================================================
+
+Profile customization is COMPLETE and WORKING.
+Everything is documented and saved.
+Ready for next phase (Stripe payments).
+
+When you come back:
+  1. Read README.md in ProjectX folder
+  2. Check git log
+  3. Test live site
+  4. Start building Stripe
+
+Good luck! 🤠
+
+================================================================================
+Last Updated: 2026-04-28
+By: Bo Jackson
+Status: Profile Customization ✅ COMPLETE, Ready for Stripe
+================================================================================
