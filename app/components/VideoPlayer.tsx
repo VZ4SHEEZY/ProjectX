@@ -24,6 +24,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [videoSrc, setVideoSrc] = useState<string>(video.thumbnailUrl || video.url || ''); // Start with blurred thumbnail
   const [isMuted, setIsMuted] = useState(false); // Start unmuted for sound
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<NodeJS.Timeout>();
@@ -34,6 +35,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [likeCount, setLikeCount] = useState(video.likes);
   const [showShareToast, setShowShareToast] = useState(false);
   const [showLikeAnimation, setShowLikeAnimation] = useState(false);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [commentText, setCommentText] = useState('');
+  const [isCommentLoading, setIsCommentLoading] = useState(false);
   
   // Gating Logic
   const [decrypted, setDecrypted] = useState(!video.isSensitive);
@@ -41,6 +45,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Strict NSFW Logic
   const canViewNSFW = !video.isNSFW || (video.isNSFW && userAgeVerified);
+
+  // Load high-quality video when it starts playing
+  useEffect(() => {
+    if (isPlaying && videoSrc !== video.mediaUrl && video.mediaUrl) {
+      // Swap to high-quality version
+      setVideoSrc(video.mediaUrl);
+    }
+  }, [isPlaying, videoSrc, video.mediaUrl]);
 
   // Play/Pause based on active state
   useEffect(() => {
@@ -151,7 +163,28 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const handleComment = (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (onComment) onComment();
+      setShowCommentModal(true);
+  };
+
+  const handlePostComment = async () => {
+      if (!commentText.trim()) return;
+      
+      setIsCommentLoading(true);
+      try {
+          await postAPI.createComment(video.id, { content: commentText });
+          setCommentText('');
+          setShowCommentModal(false);
+          // Optionally increment comment count
+      } catch (error) {
+          console.error('Comment error:', error);
+      } finally {
+          setIsCommentLoading(false);
+      }
+  };
+
+  const handleCloseCommentModal = () => {
+      setShowCommentModal(false);
+      setCommentText('');
   };
 
   const handleShare = async (e: React.MouseEvent) => {
@@ -226,10 +259,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </div>
       )}
 
-      {/* Video Element with Gating Blur */}
+      {/* Video Element with Lazy-Load High-Quality on Play */}
       <video
         ref={videoRef}
-        src={video.url}
+        src={videoSrc || video.url}
+        poster={video.thumbnailUrl}
         loop
         playsInline
         autoPlay={isActive}
