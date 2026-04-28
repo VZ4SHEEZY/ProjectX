@@ -404,7 +404,15 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
       <DesktopFeedWrapper
         video={visibleVideos[activeIndex]}
         currentUser={currentUser}
+        allVideos={visibleVideos}
         onTipClick={onTipClick}
+        onVideoSelect={(selectedVideo) => {
+          const index = visibleVideos.findIndex(v => v.id === selectedVideo.id);
+          if (index !== -1) setActiveIndex(index);
+        }}
+        onCreatorClick={(username) => {
+          console.log('Navigate to profile:', username);
+        }}
       />
     );
   }

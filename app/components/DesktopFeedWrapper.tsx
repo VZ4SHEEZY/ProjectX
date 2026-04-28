@@ -1,19 +1,31 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import VideoPlayer from './VideoPlayer';
 import { Video, User } from '../types';
 
 interface DesktopFeedWrapperProps {
   video: Video;
   currentUser: User;
+  allVideos: Video[];
   onTipClick: (address: string) => void;
+  onVideoSelect?: (video: Video) => void;
+  onCreatorClick?: (username: string) => void;
 }
 
-/**
- * STEP 1: Just the layout container
- * - Left: 65% video player
- * - Right: 35% sidebar (placeholder for now)
- */
-const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({ video, currentUser, onTipClick }) => {
+const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({ 
+  video, 
+  currentUser, 
+  allVideos,
+  onTipClick, 
+  onVideoSelect, 
+  onCreatorClick 
+}) => {
+  // Get creator's other videos from the feed
+  const creatorVideos = useMemo(() => {
+    return allVideos
+      .filter(v => v.user?.id === video.user?.id && v.id !== video.id)
+      .slice(0, 4);
+  }, [video.user?.id, video.id, allVideos]);
+
   return (
     <div className="w-full h-full bg-black flex gap-4 p-4">
       {/* LEFT: Video Player (65%) */}
@@ -32,14 +44,19 @@ const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({ video, currentU
       <div className="flex-[0.35] bg-gray-950 border border-[#39FF14]/20 rounded-lg p-4 flex flex-col gap-4 overflow-y-auto">
         {/* Creator Card */}
         <div className="border-b border-[#39FF14]/20 pb-4">
-          <div className="flex items-center gap-3 mb-3">
+          <div 
+            className="flex items-center gap-3 mb-3 cursor-pointer" 
+            onClick={() => onCreatorClick?.(video.user?.username || '')}
+          >
             <img
               src={video.user?.avatar}
               alt="creator"
-              className="w-12 h-12 rounded-full border border-[#39FF14]"
+              className="w-12 h-12 rounded-full border border-[#39FF14] hover:opacity-80 transition-opacity"
             />
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-white truncate">{video.user?.username}</p>
+              <p className="font-bold text-white truncate hover:text-[#39FF14] transition-colors">
+                {video.user?.username}
+              </p>
               <p className="text-xs text-gray-400">{video.user?.followersCount || 0} followers</p>
             </div>
           </div>
@@ -66,12 +83,23 @@ const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({ video, currentU
         <div>
           <h3 className="text-white font-bold text-sm mb-3">Latest Videos</h3>
           <div className="grid grid-cols-2 gap-2">
-            {/* Placeholder thumbnails */}
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="aspect-video bg-gray-800 rounded border border-gray-700 cursor-pointer hover:border-[#39FF14] transition-colors flex items-center justify-center text-gray-400 text-xs">
-                Video {i}
-              </div>
-            ))}
+            {creatorVideos.length === 0 ? (
+              <div className="col-span-2 text-center text-gray-400 text-xs py-4">No more videos</div>
+            ) : (
+              creatorVideos.map(v => (
+                <div
+                  key={v.id}
+                  onClick={() => onVideoSelect?.(v)}
+                  className="aspect-video bg-gray-800 rounded border border-gray-700 cursor-pointer hover:border-[#39FF14] transition-colors overflow-hidden group"
+                >
+                  <img
+                    src={v.thumbnail || v.user?.avatar}
+                    alt="video"
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                  />
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -86,8 +114,12 @@ const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({ video, currentU
         <div className="border-t border-[#39FF14]/20 pt-3">
           <p className="text-xs text-gray-400 mb-2">Follow Creator</p>
           <div className="flex gap-2">
-            <button className="flex-1 py-2 bg-red-600/20 border border-red-600/50 text-red-400 rounded text-xs font-bold hover:bg-red-600/30 transition-all">YouTube</button>
-            <button className="flex-1 py-2 bg-pink-600/20 border border-pink-600/50 text-pink-400 rounded text-xs font-bold hover:bg-pink-600/30 transition-all">Instagram</button>
+            <button className="flex-1 py-2 bg-red-600/20 border border-red-600/50 text-red-400 rounded text-xs font-bold hover:bg-red-600/30 transition-all">
+              YouTube
+            </button>
+            <button className="flex-1 py-2 bg-pink-600/20 border border-pink-600/50 text-pink-400 rounded text-xs font-bold hover:bg-pink-600/30 transition-all">
+              Instagram
+            </button>
           </div>
         </div>
       </div>
