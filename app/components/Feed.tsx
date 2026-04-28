@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import VideoPlayer from './VideoPlayer';
+import DesktopFeedWrapper from './DesktopFeedWrapper';
 import { postAPI } from '../services/api';
 import { generateSystemMessage } from '../services/aiService';
 import { User, Video } from '../types';
@@ -127,6 +128,13 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
   const [apiVideos, setApiVideos] = useState<Video[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedError, setFeedError] = useState<string | null>(null);
+  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' && window.innerWidth >= 1024);
+
+  useEffect(() => {
+    const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const mapPostToVideo = (post: any): Video => ({
     id: post._id || post.id,
@@ -389,6 +397,17 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
   };
 
   const isFactionDisabled = !currentUser.faction || currentUser.faction === 'Unaffiliated';
+
+  // STEP 1: Show desktop layout if on desktop with videos loaded
+  if (isDesktop && visibleVideos.length > 0 && !feedLoading) {
+    return (
+      <DesktopFeedWrapper
+        video={visibleVideos[activeIndex]}
+        currentUser={currentUser}
+        onTipClick={onTipClick}
+      />
+    );
+  }
 
   return (
     <div className="relative w-full h-full bg-[#050505]">
