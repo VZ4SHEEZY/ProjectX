@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 
 type OnboardingStep = 'auth' | 'scanning' | 'reveal' | 'app';
-type MainView = 'feed' | 'explore' | 'messages' | 'profile' | 'userprofile';
+type MainView = 'feed' | 'explore' | 'messages' | 'profile' | 'userprofile' | 'admin';
 type FeedTab = 'discover' | 'friends' | 'faction';
 // Cache bust: force redeploy
 

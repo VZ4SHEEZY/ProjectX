@@ -465,11 +465,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
           {/* LEFT COLUMN */}
           <div className="space-y-4">
             <div className="bg-black/80 backdrop-blur-md border-2 border-[#39FF14] p-4 relative group">
-              <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-[#39FF14] text-black text-lg font-bold px-8 py-3 font-mono">
-                {user.username}
-              </div>
-
-              <div className="relative mt-4">
+              <div className="relative">
                 <img
                   src={user.avatar}
                   alt="Avatar"
@@ -480,6 +476,13 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
                 <div className="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-[#FF00FF]" />
                 <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-2 border-l-2 border-[#FF00FF]" />
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-2 border-r-2 border-[#FF00FF]" />
+              </div>
+
+              {/* Username UNDER avatar */}
+              <div className="mt-4 text-center">
+                <div className="bg-[#39FF14] text-black text-lg font-bold px-4 py-2 font-mono inline-block rounded-sm mb-4">
+                  {user.username}
+                </div>
               </div>
 
               <div className="mt-4 text-center">
