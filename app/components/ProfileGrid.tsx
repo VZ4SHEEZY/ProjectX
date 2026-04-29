@@ -10,6 +10,7 @@ import DataLogWidget from './DataLogWidget';
 import GeoNodeWidget from './GeoNodeWidget';
 import CustomCodeWidget from './CustomCodeWidget';
 import ProfileDesignModal from './ProfileDesignModal';
+import EditProfileModal from './EditProfileModal';
 import { renderWidget, ProfileWidgetColumn } from './ProfileWidgetRenderer';
 import { Copy, Wallet, Edit, Save, PaintBucket, Layers, Crown, Eye, EyeOff, Sparkles, MessageSquare, UserPlus, Heart, Eye as EyeIcon, Zap, Music } from 'lucide-react';
 import { generateBio } from '../services/aiService';
@@ -207,6 +208,8 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isDesignOpen, setIsDesignOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [localUser, setLocalUser] = useState(user);
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
   const [isHudVisible, setIsHudVisible] = useState(true);
   const [isFollowing, setIsFollowing] = useState(user.isFollowing || false);
@@ -253,7 +256,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
 
   const handleSave = async () => {
     if (!isEditing) {
-      setIsEditing(true);
+      setIsEditModalOpen(true);
       return;
     }
     setIsSaving(true);
@@ -654,6 +657,22 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
           <span className="flex items-center gap-1"><Music size={10} className="text-[#39FF14]" /> Now Playing: Cyberpunk Dreams</span>
         </div>
       </div>
+
+      <EditProfileModal
+        isOpen={isEditModalOpen}
+        user={localUser}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={async (updates) => {
+          await userAPI.saveProfile(updates);
+          if (updates.avatar) {
+            setLocalUser({ ...localUser, avatar: updates.avatar });
+          }
+          if (updates.bio) {
+            setBio(updates.bio);
+          }
+          onProfileUpdate?.(updates);
+        }}
+      />
 
       <ProfileDesignModal
         isOpen={isDesignOpen}
