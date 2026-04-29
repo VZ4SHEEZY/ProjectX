@@ -457,7 +457,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
           {/* LEFT COLUMN */}
           <div className="space-y-4">
             <div className="bg-black/80 backdrop-blur-md border-2 border-[#39FF14] p-4 relative group">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#39FF14] text-black text-[10px] font-bold px-4 py-1 font-mono">
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#39FF14] text-black text-sm font-bold px-6 py-2 font-mono">
                 {user.username}
               </div>
 
