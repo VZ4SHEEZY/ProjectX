@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Bell } from 'lucide-react';
 import axios from 'axios';
 
+const API_URL = 'https://cyberdope-api.onrender.com';
+
 interface Announcement {
   _id: string;
   message: string;
@@ -20,6 +22,12 @@ const AnnouncementBanner: React.FC = () => {
   const fetchAnnouncement = async () => {
     try {
       const token = localStorage.getItem('cdToken');
+      if (!token) {
+        console.log('No token, skipping announcement fetch');
+        setLoading(false);
+        return;
+      }
+
       const response = await axios.get(
         'https://cyberdope-api.onrender.com/api/announcements/latest',
         {
@@ -27,6 +35,7 @@ const AnnouncementBanner: React.FC = () => {
         }
       );
 
+      console.log('Announcement response:', response.data);
       if (response.data.success && response.data.data) {
         setAnnouncement(response.data.data);
       }
