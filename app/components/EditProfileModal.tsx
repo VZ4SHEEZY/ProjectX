@@ -15,13 +15,14 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, user, onClo
   const [previewUrl, setPreviewUrl] = useState(user.avatar || '');
   const [isSaving, setIsSaving] = useState(false);
 
-  // STEP 1: Handle file selection and preview
+  // Handle file selection
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setSelectedFile(file);
-    // Show preview immediately
+    
+    // Show preview
     const reader = new FileReader();
     reader.onload = (event) => {
       setPreviewUrl(event.target?.result as string);
@@ -29,16 +30,48 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, user, onClo
     reader.readAsDataURL(file);
   };
 
-  // STEP 3: Save everything (bio + avatar if changed)
+  // Crop image to square
+  const cropToSquare = (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const size = Math.min(img.width, img.height);
+          canvas.width = size;
+          canvas.height = size;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return reject(new Error('Canvas context failed'));
+          
+          // Center crop
+          const x = (img.width - size) / 2;
+          const y = (img.height - size) / 2;
+          ctx.drawImage(img, x, y, size, size, 0, 0, size, size);
+          
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Canvas blob failed'));
+          }, 'image/jpeg', 0.9);
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Save profile
   const handleSave = async () => {
     setIsSaving(true);
     try {
       let avatarUrl = user.avatar;
 
-      // If user selected a new file, upload it
       if (selectedFile) {
+        // Crop to square
+        const croppedBlob = await cropToSquare(selectedFile);
         const formData = new FormData();
-        formData.append('image', selectedFile);
+        formData.append('image', croppedBlob, 'avatar.jpg');
 
         const token = localStorage.getItem('cdToken');
         const response = await fetch('https://cyberdope-api.onrender.com/api/upload/image', {
@@ -50,12 +83,13 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, user, onClo
         });
 
         if (!response.ok) {
-          throw new Error('Upload failed');
+          const error = await response.json();
+          throw new Error(error.message || 'Upload failed');
         }
 
         const data = await response.json();
-        if (!data.success) throw new Error(data.message || 'Upload failed');
-        avatarUrl = data.data?.url || user.avatar;
+        if (!data.success) throw new Error(data.message);
+        avatarUrl = data.data?.url;
       }
 
       // Save to profile
@@ -88,7 +122,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, user, onClo
           </button>
         </div>
 
-        {/* STEP 1: Avatar Preview + File Input */}
+        {/* Avatar */}
         <div className="mb-6">
           <label className="block text-[#39FF14] font-mono text-xs uppercase mb-3">
             Profile Picture
@@ -96,10 +130,10 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, user, onClo
           <div className="relative w-32 h-32 mx-auto">
             <img
               src={previewUrl}
-              alt="avatar preview"
+              alt="avatar"
               className="w-full h-full rounded border-2 border-[#39FF14] object-cover"
             />
-            <label className="absolute inset-0 rounded border-2 border-[#39FF14] opacity-0 hover:opacity-100 bg-black/50 flex items-center justify-center cursor-pointer transition-opacity group">
+            <label className="absolute inset-0 rounded border-2 border-[#39FF14] opacity-0 hover:opacity-100 bg-black/50 flex items-center justify-center cursor-pointer transition-opacity">
               <Upload size={24} className="text-[#39FF14]" />
               <input
                 type="file"
@@ -110,7 +144,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, user, onClo
             </label>
           </div>
           <p className="text-xs text-gray-400 mt-2 text-center">
-            {selectedFile ? '✓ Image selected' : 'Click to select image'}
+            {selectedFile ? '✓ Image selected' : 'Click to change'}
           </p>
         </div>
 
@@ -128,7 +162,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, user, onClo
           <p className="text-xs text-gray-400 mt-1">{bio.length}/150</p>
         </div>
 
-        {/* STEP 3: Save Button */}
+        {/* Buttons */}
         <div className="flex gap-3">
           <button
             onClick={onClose}
