@@ -10,6 +10,7 @@ import BiometricScanner from './components/BiometricScanner';
 import FactionReveal from './components/FactionReveal';
 import AgeVerificationModal from './components/AgeVerificationModal';
 import CreatorDashboard from './components/CreatorDashboard';
+import AdminDashboard from './components/AdminDashboard';
 import PostComposer from './components/PostComposer';
 import ExplorePage from './components/ExplorePage';
 import UserProfilePage from './components/UserProfilePage';
@@ -402,6 +403,14 @@ const App: React.FC = () => {
             icon={UserIcon}
             label="PROFILE"
           />
+          {user?.username === 'vz4sheezy' && (
+            <NavButton 
+              active={currentView === 'admin'}
+              onClick={() => navigateTo('admin')}
+              icon={UserIcon}
+              label="ADMIN"
+            />
+          )}
         </nav>
 
         {/* Right Side Actions */}
@@ -525,6 +534,10 @@ const App: React.FC = () => {
         )}
         
         {/* PROFILE VIEW - with conditional Creator tab */}
+        {currentView === 'admin' && user?.username === 'vz4sheezy' && (
+          <AdminDashboard user={user} />
+        )}
+
         {currentView === 'profile' && (
           <div className="h-full w-full overflow-y-auto">
              <ProfileGrid 
