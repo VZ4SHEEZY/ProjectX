@@ -605,6 +605,16 @@ const App: React.FC = () => {
           icon={UserIcon}
           label="PROFILE"
         />
+
+        {/* ADMIN (vz4sheezy only) */}
+        {user?.username === 'vz4sheezy' && (
+          <MobileNavButton 
+            active={currentView === 'admin'}
+            onClick={() => navigateTo('admin')}
+            icon={UserIcon}
+            label="ADMIN"
+          />
+        )}
       </nav>
 
       {/* Desktop Bottom Status Bar */}
