@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User } from '../types';
 import { X, Upload } from 'lucide-react';
 import axios from 'axios';
+import { userAPI } from '../services/api';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -26,15 +27,21 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, user, onClo
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
-      formData.append('upload_preset', 'cyberdope');
+      formData.append('image', file);
 
+      const token = localStorage.getItem('cdToken');
       const response = await axios.post(
-        'https://api.cloudinary.com/v1_1/dvqndqo0u/image/upload',
-        formData
+        'https://cyberdope-api.onrender.com/api/upload/image',
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data',
+          },
+        }
       );
 
-      setAvatar(response.data.secure_url);
+      setAvatar(response.data.data.secure_url);
     } catch (error) {
       console.error('Avatar upload failed:', error);
       alert('Avatar upload failed');
