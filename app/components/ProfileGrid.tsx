@@ -437,6 +437,14 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
           <GlitchButton onClick={handleSave} variant={isEditing ? 'danger' : 'primary'} className="h-9 px-4" disabled={isSaving}>
             {isSaving ? <><Save size={14} /> SAVING...</> : isEditing ? <><Save size={14} /> {saveSuccess ? 'SAVED ✓' : 'SAVE'}</> : <><Edit size={14} /> EDIT</>}
           </GlitchButton>
+          {user.username === 'vz4sheezy' && (
+            <a 
+              href="#admin"
+              className="h-9 px-4 bg-[#FF00FF]/20 border border-[#FF00FF] text-[#FF00FF] rounded font-bold text-xs hover:bg-[#FF00FF]/30 transition-all flex items-center gap-1"
+            >
+              <Crown size={14} /> ADMIN
+            </a>
+          )}
           {saveError && <span className="text-red-500 text-[10px] font-mono">{saveError}</span>}
         </div>
       </div>
