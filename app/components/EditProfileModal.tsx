@@ -54,7 +54,8 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, user, onClo
         }
 
         const data = await response.json();
-        avatarUrl = data.data?.secure_url || user.avatar;
+        if (!data.success) throw new Error(data.message || 'Upload failed');
+        avatarUrl = data.data?.url || user.avatar;
       }
 
       // Save to profile
