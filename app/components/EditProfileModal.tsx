@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { X, Upload } from 'lucide-react';
-import axios from 'axios';
-import { userAPI } from '../services/api';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -13,49 +11,56 @@ interface EditProfileModalProps {
 
 const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, user, onClose, onSave }) => {
   const [bio, setBio] = useState(user.bio || '');
-  const [avatar, setAvatar] = useState(user.avatar || '');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState(user.avatar || '');
   const [isSaving, setIsSaving] = useState(false);
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
 
-  const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // STEP 1: Handle file selection and preview
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setAvatarFile(file);
-    setUploading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('image', file);
-
-      const token = localStorage.getItem('cdToken');
-      const response = await axios.post(
-        'https://cyberdope-api.onrender.com/api/upload/image',
-        formData,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
-
-      setAvatar(response.data.data.secure_url);
-    } catch (error) {
-      console.error('Avatar upload failed:', error);
-      alert('Avatar upload failed');
-    } finally {
-      setUploading(false);
-    }
+    setSelectedFile(file);
+    // Show preview immediately
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPreviewUrl(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
+  // STEP 3: Save everything (bio + avatar if changed)
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      let avatarUrl = user.avatar;
+
+      // If user selected a new file, upload it
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append('image', selectedFile);
+
+        const token = localStorage.getItem('cdToken');
+        const response = await fetch('https://cyberdope-api.onrender.com/api/upload/image', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error('Upload failed');
+        }
+
+        const data = await response.json();
+        avatarUrl = data.data?.secure_url || user.avatar;
+      }
+
+      // Save to profile
       onSave({
         bio,
-        avatar: avatar !== user.avatar ? avatar : undefined,
+        avatar: avatarUrl !== user.avatar ? avatarUrl : undefined,
       });
       onClose();
     } catch (error) {
@@ -82,29 +87,30 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, user, onClo
           </button>
         </div>
 
-        {/* Avatar Upload */}
+        {/* STEP 1: Avatar Preview + File Input */}
         <div className="mb-6">
           <label className="block text-[#39FF14] font-mono text-xs uppercase mb-3">
             Profile Picture
           </label>
-          <div className="relative">
+          <div className="relative w-32 h-32 mx-auto">
             <img
-              src={avatar}
+              src={previewUrl}
               alt="avatar preview"
-              className="w-32 h-32 rounded border-2 border-[#39FF14] object-cover mx-auto"
+              className="w-full h-full rounded border-2 border-[#39FF14] object-cover"
             />
-            <label className="absolute bottom-0 right-1/2 translate-x-16 bg-[#39FF14] text-black p-2 rounded cursor-pointer hover:bg-[#39FF14]/80 transition-all">
-              <Upload size={16} />
+            <label className="absolute inset-0 rounded border-2 border-[#39FF14] opacity-0 hover:opacity-100 bg-black/50 flex items-center justify-center cursor-pointer transition-opacity group">
+              <Upload size={24} className="text-[#39FF14]" />
               <input
                 type="file"
                 accept="image/*"
-                onChange={handleAvatarSelect}
-                disabled={uploading}
+                onChange={handleFileSelect}
                 className="hidden"
               />
             </label>
           </div>
-          {uploading && <p className="text-xs text-gray-400 mt-2 text-center">Uploading...</p>}
+          <p className="text-xs text-gray-400 mt-2 text-center">
+            {selectedFile ? '✓ Image selected' : 'Click to select image'}
+          </p>
         </div>
 
         {/* Bio */}
@@ -114,14 +120,14 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, user, onClo
           </label>
           <textarea
             value={bio}
-            onChange={(e) => setBio(e.target.value)}
+            onChange={(e) => setBio(e.target.value.slice(0, 150))}
             className="w-full h-24 bg-black border border-gray-700 text-white text-sm p-3 rounded focus:border-[#39FF14] outline-none resize-none"
             placeholder="Tell us about yourself..."
           />
           <p className="text-xs text-gray-400 mt-1">{bio.length}/150</p>
         </div>
 
-        {/* Buttons */}
+        {/* STEP 3: Save Button */}
         <div className="flex gap-3">
           <button
             onClick={onClose}
@@ -131,7 +137,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, user, onClo
           </button>
           <button
             onClick={handleSave}
-            disabled={isSaving || uploading}
+            disabled={isSaving}
             className="flex-1 py-2 bg-[#39FF14] text-black rounded font-bold hover:bg-[#39FF14]/80 disabled:opacity-50 transition-all"
           >
             {isSaving ? 'SAVING...' : 'SAVE'}
