@@ -97,7 +97,22 @@ const App: React.FC = () => {
   const [activeCreatorAddress, setActiveCreatorAddress] = useState<string>('');
 
   // Initial loading + session restore (validates token against real API)
-  useEffect(() => {
+  // Hash-based routing
+useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.slice(1);
+      if (hash === 'admin') setCurrentView('admin');
+      else if (hash === 'feed') setCurrentView('feed');
+      else if (hash === 'profile') setCurrentView('profile');
+      else if (hash === 'explore') setCurrentView('explore');
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    handleHashChange(); // Handle on load
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+useEffect(() => {
     const restore = async () => {
       const token = localStorage.getItem('cdToken');
       const storedUser = localStorage.getItem('cdUser');
