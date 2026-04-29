@@ -2,6 +2,7 @@
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import VideoPlayer from './VideoPlayer';
 import DesktopFeedWrapper from './DesktopFeedWrapper';
+import AnnouncementBanner from './AnnouncementBanner';
 import { postAPI } from '../services/api';
 import { generateSystemMessage } from '../services/aiService';
 import { User, Video } from '../types';
@@ -424,6 +425,9 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
 
   return (
     <div className="relative w-full h-full bg-[#050505]">
+      
+      {/* Announcement Banner */}
+      <AnnouncementBanner />
       
       {/* Status Bar */}
       <StatusBar systemMsg={systemMsg} />

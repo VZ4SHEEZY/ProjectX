@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { BarChart3, Bell, Users } from 'lucide-react';
+import { BarChart3, Bell } from 'lucide-react';
 
 interface AdminDashboardProps {
   user: User;
@@ -140,10 +140,27 @@ const AnnouncementsView: React.FC = () => {
 
     setIsPosting(true);
     try {
-      // TODO: Post announcement to backend
-      alert('Announcement posted');
+      const token = localStorage.getItem('cdToken');
+      const response = await fetch('https://cyberdope-api.onrender.com/api/announcements', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message,
+          targetType: target,
+          targetFaction: target === 'faction' ? selectedFaction : null,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Post failed');
+      
+      alert('Announcement posted!');
       setMessage('');
+      setSelectedFaction('');
     } catch (error) {
+      console.error('Error:', error);
       alert('Failed to post announcement');
     } finally {
       setIsPosting(false);

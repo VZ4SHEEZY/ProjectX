@@ -91,6 +91,7 @@ app.use('/api/search', require('./routes/search'));
 app.use('/api/tips', require('./routes/tips'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/upload', require('./routes/upload-gridfs')); // GridFS uploads
+app.use('/api/announcements', require('./routes/announcements'));
 
 // NEW FEATURES - AI, Live Streams, Wallet, Stories, Voice, Groups
 app.use('/api/ai', require('./routes/ai'));
