@@ -97,12 +97,11 @@ const App: React.FC = () => {
   const [activeCreatorAddress, setActiveCreatorAddress] = useState<string>('');
 
   // Initial loading + session restore (validates token against real API)
-  // Hash-based routing
+  // Hash-based routing (NOT for admin - admin is modal)
 useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.slice(1);
-      if (hash === 'admin') setCurrentView('admin');
-      else if (hash === 'feed') setCurrentView('feed');
+      if (hash === 'feed') setCurrentView('feed');
       else if (hash === 'profile') setCurrentView('profile');
       else if (hash === 'explore') setCurrentView('explore');
     };
@@ -111,6 +110,9 @@ useEffect(() => {
     handleHashChange(); // Handle on load
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
+
+// Admin modal state
+const [isAdminOpen, setIsAdminOpen] = useState(false);
 
 useEffect(() => {
     const restore = async () => {
@@ -549,7 +551,21 @@ useEffect(() => {
         )}
         
         {/* PROFILE VIEW - with conditional Creator tab */}
-        {currentView === 'admin' && user?.username === 'vz4sheezy' && (
+        {/* Admin Modal - Overlay */}
+        {isAdminOpen && user?.username === 'vz4sheezy' && (
+          <div className="fixed inset-0 z-[9999] bg-black/95">
+            <button
+              onClick={() => setIsAdminOpen(false)}
+              className="absolute top-4 right-4 z-[10000] text-gray-400 hover:text-white text-2xl"
+            >
+              ×
+            </button>
+            <AdminDashboard user={user} />
+          </div>
+        )}
+
+        {/* Old route - no longer used */}
+        {currentView === 'admin' && user?.username === 'vz4sheezy' && !isAdminOpen && (
           <AdminDashboard user={user} />
         )}
 
@@ -561,6 +577,7 @@ useEffect(() => {
                onProfileUpdate={handleProfileUpdate}
                creatorModeEnabled={creatorModeEnabled}
                onUsernameClick={handleViewUserProfile}
+               onOpenAdmin={() => setIsAdminOpen(true)}
              />
           </div>
         )}

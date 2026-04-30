@@ -18,6 +18,7 @@ import { userAPI, postAPI } from '../services/api';
 import VideoModal from './VideoModal';
 
 interface ProfileGridProps {
+  onOpenAdmin?: () => void;
   user: User;
   onTip?: (address: string) => void;
   onProfileUpdate?: (updates: Partial<User>) => void;
@@ -202,7 +203,7 @@ const ContactButtons: React.FC<{ onMessage?: () => void; onAddFriend?: () => voi
   </div>
 );
 
-const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate, onUsernameClick }) => {
+const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate, onUsernameClick, onOpenAdmin }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -438,12 +439,12 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
             {isSaving ? <><Save size={14} /> SAVING...</> : isEditing ? <><Save size={14} /> {saveSuccess ? 'SAVED ✓' : 'SAVE'}</> : <><Edit size={14} /> EDIT</>}
           </GlitchButton>
           {user.username === 'vz4sheezy' && (
-            <a 
-              href="#admin"
+            <button 
+              onClick={onOpenAdmin}
               className="h-9 px-4 bg-[#FF00FF]/20 border border-[#FF00FF] text-[#FF00FF] rounded font-bold text-xs hover:bg-[#FF00FF]/30 transition-all flex items-center gap-1"
             >
               <Crown size={14} /> ADMIN
-            </a>
+            </button>
           )}
           {saveError && <span className="text-red-500 text-[10px] font-mono">{saveError}</span>}
         </div>
