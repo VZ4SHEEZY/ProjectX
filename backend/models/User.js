@@ -46,7 +46,8 @@ const userSchema = new mongoose.Schema({
       'Gold Syndicate', 'Azure Phantom', 'Toxic Bloom', 'Scarlet Dominion',
       'Chrome Legion', 'Phantom Signal', 'Obsidian Pact', 'Ember Protocol',
       'Violet Surge', 'Steel Covenant', 'Binary Ghost', 'Copper Throne',
-      'Nova Rift', 'Silver Wraith', 'Inferno Grid', 'Quantum Veil'
+      'Nova Rift', 'Silver Wraith', 'Inferno Grid', 'Quantum Veil',
+      'Unaffiliated'
     ],
     default: 'Quantum Veil'
   },
