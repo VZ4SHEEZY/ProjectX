@@ -46,10 +46,9 @@ const userSchema = new mongoose.Schema({
       'Gold Syndicate', 'Azure Phantom', 'Toxic Bloom', 'Scarlet Dominion',
       'Chrome Legion', 'Phantom Signal', 'Obsidian Pact', 'Ember Protocol',
       'Violet Surge', 'Steel Covenant', 'Binary Ghost', 'Copper Throne',
-      'Nova Rift', 'Silver Wraith', 'Inferno Grid', 'Quantum Veil',
-      'Unaffiliated'
+      'Nova Rift', 'Silver Wraith', 'Inferno Grid', 'Quantum Veil'
     ],
-    default: 'Unaffiliated'
+    required: true
   },
   factionColor: { type: String, default: '#39FF14' },
   zodiacSign: { type: String, default: '' },

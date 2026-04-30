@@ -113,8 +113,7 @@ const StatsView: React.FC = () => {
                 'Gold Syndicate', 'Azure Phantom', 'Toxic Bloom', 'Scarlet Dominion',
                 'Chrome Legion', 'Phantom Signal', 'Obsidian Pact', 'Ember Protocol',
                 'Violet Surge', 'Steel Covenant', 'Binary Ghost', 'Copper Throne',
-                'Nova Rift', 'Silver Wraith', 'Inferno Grid', 'Quantum Veil',
-                'Unaffiliated'
+                'Nova Rift', 'Silver Wraith', 'Inferno Grid', 'Quantum Veil'
               ].map((faction) => (
                 <tr key={faction} className="border-b border-gray-800 hover:bg-gray-900">
                   <td className="p-4 text-white font-mono">{faction}</td>
@@ -240,7 +239,6 @@ const AnnouncementsView: React.FC = () => {
               <option value="Silver Wraith">Silver Wraith</option>
               <option value="Inferno Grid">Inferno Grid</option>
               <option value="Quantum Veil">Quantum Veil</option>
-              <option value="Unaffiliated">Unaffiliated</option>
             </select>
           </div>
         )}
