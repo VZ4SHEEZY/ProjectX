@@ -48,7 +48,7 @@ const userSchema = new mongoose.Schema({
       'Violet Surge', 'Steel Covenant', 'Binary Ghost', 'Copper Throne',
       'Nova Rift', 'Silver Wraith', 'Inferno Grid', 'Quantum Veil'
     ],
-    required: true
+    default: 'Quantum Veil'
   },
   factionColor: { type: String, default: '#39FF14' },
   zodiacSign: { type: String, default: '' },
