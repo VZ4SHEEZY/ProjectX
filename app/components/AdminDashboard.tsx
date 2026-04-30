@@ -108,9 +108,16 @@ const StatsView: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {[1, 2, 3, 4, 5].map((i) => (
-                <tr key={i} className="border-b border-gray-800 hover:bg-gray-900">
-                  <td className="p-4 text-white font-mono">Faction {i}</td>
+              {[
+                'Neon Wraith', 'Iron Veil', 'Crimson Static', 'Void Circuit',
+                'Gold Syndicate', 'Azure Phantom', 'Toxic Bloom', 'Scarlet Dominion',
+                'Chrome Legion', 'Phantom Signal', 'Obsidian Pact', 'Ember Protocol',
+                'Violet Surge', 'Steel Covenant', 'Binary Ghost', 'Copper Throne',
+                'Nova Rift', 'Silver Wraith', 'Inferno Grid', 'Quantum Veil',
+                'Unaffiliated'
+              ].map((faction) => (
+                <tr key={faction} className="border-b border-gray-800 hover:bg-gray-900">
+                  <td className="p-4 text-white font-mono">{faction}</td>
                   <td className="p-4 text-right text-gray-400">0</td>
                   <td className="p-4 text-right text-gray-400">0</td>
                   <td className="p-4 text-right text-gray-400">0</td>
@@ -213,8 +220,27 @@ const AnnouncementsView: React.FC = () => {
               className="w-full bg-black border border-gray-700 text-white p-3 rounded focus:border-[#39FF14] outline-none"
             >
               <option value="">Choose faction...</option>
-              <option value="iron-veil">Iron Veil</option>
-              <option value="neon-wraith">Neon Wraith</option>
+              <option value="Neon Wraith">Neon Wraith</option>
+              <option value="Iron Veil">Iron Veil</option>
+              <option value="Crimson Static">Crimson Static</option>
+              <option value="Void Circuit">Void Circuit</option>
+              <option value="Gold Syndicate">Gold Syndicate</option>
+              <option value="Azure Phantom">Azure Phantom</option>
+              <option value="Toxic Bloom">Toxic Bloom</option>
+              <option value="Scarlet Dominion">Scarlet Dominion</option>
+              <option value="Chrome Legion">Chrome Legion</option>
+              <option value="Phantom Signal">Phantom Signal</option>
+              <option value="Obsidian Pact">Obsidian Pact</option>
+              <option value="Ember Protocol">Ember Protocol</option>
+              <option value="Violet Surge">Violet Surge</option>
+              <option value="Steel Covenant">Steel Covenant</option>
+              <option value="Binary Ghost">Binary Ghost</option>
+              <option value="Copper Throne">Copper Throne</option>
+              <option value="Nova Rift">Nova Rift</option>
+              <option value="Silver Wraith">Silver Wraith</option>
+              <option value="Inferno Grid">Inferno Grid</option>
+              <option value="Quantum Veil">Quantum Veil</option>
+              <option value="Unaffiliated">Unaffiliated</option>
             </select>
           </div>
         )}
