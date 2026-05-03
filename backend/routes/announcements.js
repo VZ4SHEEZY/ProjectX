@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Announcement = require('../models/Announcement');
+const Post = require('../models/Post');
 const { protect } = require('../middleware/auth');
 
 // POST: Create announcement (admin only)
@@ -26,6 +27,19 @@ router.post('/', protect, async (req, res) => {
     });
 
     await announcement.save();
+
+    // If faction announcement, create a post in that faction
+    if (targetType === 'faction' && targetFaction) {
+      const post = new Post({
+        creator: req.user.id,
+        caption: message,
+        mediaUrl: announcement.mediaUrl || null,
+        visibility: 'faction',
+        faction: targetFaction,
+      });
+      await post.save();
+    }
+
     res.json({ success: true, data: announcement });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -51,7 +65,7 @@ router.get('/latest', protect, async (req, res) => {
   }
 });
 
-// POST: Dismiss announcement
+// POST: Dismiss announcement (for ALL users announcements)
 router.post('/:id/dismiss', protect, async (req, res) => {
   try {
     await Announcement.findByIdAndUpdate(
