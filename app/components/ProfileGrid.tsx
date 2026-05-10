@@ -248,10 +248,15 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
   const handleFollow = async () => {
     try {
       const userId = user.id;
-      await userAPI.followUser(userId);
-      setIsFollowing(!isFollowing);
+      const response = await userAPI.followUser(userId);
+      if (response.data?.success) {
+        setIsFollowing(response.data.isFollowing);
+      } else {
+        console.error('Follow response error:', response.data);
+      }
     } catch (err) {
-      console.warn('Follow failed:', err);
+      console.error('Follow failed:', err);
+      alert('Failed to follow/unfollow user');
     }
   };
 
@@ -577,7 +582,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
             <ProfileWidgetColumn
               widgets={user.profileLayout?.rightZone}
               defaultWidgets={[
-                <div key="topfriends" className="h-72"><TopFriendsWidget /></div>,
+                <div key="topfriends" className="h-72"><TopFriendsWidget userId={user.id} /></div>,
                 <div key="assetgrid" className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="h-64"><AssetGalleryWidget /></div>
                   <div className="h-64"><DataLogWidget /></div>

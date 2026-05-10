@@ -73,7 +73,7 @@ export const userAPI = {
     api.post(`/users/${userId}/follow`),
 
   unfollowUser: (userId: string) =>
-    api.delete(`/users/${userId}/follow`),
+    api.post(`/users/${userId}/follow`), // Same endpoint, toggles
 
   getFollowers: (userId: string, params?: { page?: number; limit?: number }) =>
     api.get(`/users/${userId}/followers`, { params }),
