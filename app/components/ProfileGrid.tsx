@@ -19,6 +19,7 @@ import VideoModal from './VideoModal';
 
 interface ProfileGridProps {
   onOpenAdmin?: () => void;
+  onFollowUpdate?: () => void;
   user: User;
   onTip?: (address: string) => void;
   onProfileUpdate?: (updates: Partial<User>) => void;
@@ -251,6 +252,8 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
       const response = await userAPI.followUser(userId);
       if (response.data?.success) {
         setIsFollowing(response.data.isFollowing);
+        // Trigger refresh of following list across app
+        window.dispatchEvent(new Event('followingUpdated'));
       } else {
         console.error('Follow response error:', response.data);
       }

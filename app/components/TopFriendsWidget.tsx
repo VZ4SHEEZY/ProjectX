@@ -10,7 +10,11 @@ interface Following {
   followersCount?: number;
 }
 
-const TopFriendsWidget: React.FC<{ userId?: string }> = ({ userId }) => {
+interface TopFriendsWidgetProps {
+  userId?: string;
+}
+
+const TopFriendsWidget: React.FC<TopFriendsWidgetProps> = ({ userId }) => {
   const [following, setFollowing] = useState<Following[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -31,6 +35,14 @@ const TopFriendsWidget: React.FC<{ userId?: string }> = ({ userId }) => {
     };
 
     fetchFollowing();
+
+    // Listen for follow updates
+    const handleFollowUpdate = () => {
+      fetchFollowing();
+    };
+
+    window.addEventListener('followingUpdated', handleFollowUpdate);
+    return () => window.removeEventListener('followingUpdated', handleFollowUpdate);
   }, [userId]);
 
   if (loading) {

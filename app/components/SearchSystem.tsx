@@ -188,6 +188,8 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
       const response = await userAPI.followUser(userId);
       if (response.data?.success) {
         setFollowingMap(prev => ({ ...prev, [userId]: response.data.isFollowing }));
+        // Trigger refresh across app
+        window.dispatchEvent(new Event('followingUpdated'));
       }
     } catch (err) {
       console.error('Follow failed:', err);

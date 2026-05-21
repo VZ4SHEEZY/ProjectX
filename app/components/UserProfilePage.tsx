@@ -20,6 +20,15 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [topFriends, setTopFriends] = useState<any[]>([]);
 
+  // Listen for follow updates from other components
+  useEffect(() => {
+    const handleFollowUpdate = () => {
+      loadUserProfile();
+    };
+    window.addEventListener('followingUpdated', handleFollowUpdate);
+    return () => window.removeEventListener('followingUpdated', handleFollowUpdate);
+  }, []);
+
   useEffect(() => {
     loadUserProfile();
   }, [userId, username]);

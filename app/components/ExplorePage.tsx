@@ -7,6 +7,16 @@ import {
 import { postAPI, userAPI } from '../services/api';
 import VideoModal from './VideoModal';
 
+// Listen for follow updates to refresh
+const useFollowRefresh = () => {
+  const [, setRefresh] = React.useState(0);
+  React.useEffect(() => {
+    const handleUpdate = () => setRefresh(prev => prev + 1);
+    window.addEventListener('followingUpdated', handleUpdate);
+    return () => window.removeEventListener('followingUpdated', handleUpdate);
+  }, []);
+};
+
 interface ExplorePageProps {
   isAgeVerified: boolean;
   onContentClick: (content: any) => void;
@@ -128,6 +138,8 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
       const response = await userAPI.followUser(userId);
       if (response.data?.success) {
         setFollowingMap(prev => ({ ...prev, [userId]: response.data.isFollowing }));
+        // Trigger refresh across app
+        window.dispatchEvent(new Event('followingUpdated'));
       }
     } catch (err) {
       console.error('Follow failed:', err);
