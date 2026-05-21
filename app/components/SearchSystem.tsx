@@ -185,10 +185,12 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
   const handleFollow = async (userId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await userAPI.followUser(userId);
-      setFollowingMap(prev => ({ ...prev, [userId]: !prev[userId] }));
+      const response = await userAPI.followUser(userId);
+      if (response.data?.success) {
+        setFollowingMap(prev => ({ ...prev, [userId]: response.data.isFollowing }));
+      }
     } catch (err) {
-      console.warn('Follow failed:', err);
+      console.error('Follow failed:', err);
     }
   };
 

@@ -9,6 +9,7 @@ interface UserProfilePageProps {
   username?: string;
   currentUser?: User;
   onBack: () => void;
+  onFollowChange?: (userId: string, isFollowing: boolean) => void;
 }
 
 const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, currentUser, onBack }) => {
@@ -62,12 +63,9 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
 
   const handleFollow = async () => {
     try {
-      if (isFollowing) {
-        await userAPI.unfollowUser(user._id);
-        setIsFollowing(false);
-      } else {
-        await userAPI.followUser(user._id);
-        setIsFollowing(true);
+      const response = await userAPI.followUser(user._id);
+      if (response.data?.success) {
+        setIsFollowing(response.data.isFollowing);
       }
     } catch (error) {
       console.error('Follow error:', error);
