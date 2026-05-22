@@ -75,6 +75,8 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
       const response = await userAPI.followUser(user._id);
       if (response.data?.success) {
         setIsFollowing(response.data.isFollowing);
+        // Trigger refresh across app
+        window.dispatchEvent(new Event('followingUpdated'));
       }
     } catch (error) {
       console.error('Follow error:', error);
