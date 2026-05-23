@@ -286,8 +286,16 @@ useEffect(() => {
     setCurrentView(view);
   };
 
-  const handleViewUserProfile = (userId: string) => {
-    navigateTo('userprofile', userId);
+  // Handle user clicks (accepts username OR userId)
+  const handleUserClick = (userIdOrUsername: string) => {
+    setSelectedUserId(userIdOrUsername);
+    setCurrentView('userprofile');
+  };
+
+  const handleViewUserProfile = (userIdOrUsername: string) => {
+    // Can accept either userId or username
+    setSelectedUserId(userIdOrUsername);
+    setCurrentView('userprofile');
   };
 
   // Handle creator mode toggle from Settings
@@ -586,6 +594,7 @@ useEffect(() => {
           <div className="h-full w-full overflow-y-auto">
             <UserProfilePage
               userId={selectedUserId}
+              username={selectedUserId}
               currentUser={user}
               onBack={() => setCurrentView('feed')}
             />

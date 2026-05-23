@@ -20,6 +20,7 @@ const useFollowRefresh = () => {
 interface ExplorePageProps {
   isAgeVerified: boolean;
   onContentClick: (content: any) => void;
+  onUsernameClick?: (username: string) => void;
 }
 
 interface ContentItem {
@@ -476,16 +477,24 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {suggestedUsers.slice(0, 8).map((user) => (
                   <div key={user._id} className="bg-black border border-gray-800 rounded-lg p-4 flex flex-col items-center gap-3">
-                    <img
-                      src={user.avatar || `https://picsum.photos/seed/${user._id}/100`}
-                      alt={user.username}
-                      className="w-16 h-16 rounded-full object-cover border-2 border-gray-700"
-                    />
+                    <button
+                      onClick={() => onUsernameClick(user.username)}
+                      className="w-16 h-16 rounded-full object-cover border-2 border-gray-700 hover:border-[#39FF14] transition-colors overflow-hidden"
+                    >
+                      <img
+                        src={user.avatar || `https://picsum.photos/seed/${user._id}/100`}
+                        alt={user.username}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
                     <div className="text-center">
-                      <p className="text-white text-sm font-medium flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => onUsernameClick(user.username)}
+                        className="text-white text-sm font-medium flex items-center justify-center gap-1 hover:text-[#39FF14] transition-colors"
+                      >
                         @{user.username}
                         {user.isVerified && <Check size={12} className="text-[#39FF14]" />}
-                      </p>
+                      </button>
                       {user.followersCount !== undefined && (
                         <p className="text-gray-500 text-xs">{formatNumber(user.followersCount)} followers</p>
                       )}
