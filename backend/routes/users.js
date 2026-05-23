@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const Post = require('../models/Post');
 const { protect } = require('../middleware/auth');
+const { createNotification } = require('./notifications');
 
 // @route   GET /api/users
 // @desc    Get all users (with filters)
@@ -202,6 +203,7 @@ router.put('/profile', protect, async (req, res) => {
 // @route   POST /api/users/:id/follow
 // @desc    Follow/unfollow a user
 // @access  Private
+// POST /api/users/:id/follow - Follow/unfollow user
 router.post('/:id/follow', protect, async (req, res) => {
   try {
     if (req.params.id === req.user._id.toString()) {
@@ -239,6 +241,16 @@ router.post('/:id/follow', protect, async (req, res) => {
 
     await currentUser.save();
     await userToFollow.save();
+
+    // Create follow notification (only if following, not unfollowing)
+    if (!isFollowing) {
+      await createNotification(
+        userToFollow._id,
+        req.user._id,
+        'follow',
+        { message: `${currentUser.username} followed you` }
+      );
+    }
 
     res.json({
       success: true,

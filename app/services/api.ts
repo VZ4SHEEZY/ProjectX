@@ -53,6 +53,14 @@ export const authAPI = {
 };
 
 // ==================== USER API ====================
+// Listen for notification updates
+if (typeof window !== 'undefined') {
+  // Set up periodic polling for new notifications (every 30 seconds)
+  setInterval(() => {
+    userAPI.getUnreadCount().catch(() => {});
+  }, 30000);
+}
+
 export const userAPI = {
   getUsers: (params?: { search?: string; faction?: string; isCreator?: boolean; page?: number; limit?: number }) =>
     api.get('/users', { params }),
@@ -83,6 +91,25 @@ export const userAPI = {
 
   getStats: (userId: string) =>
     api.get(`/users/${userId}/stats`),
+
+  // Notifications
+  getNotifications: (params?: { limit?: number; skip?: number; unreadOnly?: boolean }) =>
+    api.get('/notifications', { params }),
+
+  getUnreadCount: () =>
+    api.get('/notifications/count/unread'),
+
+  markNotificationAsRead: (notificationId: string) =>
+    api.patch(`/notifications/${notificationId}/read`),
+
+  markAllNotificationsAsRead: () =>
+    api.patch('/notifications/read/all'),
+
+  deleteNotification: (notificationId: string) =>
+    api.delete(`/notifications/${notificationId}`),
+
+  clearAllNotifications: () =>
+    api.delete('/notifications'),
 };
 
 // ==================== POST API ====================

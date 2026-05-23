@@ -14,6 +14,7 @@ import AdminDashboard from './components/AdminDashboard';
 import PostComposer from './components/PostComposer';
 import ExplorePage from './components/ExplorePage';
 import UserProfilePage from './components/UserProfilePage';
+import NotificationPanel from './components/NotificationPanel';
 import SubscriptionTiers from './components/SubscriptionTiers';
 
 // New Components
@@ -89,6 +90,7 @@ const App: React.FC = () => {
   const [isCreateStoryOpen, setIsCreateStoryOpen] = useState(false);
   const [isGroupsOpen, setIsGroupsOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   
   // Wallet state
   const [walletAddress, setWalletAddress] = useState<string>('');
@@ -157,6 +159,26 @@ useEffect(() => {
     };
     restore();
   }, []);
+
+  // Fetch unread notifications count periodically
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await userAPI.getUnreadCount();
+        if (response.data?.success) {
+          setUnreadNotifications(response.data.unreadCount);
+        }
+      } catch (error) {
+        console.error('Failed to fetch unread count:', error);
+      }
+    };
+
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, [user]);
 
   // 1. Auth Success -> Handle Routing based on user status
   const handleLoginSuccess = (isNewUser: boolean) => {
@@ -449,6 +471,20 @@ useEffect(() => {
              <Search size={18} />
           </button>
 
+          {/* Notifications */}
+          <button 
+            onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+            className="relative w-9 h-9 md:w-10 md:h-10 flex items-center justify-center text-gray-500 hover:text-[#39FF14] hover:bg-[#39FF14]/10 rounded-lg transition-colors"
+            title="Notifications"
+          >
+             <Bell size={18} />
+             {unreadNotifications > 0 && (
+               <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+                 {unreadNotifications > 9 ? '9+' : unreadNotifications}
+               </span>
+             )}
+          </button>
+
           {/* Settings */}
           <button 
             onClick={() => setIsSettingsOpen(true)}
@@ -601,6 +637,12 @@ useEffect(() => {
           </div>
         )}
       </main>
+
+      {/* Notification Panel */}
+      <NotificationPanel 
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+      />
 
       {/* 3. Mobile Bottom Navigation Bar - 5 items: Home, Explore, Create, Messages, Profile */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[9999] h-[calc(3.5rem+var(--sab))] bg-black/95 backdrop-blur-xl border-t border-[var(--primary-color,#39FF14)]/30 grid grid-cols-5 items-start pt-2 safe-bottom will-change-transform">
