@@ -642,6 +642,11 @@ useEffect(() => {
       <NotificationPanel 
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
+        onUserClick={(username) => {
+          setSelectedUserId(username);
+          setCurrentView('userprofile');
+          setIsNotificationsOpen(false);
+        }}
       />
 
       {/* 3. Mobile Bottom Navigation Bar - 5 items: Home, Explore, Create, Messages, Profile */}
