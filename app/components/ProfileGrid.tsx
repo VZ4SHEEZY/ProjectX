@@ -444,8 +444,14 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
             <PaintBucket size={14} /> DESIGN
           </button>
           <GlitchButton onClick={handleSave} variant={isEditing ? 'danger' : 'primary'} className="h-9 px-4" disabled={isSaving}>
-            {isSaving ? <><Save size={14} /> SAVING...</> : isEditing ? <><Save size={14} /> {saveSuccess ? 'SAVED ✓' : 'SAVE'}</> : <><Edit size={14} /> EDIT</>}
+            {isSaving ? <><Save size={14} /> SAVING...</> : isEditing ? <><Save size={14} /> {saveSuccess ? 'SAVED ✓' : 'SAVE'}</> : <><PaintBucket size={14} /> DESIGN</>}
           </GlitchButton>
+          <button 
+            onClick={() => setIsEditModalOpen(true)}
+            className="h-9 px-4 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] rounded font-bold text-xs hover:bg-[#39FF14]/20 transition-all flex items-center gap-1"
+          >
+            <Edit size={14} /> EDIT PROFILE
+          </button>
           {user.username === 'vz4sheezy' && (
             <button 
               onClick={onOpenAdmin}
@@ -680,16 +686,12 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
 
       <EditProfileModal
         isOpen={isEditModalOpen}
-        user={localUser}
+        currentBio={localUser.bio || ''}
+        currentDisplayName={localUser.displayName || ''}
         onClose={() => setIsEditModalOpen(false)}
-        onSave={async (updates) => {
-          await userAPI.saveProfile(updates);
-          if (updates.avatar) {
-            setLocalUser({ ...localUser, avatar: updates.avatar });
-          }
-          if (updates.bio) {
-            setBio(updates.bio);
-          }
+        onUpdate={(updates) => {
+          setLocalUser({ ...localUser, ...updates });
+          if (updates.bio) setBio(updates.bio);
           onProfileUpdate?.(updates);
         }}
       />
