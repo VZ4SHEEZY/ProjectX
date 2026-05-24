@@ -201,7 +201,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, 
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white">
+                      <div className="text-sm text-white flex items-center gap-1">
                         <button
                           onClick={() => handleUserClick(notification.actor.username)}
                           className="font-bold hover:text-[#39FF14] transition-colors bg-none border-none p-0 cursor-pointer text-left"
@@ -209,9 +209,9 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, 
                           @{notification.actor.username}
                         </button>
                         {notification.actor.isVerified && (
-                          <span className="ml-1 text-[#39FF14] text-xs">✓</span>
+                          <span className="text-[#39FF14] text-xs">✓</span>
                         )}
-                      </p>
+                      </div>
                       <p className="text-sm text-gray-400 mt-1">{notification.message}</p>
                       <p className="text-xs text-gray-600 mt-2">{formatTime(notification.createdAt)}</p>
                     </div>
