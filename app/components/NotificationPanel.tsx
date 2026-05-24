@@ -182,35 +182,32 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, 
               {notifications.map((notification) => (
                 <div
                   key={notification._id}
-                  className={`p-4 hover:bg-white/5 transition-colors group cursor-pointer ${
+                  className={`p-4 hover:bg-white/5 transition-colors group ${
                     !notification.read ? 'bg-white/5' : ''
                   }`}
-                  onClick={() => handleUserClick(notification.actor.username)}
                 >
                   <div className="flex gap-3">
-                    {/* Avatar */}
-                    <img
-                      src={notification.actor.avatar}
-                      alt={notification.actor.username}
-                      className="w-10 h-10 rounded-full flex-shrink-0 border border-gray-700 hover:border-[#39FF14] transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleUserClick(notification.actor.username);
-                      }}
-                    />
+                    {/* Avatar Button */}
+                    <button
+                      onClick={() => handleUserClick(notification.actor.username)}
+                      className="w-10 h-10 rounded-full flex-shrink-0 border border-gray-700 hover:border-[#39FF14] transition-colors p-0 bg-none cursor-pointer overflow-hidden"
+                    >
+                      <img
+                        src={notification.actor.avatar}
+                        alt={notification.actor.username}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-white">
-                        <span 
-                          className="font-bold hover:text-[#39FF14] transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleUserClick(notification.actor.username);
-                          }}
+                        <button
+                          onClick={() => handleUserClick(notification.actor.username)}
+                          className="font-bold hover:text-[#39FF14] transition-colors bg-none border-none p-0 cursor-pointer text-left"
                         >
                           @{notification.actor.username}
-                        </span>
+                        </button>
                         {notification.actor.isVerified && (
                           <span className="ml-1 text-[#39FF14] text-xs">✓</span>
                         )}
@@ -228,10 +225,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, 
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                         {!notification.read && (
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMarkAsRead(notification._id);
-                            }}
+                            onClick={() => handleMarkAsRead(notification._id)}
                             className="p-1 hover:bg-white/10 rounded text-gray-500 hover:text-[#39FF14]"
                             title="Mark as read"
                           >
@@ -239,10 +233,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, 
                           </button>
                         )}
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(notification._id);
-                          }}
+                          onClick={() => handleDelete(notification._id)}
                           className="p-1 hover:bg-white/10 rounded text-gray-500 hover:text-red-500"
                           title="Delete"
                         >
@@ -254,15 +245,16 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, 
 
                   {/* Post thumbnail if available */}
                   {notification.post && notification.post.mediaUrl && (
-                    <img
-                      src={notification.post.mediaUrl}
-                      alt=""
-                      className="mt-3 w-full h-24 object-cover rounded border border-gray-800 hover:border-[#39FF14] transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleUserClick(notification.actor.username);
-                      }}
-                    />
+                    <button
+                      onClick={() => handleUserClick(notification.actor.username)}
+                      className="mt-3 w-full h-24 rounded border border-gray-800 hover:border-[#39FF14] transition-colors p-0 bg-none cursor-pointer overflow-hidden"
+                    >
+                      <img
+                        src={notification.post.mediaUrl}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
                   )}
                 </div>
               ))}
