@@ -5,6 +5,7 @@ import ProfileGrid from './components/ProfileGrid';
 import AuthPage from './components/AuthPage';
 import TipModal from './components/TipModal';
 import UploadModal from './components/UploadModal';
+import { userAPI } from './services/api';
 
 import BiometricScanner from './components/BiometricScanner';
 import FactionReveal from './components/FactionReveal';
