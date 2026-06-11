@@ -619,7 +619,7 @@ useEffect(() => {
             <ExplorePage 
               isAgeVerified={user.isAgeVerified || false}
               currentUser={user}
-              onUsernameClick={handleViewUserProfile}
+              onUsernameClick={handleUserClick}
               onContentClick={(content) => {
                 if (content.isNSFW && !user.isAgeVerified) {
                   setIsAgeVerificationOpen(true);
@@ -668,7 +668,7 @@ useEffect(() => {
                onTip={handleTipClick} 
                onProfileUpdate={handleProfileUpdate}
                creatorModeEnabled={creatorModeEnabled}
-               onUsernameClick={handleViewUserProfile}
+               onUsernameClick={handleUserClick}
                onOpenAdmin={() => setIsAdminOpen(true)}
              />
           </div>
