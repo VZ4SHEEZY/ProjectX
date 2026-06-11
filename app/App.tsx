@@ -63,8 +63,21 @@ const App: React.FC = () => {
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('auth');
   const [isLoading, setIsLoading] = useState(true);
   
-  const [currentView, setCurrentView] = useState<MainView>('feed');
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  // Hash-based routing
+  const [currentView, setCurrentView] = useState<MainView>(() => {
+    const hash = window.location.hash.slice(1);
+    if (hash.startsWith('/profile/')) return 'userprofile';
+    if (hash === '/explore') return 'explore';
+    if (hash === '/messages') return 'messages';
+    if (hash === '/admin') return 'admin';
+    return 'feed';
+  });
+  
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(() => {
+    const hash = window.location.hash.slice(1);
+    const match = hash.match(/^\/profile\/(.+)$/);
+    return match ? match[1] : null;
+  });
   const [feedTab, setFeedTab] = useState<FeedTab>('discover');
   const [creatorModeEnabled, setCreatorModeEnabled] = useState(false);
   const [isTipModalOpen, setIsTipModalOpen] = useState(false);
@@ -301,18 +314,52 @@ useEffect(() => {
     setIsSubscriptionTiersOpen(false);
   };
 
-  // Navigation handler - switches between main views
+
+
+  // Navigation function with URL updates
   const navigateTo = (view: MainView, userId?: string) => {
     if (view === 'userprofile' && userId) {
+      window.location.hash = `/profile/${userId}`;
       setSelectedUserId(userId);
+    } else if (view === 'explore') {
+      window.location.hash = '/explore';
+    } else if (view === 'messages') {
+      window.location.hash = '/messages';
+    } else if (view === 'admin') {
+      window.location.hash = '/admin';
+    } else {
+      window.location.hash = '';
     }
     setCurrentView(view);
   };
 
+  // Listen for hash changes (back button, direct URL entry)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.slice(1);
+      if (hash.startsWith('/profile/')) {
+        const username = hash.split('/profile/')[1];
+        setSelectedUserId(username);
+        setCurrentView('userprofile');
+      } else if (hash === '/explore') {
+        setCurrentView('explore');
+      } else if (hash === '/messages') {
+        setCurrentView('messages');
+      } else if (hash === '/admin') {
+        setCurrentView('admin');
+      } else {
+        setCurrentView('feed');
+        setSelectedUserId(null);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
   // Handle user clicks (accepts username OR userId)
   const handleUserClick = (userIdOrUsername: string) => {
-    setSelectedUserId(userIdOrUsername);
-    setCurrentView('userprofile');
+    navigateTo('userprofile', userIdOrUsername);
   };
 
   const handleViewUserProfile = (userIdOrUsername: string) => {
@@ -633,7 +680,7 @@ useEffect(() => {
               userId={selectedUserId}
               username={selectedUserId}
               currentUser={user}
-              onBack={() => setCurrentView('feed')}
+              onBack={() => navigateTo('feed')}
             />
           </div>
         )}
