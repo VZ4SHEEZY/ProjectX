@@ -63,6 +63,7 @@ const CATEGORIES = [
 ];
 
 const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick, currentUser, onUsernameClick }) => {
+  console.log('ExplorePage rendered, onUsernameClick:', typeof onUsernameClick);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -489,7 +490,10 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
                     </button>
                     <div className="text-center">
                       <button
-                        onClick={() => onUsernameClick(user.username)}
+                        onClick={() => {
+                          console.log('Username clicked:', user.username);
+                          onUsernameClick?.(user.username);
+                        }}
                         className="text-white text-sm font-medium flex items-center justify-center gap-1 hover:text-[#39FF14] transition-colors"
                       >
                         @{user.username}
