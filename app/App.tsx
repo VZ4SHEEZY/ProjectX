@@ -317,6 +317,7 @@ useEffect(() => {
 
   const handleViewUserProfile = (userIdOrUsername: string) => {
     // Can accept either userId or username
+    console.log('Viewing profile:', userIdOrUsername);
     setSelectedUserId(userIdOrUsername);
     setCurrentView('userprofile');
   };
