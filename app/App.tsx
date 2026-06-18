@@ -320,6 +320,7 @@ useEffect(() => {
     console.log('Viewing profile:', userIdOrUsername);
     setSelectedUserId(userIdOrUsername);
     setCurrentView('userprofile');
+    console.log('Set currentView to userprofile, selectedUserId:', userIdOrUsername);
   };
 
   // Handle creator mode toggle from Settings
