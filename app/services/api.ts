@@ -189,20 +189,26 @@ export const notificationAPI = {
 
 // ==================== MESSAGE API ====================
 export const messageAPI = {
-  getConversations: () =>
-    api.get('/messages/conversations'),
+  sendMessage: (recipientId: string, content: string, mediaUrl?: string, isVanishing?: boolean) =>
+    api.post('/messages', { recipientId, content, mediaUrl, isVanishing }),
 
-  getMessages: (userId: string, params?: { page?: number; limit?: number }) =>
-    api.get(`/messages/${userId}`, { params }),
+  getMessages: (recipientId: string, params?: { limit?: number; skip?: number }) =>
+    api.get(`/messages/${recipientId}`, { params }),
 
-  sendMessage: (userId: string, data: { content?: string; mediaUrl?: string; mediaType?: string }) =>
-    api.post(`/messages/${userId}`, data),
+  markMessageAsRead: (messageId: string) =>
+    api.patch(`/messages/${messageId}/read`),
+
+  screenshotAlert: (messageId: string) =>
+    api.post(`/messages/${messageId}/screenshot-alert`),
+
+  getUnreadMessageCount: () =>
+    api.get('/messages/unread/count'),
 
   deleteMessage: (messageId: string) =>
     api.delete(`/messages/${messageId}`),
 
-  getUnreadCount: () =>
-    api.get('/messages/unread/count'),
+  clearChat: (recipientId: string) =>
+    api.delete(`/messages/chat/${recipientId}`),
 };
 
 // ==================== TIP & SUBSCRIPTION API ====================

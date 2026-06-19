@@ -4,129 +4,21 @@ const Message = require('../models/Message');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 
-// @route   GET /api/messages/conversations
-// @desc    Get all conversations for current user
-// @access  Private
-router.get('/conversations', protect, async (req, res) => {
+// Send message
+// POST /api/messages
+router.post('/', protect, async (req, res) => {
   try {
-    // Get unique conversations
-    const sentMessages = await Message.find({ sender: req.user._id })
-      .distinct('recipient');
-    
-    const receivedMessages = await Message.find({ recipient: req.user._id })
-      .distinct('sender');
+    const { recipientId, content, mediaUrl, isVanishing = true } = req.body;
 
-    const conversationUserIds = [...new Set([...sentMessages, ...receivedMessages])];
-
-    // Get last message and unread count for each conversation
-    const conversations = await Promise.all(
-      conversationUserIds.map(async (userId) => {
-        const otherUser = await User.findById(userId)
-          .select('username displayName avatar isVerified isCreator');
-
-        const lastMessage = await Message.findOne({
-          $or: [
-            { sender: req.user._id, recipient: userId },
-            { sender: userId, recipient: req.user._id }
-          ]
-        })
-        .sort('-createdAt')
-        .limit(1);
-
-        const unreadCount = await Message.countDocuments({
-          sender: userId,
-          recipient: req.user._id,
-          isRead: false
-        });
-
-        return {
-          user: otherUser,
-          lastMessage,
-          unreadCount
-        };
-      })
-    );
-
-    // Sort by most recent message
-    conversations.sort((a, b) => {
-      if (!a.lastMessage) return 1;
-      if (!b.lastMessage) return -1;
-      return b.lastMessage.createdAt - a.lastMessage.createdAt;
-    });
-
-    res.json({
-      success: true,
-      count: conversations.length,
-      data: conversations
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
-  }
-});
-
-// @route   GET /api/messages/:userId
-// @desc    Get messages between current user and another user
-// @access  Private
-router.get('/:userId', protect, async (req, res) => {
-  try {
-    const { page = 1, limit = 50 } = req.query;
-
-    const messages = await Message.find({
-      $or: [
-        { sender: req.user._id, recipient: req.params.userId },
-        { sender: req.params.userId, recipient: req.user._id }
-      ]
-    })
-    .populate('sender', 'username displayName avatar')
-    .populate('recipient', 'username displayName avatar')
-    .sort('-createdAt')
-    .limit(limit * 1)
-    .skip((page - 1) * limit);
-
-    // Mark messages as read
-    await Message.updateMany(
-      {
-        sender: req.params.userId,
-        recipient: req.user._id,
-        isRead: false
-      },
-      { isRead: true }
-    );
-
-    res.json({
-      success: true,
-      count: messages.length,
-      data: messages.reverse() // Return in chronological order
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
-  }
-});
-
-// @route   POST /api/messages/:userId
-// @desc    Send a message to a user
-// @access  Private
-router.post('/:userId', protect, async (req, res) => {
-  try {
-    const { content, mediaUrl, mediaType } = req.body;
-
-    if (!content && !mediaUrl) {
+    if (!recipientId || !content.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Message content or media is required'
+        message: 'Recipient and content are required'
       });
     }
 
-    // Check if recipient exists
-    const recipient = await User.findById(req.params.userId);
+    // Verify recipient exists
+    const recipient = await User.findById(recipientId);
     if (!recipient) {
       return res.status(404).json({
         success: false,
@@ -134,54 +26,163 @@ router.post('/:userId', protect, async (req, res) => {
       });
     }
 
-    // Check if recipient accepts messages
-    if (recipient.privacySettings?.allowMessages === 'nobody') {
-      return res.status(403).json({
-        success: false,
-        message: 'This user does not accept messages'
-      });
-    }
-
-    if (recipient.privacySettings?.allowMessages === 'following' &&
-        !recipient.following.includes(req.user._id)) {
-      return res.status(403).json({
-        success: false,
-        message: 'You must be following this user to send messages'
-      });
-    }
-
-    const message = await Message.create({
+    const message = new Message({
       sender: req.user._id,
-      recipient: req.params.userId,
+      recipient: recipientId,
       content,
       mediaUrl,
-      mediaType
+      isVanishing,
+      expiresAt: isVanishing ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null
     });
 
-    await message.populate('sender', 'username displayName avatar');
-    await message.populate('recipient', 'username displayName avatar');
+    await message.save();
+    await message.populate('sender', 'username avatar');
 
-    res.status(201).json({
+    res.json({
       success: true,
-      data: message
+      data: message,
+      message: 'Message sent'
     });
   } catch (error) {
+    console.error('Send message error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: 'Failed to send message'
     });
   }
 });
 
-// @route   DELETE /api/messages/:id
-// @desc    Delete a message
-// @access  Private
+// Get messages with a specific user
+// GET /api/messages/:recipientId
+router.get('/:recipientId', protect, async (req, res) => {
+  try {
+    const { limit = 50, skip = 0 } = req.query;
+
+    const messages = await Message.find({
+      $or: [
+        { sender: req.user._id, recipient: req.params.recipientId },
+        { sender: req.params.recipientId, recipient: req.user._id }
+      ]
+    })
+    .populate('sender', 'username avatar')
+    .populate('recipient', 'username avatar')
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit))
+    .skip(parseInt(skip))
+    .lean();
+
+    res.json({
+      success: true,
+      data: messages.reverse(), // Reverse to show oldest first
+      hasMore: (skip + parseInt(limit)) < await Message.countDocuments({
+        $or: [
+          { sender: req.user._id, recipient: req.params.recipientId },
+          { sender: req.params.recipientId, recipient: req.user._id }
+        ]
+      })
+    });
+  } catch (error) {
+    console.error('Get messages error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch messages'
+    });
+  }
+});
+
+// Mark message as read
+// PATCH /api/messages/:id/read
+router.patch('/:id/read', protect, async (req, res) => {
+  try {
+    const message = await Message.findOneAndUpdate(
+      { _id: req.params.id, recipient: req.user._id },
+      { read: true, readAt: new Date() },
+      { new: true }
+    ).populate('sender', 'username avatar');
+
+    if (!message) {
+      return res.status(404).json({
+        success: false,
+        message: 'Message not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: message
+    });
+  } catch (error) {
+    console.error('Mark read error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to mark message as read'
+    });
+  }
+});
+
+// Screenshot alert
+// POST /api/messages/:id/screenshot-alert
+router.post('/:id/screenshot-alert', protect, async (req, res) => {
+  try {
+    const message = await Message.findOneAndUpdate(
+      { _id: req.params.id, recipient: req.user._id },
+      { screenshotAlert: true },
+      { new: true }
+    );
+
+    if (!message) {
+      return res.status(404).json({
+        success: false,
+        message: 'Message not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: message,
+      message: 'Screenshot alert logged'
+    });
+  } catch (error) {
+    console.error('Screenshot alert error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to log screenshot alert'
+    });
+  }
+});
+
+// Get unread message count
+// GET /api/messages/unread/count
+router.get('/unread/count', protect, async (req, res) => {
+  try {
+    const count = await Message.countDocuments({
+      recipient: req.user._id,
+      read: false
+    });
+
+    res.json({
+      success: true,
+      unreadCount: count
+    });
+  } catch (error) {
+    console.error('Count unread error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to count unread messages'
+    });
+  }
+});
+
+// Delete message (soft delete - user just doesn't see it)
+// DELETE /api/messages/:id
 router.delete('/:id', protect, async (req, res) => {
   try {
-    const message = await Message.findOne({
+    const message = await Message.findOneAndDelete({
       _id: req.params.id,
-      sender: req.user._id
+      $or: [
+        { sender: req.user._id },
+        { recipient: req.user._id }
+      ]
     });
 
     if (!message) {
@@ -191,43 +192,39 @@ router.delete('/:id', protect, async (req, res) => {
       });
     }
 
-    message.isDeleted = true;
-    message.content = '[deleted]';
-    message.mediaUrl = null;
-    await message.save();
-
     res.json({
       success: true,
       message: 'Message deleted'
     });
   } catch (error) {
+    console.error('Delete message error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: 'Failed to delete message'
     });
   }
 });
 
-// @route   GET /api/messages/unread/count
-// @desc    Get unread message count
-// @access  Private
-router.get('/unread/count', protect, async (req, res) => {
+// Clear all messages with a user
+// DELETE /api/messages/chat/:recipientId
+router.delete('/chat/:recipientId', protect, async (req, res) => {
   try {
-    const count = await Message.countDocuments({
-      recipient: req.user._id,
-      isRead: false
+    await Message.deleteMany({
+      $or: [
+        { sender: req.user._id, recipient: req.params.recipientId },
+        { sender: req.params.recipientId, recipient: req.user._id }
+      ]
     });
 
     res.json({
       success: true,
-      count
+      message: 'Chat cleared'
     });
   } catch (error) {
+    console.error('Clear chat error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: 'Failed to clear chat'
     });
   }
 });
