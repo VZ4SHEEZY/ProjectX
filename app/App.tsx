@@ -100,19 +100,6 @@ const App: React.FC = () => {
   const [activeCreatorAddress, setActiveCreatorAddress] = useState<string>('');
 
   // Initial loading + session restore (validates token against real API)
-  // Hash-based routing (NOT for admin - admin is modal)
-useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.slice(1);
-      if (hash === 'feed') setCurrentView('feed');
-      else if (hash === 'profile') setCurrentView('profile');
-      else if (hash === 'explore') setCurrentView('explore');
-    };
-
-    window.addEventListener('hashchange', handleHashChange);
-    handleHashChange(); // Handle on load
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
 
 // Admin modal state
 const [isAdminOpen, setIsAdminOpen] = useState(false);
