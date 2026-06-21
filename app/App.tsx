@@ -23,7 +23,7 @@ import SearchSystem from './components/SearchSystem';
 import WalletConnect from './components/WalletConnect';
 import NotificationSystem from './components/NotificationSystem';
 import CommentSystem from './components/CommentSystem';
-import DMChat from './components/DMChat';
+import DMSystem from './components/DMSystem';
 import SettingsPage from './components/SettingsPage';
 import ThemeEditor from './components/ThemeEditor';
 import LiveStream from './components/LiveStream';
@@ -575,13 +575,11 @@ useEffect(() => {
         
         {/* MESSAGES VIEW */}
         {currentView === 'messages' && (
-          <div className="h-full w-full overflow-y-auto">
-            <DMChat 
-              isOpen={true}
-              onClose={() => navigateTo('feed')}
-              currentUser={{ name: user.username, avatar: user.avatar }}
-            />
-          </div>
+          <DMSystem
+            isOpen={true}
+            onClose={() => navigateTo('feed')}
+            currentUser={{ _id: user.id, username: user.username, avatar: user.avatar }}
+          />
         )}
         
         {/* PROFILE VIEW - with conditional Creator tab */}
