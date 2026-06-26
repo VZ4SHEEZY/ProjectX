@@ -15,9 +15,13 @@ const api: AxiosInstance = axios.create({
 // Request interceptor - add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('cdToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    try {
+      const token = localStorage?.getItem?.('cdToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (err) {
+      console.warn('Could not read auth token:', err);
     }
     return config;
   },
@@ -29,9 +33,17 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('cdToken');
-      localStorage.removeItem('cdUser');
-      window.location.href = '/';
+      try {
+        localStorage?.removeItem?.('cdToken');
+        localStorage?.removeItem?.('cdUser');
+      } catch (err) {
+        console.warn('Could not clear auth from localStorage:', err);
+      }
+      try {
+        window?.location?.assign?.('/');
+      } catch (err) {
+        console.warn('Could not redirect to login:', err);
+      }
     }
     return Promise.reject(error);
   }
