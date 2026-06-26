@@ -81,7 +81,6 @@ const App: React.FC = () => {
   const [isWalletOpen, setIsWalletOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
-  const [isDMOpen, setIsDMOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isThemeEditorOpen, setIsThemeEditorOpen] = useState(false);
   const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false);
@@ -327,13 +326,12 @@ useEffect(() => {
       if (e.key === 'Escape') {
         if (isSearchOpen) setIsSearchOpen(false);
         if (isNotificationsOpen) setIsNotificationsOpen(false);
-        if (isDMOpen) setIsDMOpen(false);
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isSearchOpen, isNotificationsOpen, isDMOpen]);
+  }, [isSearchOpen, isNotificationsOpen]);
 
   // --- RENDER FLOW ---
 
@@ -768,13 +766,6 @@ useEffect(() => {
         isOpen={isCommentsOpen}
         onClose={() => setIsCommentsOpen(false)}
         contentId="post-123"
-        currentUser={{ name: user.username, avatar: user.avatar }}
-      />
-
-      {/* DM Chat */}
-      <DMChat 
-        isOpen={isDMOpen}
-        onClose={() => setIsDMOpen(false)}
         currentUser={{ name: user.username, avatar: user.avatar }}
       />
 
