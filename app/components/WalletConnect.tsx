@@ -27,11 +27,15 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({ onConnect, onDisco
 
   useEffect(() => {
     // Check if wallet was previously connected
-    const savedWallet = localStorage.getItem('walletAddress');
-    if (savedWallet) {
-      setWalletAddress(savedWallet);
-      setIsConnected(true);
-      fetchBalances(savedWallet);
+    try {
+      const savedWallet = localStorage?.getItem?.('walletAddress');
+      if (savedWallet) {
+        setWalletAddress(savedWallet);
+        setIsConnected(true);
+        fetchBalances(savedWallet).catch(err => console.warn('Failed to restore balances:', err));
+      }
+    } catch (err) {
+      console.warn('localStorage unavailable:', err);
     }
   }, []);
 
@@ -39,15 +43,22 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({ onConnect, onDisco
     setIsConnecting(true);
     try {
       // Check if MetaMask is installed
-      if (typeof window.ethereum === 'undefined') {
-        alert('Please install MetaMask or another Web3 wallet');
-        window.open('https://metamask.io', '_blank');
+      if (typeof window?.ethereum === 'undefined') {
+        try { alert('Please install MetaMask or another Web3 wallet'); }
+        catch (err) { console.warn('Could not show alert:', err); }
+        try { window?.open?.('https://metamask.io', '_blank'); }
+        catch (err) { console.warn('Could not open Metamask URL:', err); }
         return;
       }
 
-      // Request account access
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      const address = accounts[0];
+      // Request account access with safety
+      const accounts = await window.ethereum?.request?.({ method: 'eth_requestAccounts' }) || [];
+      const address = accounts?.[0];
+      
+      if (!address) {
+        alert('No wallet address returned. Please try again.');
+        return;
+      }
 
       // Get nonce from backend
       const nonceResponse = await walletAPI.getNonce(address);
@@ -59,58 +70,91 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({ onConnect, onDisco
         params: [message, address]
       });
 
-      // Verify with backend
+      // Verify with backend - check response before using
       const verifyResponse = await walletAPI.verify(address, signature, message);
+      if (!verifyResponse?.token) {
+        throw new Error('Backend failed to verify wallet signature');
+      }
 
-      // Save token and wallet
-      localStorage.setItem('token', verifyResponse.token);
-      localStorage.setItem('walletAddress', address);
+      // Save token and wallet with error handling for localStorage
+      try {
+        localStorage?.setItem?.('token', verifyResponse.token);
+        localStorage?.setItem?.('walletAddress', address);
+      } catch (err) {
+        console.warn('Could not save wallet to localStorage:', err);
+      }
       
       setWalletAddress(address);
       setIsConnected(true);
       onConnect?.(address);
       
-      // Fetch balances
-      await fetchBalances(address);
+      // Fetch balances with error handling
+      try {
+        await fetchBalances(address);
+      } catch (err) {
+        console.warn('Initial balance fetch failed, wallet still connected:', err);
+      }
       
     } catch (error) {
       console.error('Wallet Connection Error:', error);
-      alert('Failed to connect wallet');
+      try {
+        alert(`Failed to connect wallet: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } catch (err) {
+        console.warn('Could not show error alert:', err);
+      }
     } finally {
       setIsConnecting(false);
     }
   };
 
-  const fetchBalances = async (address: string) => {
+  const fetchBalances = async (address: string): Promise<void> => {
     try {
       const response = await walletAPI.getBalance();
-      
+      if (!response?.balances || typeof response.balances !== 'object') {
+        throw new Error('Invalid balances response');
+      }
+
+      const safeFloat = (val: any): number => {
+        const num = parseFloat(val);
+        return isNaN(num) ? 0 : num;
+      };
+
       const tokens = [
-        { symbol: 'ETH', name: 'Ethereum', balance: response.balances.ETH, logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.png', usdValue: (parseFloat(response.balances.ETH) * 3500).toFixed(2) },
-        { symbol: 'USDC', name: 'USD Coin', balance: response.balances.USDC, logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png', usdValue: response.balances.USDC },
-        { symbol: 'USDT', name: 'Tether', balance: response.balances.USDT, logo: 'https://cryptologos.cc/logos/tether-usdt-logo.png', usdValue: response.balances.USDT },
-        { symbol: 'MATIC', name: 'Polygon', balance: response.balances.MATIC, logo: 'https://cryptologos.cc/logos/polygon-matic-logo.png', usdValue: (parseFloat(response.balances.MATIC) * 0.5).toFixed(2) },
-        { symbol: 'SOL', name: 'Solana', balance: response.balances.SOL, logo: 'https://cryptologos.cc/logos/solana-sol-logo.png', usdValue: (parseFloat(response.balances.SOL) * 150).toFixed(2) }
+        { symbol: 'ETH', name: 'Ethereum', balance: String(response.balances.ETH || '0'), logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.png', usdValue: (safeFloat(response.balances.ETH) * 3500).toFixed(2) },
+        { symbol: 'USDC', name: 'USD Coin', balance: String(response.balances.USDC || '0'), logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png', usdValue: String(response.balances.USDC || '0') },
+        { symbol: 'USDT', name: 'Tether', balance: String(response.balances.USDT || '0'), logo: 'https://cryptologos.cc/logos/tether-usdt-logo.png', usdValue: String(response.balances.USDT || '0') },
+        { symbol: 'MATIC', name: 'Polygon', balance: String(response.balances.MATIC || '0'), logo: 'https://cryptologos.cc/logos/polygon-matic-logo.png', usdValue: (safeFloat(response.balances.MATIC) * 0.5).toFixed(2) },
+        { symbol: 'SOL', name: 'Solana', balance: String(response.balances.SOL || '0'), logo: 'https://cryptologos.cc/logos/solana-sol-logo.png', usdValue: (safeFloat(response.balances.SOL) * 150).toFixed(2) }
       ];
-      
+
       setBalances(tokens);
-      setTotalUSD(response.totalUSD);
+      setTotalUSD(response.totalUSD || '0.00');
     } catch (error) {
       console.error('Fetch Balances Error:', error);
+      // On error, set empty balances so UI doesn't crash
+      setBalances([]);
+      setTotalUSD('0.00');
     }
   };
 
   const disconnectWallet = async () => {
     try {
       await walletAPI.disconnect();
-      localStorage.removeItem('walletAddress');
-      setIsConnected(false);
-      setWalletAddress('');
-      setBalances([]);
-      onDisconnect?.();
-    } catch (error) {
-      console.error('Disconnect Error:', error);
+    } catch (err) {
+      console.warn('Could not disconnect wallet from backend:', err);
+      // Continue anyway - we're removing local state regardless
     }
+    
+    try {
+      localStorage?.removeItem?.('walletAddress');
+    } catch (err) {
+      console.warn('Could not clear localStorage wallet:', err);
+    }
+    
+    setIsConnected(false);
+    setWalletAddress('');
+    setBalances([]);
+    onDisconnect?.();
   };
 
   const copyAddress = () => {
