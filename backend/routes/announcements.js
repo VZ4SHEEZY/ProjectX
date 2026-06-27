@@ -3,14 +3,11 @@ const router = express.Router();
 const Announcement = require('../models/Announcement');
 const Post = require('../models/Post');
 const { protect } = require('../middleware/auth');
+const { requireAdmin, logAdminAction } = require('../middleware/admin');
 
 // POST: Create announcement (admin only)
-router.post('/', protect, async (req, res) => {
+router.post('/', protect, requireAdmin, logAdminAction('broadcast_announcement'), async (req, res) => {
   try {
-    // Check if user is vz4sheezy
-    if (req.user.username !== 'vz4sheezy') {
-      return res.status(403).json({ success: false, message: 'Admin only' });
-    }
 
     const { message, targetType, targetFaction } = req.body;
 
