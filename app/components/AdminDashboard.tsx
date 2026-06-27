@@ -3,7 +3,7 @@ import { User } from '../types';
 import { BarChart3, Bell } from 'lucide-react';
 
 interface AdminDashboardProps {
-  user: User;
+  user: User & { isAdmin?: boolean };
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
@@ -16,10 +16,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
     setLoading(false);
   }, []);
 
-  if (user.id !== '69c03c1f50bf927b744dd5d9' && user.username !== 'vz4sheezy') {
+  // Fail-closed: if isAdmin is not explicitly true, deny access
+  if (user.isAdmin !== true) {
     return (
       <div className="w-full h-full flex items-center justify-center text-gray-400">
-        Access denied
+        Access denied. Admin role required.
       </div>
     );
   }
