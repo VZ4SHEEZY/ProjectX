@@ -452,7 +452,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
           >
             <Edit size={14} /> EDIT PROFILE
           </button>
-          {user.username === 'vz4sheezy' && (
+          {user.isAdmin === true && (
             <button 
               onClick={onOpenAdmin}
               className="h-9 px-4 bg-[#FF00FF]/20 border border-[#FF00FF] text-[#FF00FF] rounded font-bold text-xs hover:bg-[#FF00FF]/30 transition-all flex items-center gap-1"

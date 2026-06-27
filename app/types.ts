@@ -23,6 +23,7 @@ export interface User {
   faction?: string;
   isVerified?: boolean;
   isAgeVerified?: boolean;
+  isAdmin?: boolean; // Admin role flag from database
   theme?: ProfileTheme;
   subscriptionPlan?: SubscriptionPlan;
   mood?: string;

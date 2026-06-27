@@ -438,7 +438,7 @@ useEffect(() => {
             icon={UserIcon}
             label="PROFILE"
           />
-          {user?.username === 'vz4sheezy' && (
+          {user?.isAdmin === true && (
             <NavButton 
               active={currentView === 'admin'}
               onClick={() => navigateTo('admin')}
@@ -582,7 +582,7 @@ useEffect(() => {
         
         {/* PROFILE VIEW - with conditional Creator tab */}
         {/* Admin Modal - Overlay */}
-        {isAdminOpen && user?.username === 'vz4sheezy' && (
+        {isAdminOpen && user?.isAdmin === true && (
           <div className="fixed inset-0 z-[9999] bg-black/95">
             <button
               onClick={() => setIsAdminOpen(false)}
@@ -595,7 +595,7 @@ useEffect(() => {
         )}
 
         {/* Old route - no longer used */}
-        {currentView === 'admin' && user?.username === 'vz4sheezy' && !isAdminOpen && (
+        {currentView === 'admin' && user?.isAdmin === true && !isAdminOpen && (
           <AdminDashboard user={user} />
         )}
 
@@ -680,8 +680,8 @@ useEffect(() => {
           label="PROFILE"
         />
 
-        {/* ADMIN (vz4sheezy only) */}
-        {user?.username === 'vz4sheezy' && (
+        {/* ADMIN (isAdmin only) */}
+        {user?.isAdmin === true && (
           <MobileNavButton 
             active={currentView === 'admin'}
             onClick={() => navigateTo('admin')}
