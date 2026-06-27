@@ -60,6 +60,10 @@ const userSchema = new mongoose.Schema({
   isAgeVerified: { type: Boolean, default: false },
   ageVerifiedAt: Date,
   
+  // Admin access (role-based)
+  isAdmin: { type: Boolean, default: false, index: true },
+  adminSince: Date,
+  
   // Privacy settings
   profilePrivacy: { type: String, enum: ['public', 'private'], default: 'public' },
   
