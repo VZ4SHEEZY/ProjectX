@@ -191,7 +191,9 @@ userSchema.methods.toPublicProfile = function() {
     website: this.website,
     socialLinks: this.socialLinks,
     isActive: this.isActive,
-    createdAt: this.createdAt
+    createdAt: this.createdAt,
+    isAdmin: this.isAdmin,
+    adminSince: this.adminSince
   };
 };
 
