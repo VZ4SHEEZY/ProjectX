@@ -53,6 +53,7 @@ const mapApiUser = (apiUser: any): User => ({
   faction: apiUser.faction || 'Unaffiliated',
   isVerified: apiUser.isVerified || false,
   isAgeVerified: apiUser.isAgeVerified || false,
+  isAdmin: apiUser.isAdmin || false,
   followersCount: apiUser.followersCount || 0,
   followingCount: apiUser.followingCount || 0,
   postsCount: apiUser.postsCount || 0,
