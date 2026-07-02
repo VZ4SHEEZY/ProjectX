@@ -10,6 +10,7 @@ import { userAPI } from './services/api';
 import BiometricScanner from './components/BiometricScanner';
 import FactionReveal from './components/FactionReveal';
 import AgeVerificationModal from './components/AgeVerificationModal';
+import NSFWPrompt from './components/NSFWPrompt';
 import CreatorDashboard from './components/CreatorDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import PostComposer from './components/PostComposer';
@@ -103,8 +104,8 @@ const App: React.FC = () => {
 
 // Admin modal state
 const [isAdminOpen, setIsAdminOpen] = useState(false);
-
-useEffect(() => {
+const [isAgeVerificationOpen, setIsAgeVerificationOpen] = useState(false);
+const [showNSFWPrompt, setShowNSFWPrompt] = useState(false);
     const restore = async () => {
       const token = localStorage.getItem('cdToken');
       const storedUser = localStorage.getItem('cdUser');
@@ -147,6 +148,13 @@ useEffect(() => {
     };
     restore();
   }, []);
+
+  // Show age verification modal if user is not verified (and not on auth page)
+  useEffect(() => {
+    if (user && !user.isAgeVerified && currentView === 'feed') {
+      setIsAgeVerificationOpen(true);
+    }
+  }, [user, currentView]);
 
   // Fetch unread notifications count periodically
   useEffect(() => {
@@ -240,9 +248,10 @@ useEffect(() => {
     }
   };
 
-  // Handle Age Verification from modal
-  const handleAgeVerify = (method: 'wallet' | 'document' | 'nft') => {
-    handleVerificationUpdate(true);
+  // Handle Age Verification success from modal (user completed verification)
+  const handleAgeVerifySuccess = () => {
+    // Refresh user data to get updated isAgeVerified from API
+    restore();
     setIsAgeVerificationOpen(false);
   };
 
@@ -815,7 +824,25 @@ useEffect(() => {
       <AgeVerificationModal 
         isOpen={isAgeVerificationOpen}
         onClose={() => setIsAgeVerificationOpen(false)}
-        onVerify={handleAgeVerify}
+        onVerifySuccess={() => {
+          setIsAgeVerificationOpen(false);
+          // Refresh user data
+          const storedUser = localStorage.getItem('cdUser');
+          if (storedUser) {
+            const updatedUser = JSON.parse(storedUser);
+            updatedUser.isAgeVerified = true;
+            localStorage.setItem('cdUser', JSON.stringify(updatedUser));
+            setUser(mapApiUser(updatedUser));
+          }
+        }}
+      />
+
+      <NSFWPrompt 
+        onClose={() => setShowNSFWPrompt(false)}
+        onVerify={() => {
+          setShowNSFWPrompt(false);
+          setIsAgeVerificationOpen(true);
+        }}
       />
 
       <PostComposer 
