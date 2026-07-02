@@ -1,63 +1,138 @@
-
-import React, { useState } from 'react';
-import { X, Shield, Wallet, Upload, Check, AlertTriangle, Lock, EyeOff } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Upload, Check, AlertTriangle, Lock, Shield, Camera, FileCheck } from 'lucide-react';
 import GlitchButton from './GlitchButton';
 
 interface AgeVerificationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onVerify: (method: 'wallet' | 'document' | 'nft') => void;
+  onVerifySuccess: () => void;
 }
 
-type VerificationMethod = 'wallet' | 'document' | 'nft' | null;
+type VerificationStep = 'intro' | 'id-upload' | 'selfie-upload' | 'review' | 'success' | 'error';
 
-const AgeVerificationModal: React.FC<AgeVerificationModalProps> = ({ isOpen, onClose, onVerify }) => {
-  const [selectedMethod, setSelectedMethod] = useState<VerificationMethod>(null);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [step, setStep] = useState<'select' | 'verify' | 'success'>('select');
+const AgeVerificationModal: React.FC<AgeVerificationModalProps> = ({ isOpen, onClose, onVerifySuccess }) => {
+  const [step, setStep] = useState<VerificationStep>('intro');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [idPhotoUrl, setIdPhotoUrl] = useState<string | null>(null);
+  const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
+  const idInputRef = useRef<HTMLInputElement>(null);
+  const selfieInputRef = useRef<HTMLInputElement>(null);
 
-  const handleMethodSelect = (method: VerificationMethod) => {
-    setSelectedMethod(method);
-    setStep('verify');
+  const handleFileUpload = async (file: File, type: 'id' | 'selfie') => {
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File must be less than 10MB');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', type);
+
+      const token = localStorage.getItem('cdToken');
+      const res = await fetch('https://cyberdope-api.onrender.com/api/upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      if (type === 'id') {
+        setIdPhotoUrl(data.url);
+        if (selfieUrl) setStep('review');
+        else setStep('selfie-upload');
+      } else {
+        setSelfieUrl(data.url);
+        if (idPhotoUrl) setStep('review');
+        else setStep('id-upload');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleVerify = async () => {
-    if (!selectedMethod) return;
-    
-    setIsVerifying(true);
-    // Simulate verification process
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsVerifying(false);
-    setStep('success');
-    
-    // Call parent callback
-    setTimeout(() => {
-      onVerify(selectedMethod);
-      onClose();
-      // Reset state
-      setStep('select');
-      setSelectedMethod(null);
-    }, 1500);
+  const handleSubmitVerification = async () => {
+    if (!idPhotoUrl || !selfieUrl) {
+      setError('Both ID and selfie are required');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const token = localStorage.getItem('cdToken');
+      const res = await fetch('https://cyberdope-api.onrender.com/api/age-verification/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          idPhotoUrl,
+          selfieUrl
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Verification failed');
+      }
+
+      setStep('success');
+      setTimeout(() => {
+        onVerifySuccess();
+        onClose();
+        // Reset state
+        setStep('intro');
+        setIdPhotoUrl(null);
+        setSelfieUrl(null);
+      }, 2000);
+    } catch (err: any) {
+      setError(err.message);
+      setStep('error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleBack = () => {
-    setStep('select');
-    setSelectedMethod(null);
+  const handleReset = () => {
+    setStep('intro');
+    setIdPhotoUrl(null);
+    setSelfieUrl(null);
+    setError(null);
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-xl">
-      <div className="relative w-full max-w-lg mx-4 bg-[#0a0a0a] border-2 border-pink-600 shadow-[0_0_50px_rgba(236,72,153,0.3)] flex flex-col max-h-[90vh] overflow-hidden">
+      <div className="relative w-full max-w-2xl mx-4 bg-[#0a0a0a] border-2 border-pink-600 shadow-[0_0_50px_rgba(236,72,153,0.3)] flex flex-col max-h-[90vh] overflow-hidden">
         
         {/* Header */}
         <div className="flex items-center justify-between p-4 bg-pink-600/20 border-b-2 border-pink-600/50">
           <div className="flex items-center gap-3">
-            <EyeOff className="text-pink-500" size={24} />
+            <Shield className="text-pink-500" size={24} />
             <div>
               <h2 className="text-pink-500 font-bold text-lg tracking-wider">AGE VERIFICATION</h2>
-              <p className="text-pink-400/70 text-[10px] font-mono">PROTOCOL 18+ // RESTRICTED ACCESS</p>
+              <p className="text-pink-400/70 text-[10px] font-mono">18+ IDENTITY CONFIRMATION</p>
             </div>
           </div>
           <button 
@@ -71,7 +146,7 @@ const AgeVerificationModal: React.FC<AgeVerificationModalProps> = ({ isOpen, onC
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           
-          {step === 'select' && (
+          {step === 'intro' && (
             <div className="space-y-6 animate-in fade-in duration-300">
               {/* Warning Banner */}
               <div className="bg-pink-600/10 border border-pink-600/30 p-4 rounded-lg">
@@ -80,205 +155,264 @@ const AgeVerificationModal: React.FC<AgeVerificationModalProps> = ({ isOpen, onC
                   <div>
                     <h3 className="text-pink-500 font-bold text-sm mb-1">Adult Content Warning</h3>
                     <p className="text-gray-400 text-xs leading-relaxed">
-                      The content you're attempting to access contains adult material (18+). 
-                      By proceeding, you confirm you are of legal age in your jurisdiction.
+                      CyberDope hosts adult (18+) content from creators. To protect our community, 
+                      we require government-issued ID verification for all users.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Verification Options */}
+              {/* What We Need */}
               <div className="space-y-3">
-                <p className="text-gray-500 text-xs font-mono uppercase tracking-wider">Choose Verification Method</p>
+                <p className="text-gray-500 text-xs font-mono uppercase tracking-wider">What We'll Ask For</p>
                 
-                {/* Wallet Verification */}
-                <button
-                  onClick={() => handleMethodSelect('wallet')}
-                  className="w-full p-4 border-2 border-gray-700 hover:border-[#39FF14] bg-black/50 hover:bg-[#39FF14]/5 transition-all group text-left rounded-lg"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-[#39FF14]/10 flex items-center justify-center group-hover:bg-[#39FF14]/20 transition-colors">
-                      <Wallet className="text-[#39FF14]" size={24} />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="text-white font-bold group-hover:text-[#39FF14] transition-colors">Wallet Signature</h4>
-                      <p className="text-gray-500 text-xs mt-1">Sign a message with your wallet. Fastest method.</p>
-                      <span className="text-[10px] text-[#39FF14] font-mono mt-2 inline-block">RECOMMENDED</span>
-                    </div>
-                    <div className="w-6 h-6 rounded-full border-2 border-gray-700 group-hover:border-[#39FF14] flex items-center justify-center">
-                      <div className="w-3 h-3 rounded-full bg-[#39FF14] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 p-3 bg-black/50 border border-gray-800 rounded-lg">
+                    <FileCheck className="text-[#39FF14] flex-shrink-0" size={20} />
+                    <div>
+                      <h4 className="text-white text-sm font-bold">Government ID Photo</h4>
+                      <p className="text-gray-500 text-xs">Driver's license, passport, or national ID</p>
                     </div>
                   </div>
-                </button>
 
-                {/* Document Verification */}
-                <button
-                  onClick={() => handleMethodSelect('document')}
-                  className="w-full p-4 border-2 border-gray-700 hover:border-blue-500 bg-black/50 hover:bg-blue-500/5 transition-all group text-left rounded-lg"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-                      <Upload className="text-blue-500" size={24} />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="text-white font-bold group-hover:text-blue-500 transition-colors">ID Document</h4>
-                      <p className="text-gray-500 text-xs mt-1">Upload ID for verification. Processed securely.</p>
-                      <span className="text-[10px] text-gray-500 font-mono mt-2 inline-block">~5 MIN PROCESSING</span>
-                    </div>
-                    <div className="w-6 h-6 rounded-full border-2 border-gray-700 group-hover:border-blue-500 flex items-center justify-center">
-                      <div className="w-3 h-3 rounded-full bg-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="flex items-center gap-3 p-3 bg-black/50 border border-gray-800 rounded-lg">
+                    <Camera className="text-blue-500 flex-shrink-0" size={20} />
+                    <div>
+                      <h4 className="text-white text-sm font-bold">Selfie for Liveness</h4>
+                      <p className="text-gray-500 text-xs">Recent photo showing your face clearly</p>
                     </div>
                   </div>
-                </button>
-
-                {/* NFT Verification */}
-                <button
-                  onClick={() => handleMethodSelect('nft')}
-                  className="w-full p-4 border-2 border-gray-700 hover:border-purple-500 bg-black/50 hover:bg-purple-500/5 transition-all group text-left rounded-lg"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
-                      <Lock className="text-purple-500" size={24} />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="text-white font-bold group-hover:text-purple-500 transition-colors">Verification NFT</h4>
-                      <p className="text-gray-500 text-xs mt-1">Purchase a one-time verification NFT (~$5).</p>
-                      <span className="text-[10px] text-purple-400 font-mono mt-2 inline-block">ONE-TIME FEE</span>
-                    </div>
-                    <div className="w-6 h-6 rounded-full border-2 border-gray-700 group-hover:border-purple-500 flex items-center justify-center">
-                      <div className="w-3 h-3 rounded-full bg-purple-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  </div>
-                </button>
+                </div>
               </div>
 
-              {/* Privacy Note */}
+              {/* Security Info */}
+              <div className="bg-black/50 border border-gray-800 p-4 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <Lock className="text-[#39FF14] flex-shrink-0 mt-0.5" size={16} />
+                  <div className="text-xs text-gray-400">
+                    <p className="font-bold text-white mb-1">🔒 Privacy & Security</p>
+                    <ul className="space-y-1">
+                      <li>• Encrypted end-to-end</li>
+                      <li>• Processed by secure verification partner</li>
+                      <li>• Not stored on our servers</li>
+                      <li>• Only used for age verification</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Terms */}
               <div className="text-center">
-                <p className="text-[10px] text-gray-600 font-mono">
-                  <Shield size={10} className="inline mr-1" />
-                  Your privacy is protected. No personal data stored on-chain.
+                <p className="text-[10px] text-gray-600 font-mono mb-4">
+                  By proceeding, you agree to our Terms of Service and confirm you are 18+ years old.
                 </p>
+                <GlitchButton 
+                  onClick={() => setStep('id-upload')}
+                  className="w-full py-3"
+                >
+                  START VERIFICATION
+                </GlitchButton>
               </div>
             </div>
           )}
 
-          {step === 'verify' && selectedMethod === 'wallet' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-              <button onClick={handleBack} className="text-gray-500 hover:text-white text-sm flex items-center gap-1">
+          {step === 'id-upload' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <button 
+                onClick={() => setStep('intro')} 
+                className="text-gray-500 hover:text-white text-sm flex items-center gap-1 mb-2"
+              >
                 ← Back
               </button>
-              
-              <div className="text-center py-8">
+
+              <div className="text-center">
                 <div className="w-20 h-20 rounded-full bg-[#39FF14]/10 flex items-center justify-center mx-auto mb-4">
-                  <Wallet className="text-[#39FF14]" size={40} />
+                  <FileCheck className="text-[#39FF14]" size={40} />
                 </div>
-                <h3 className="text-white font-bold text-lg mb-2">Connect Your Wallet</h3>
+                <h3 className="text-white font-bold text-lg mb-2">Upload Government ID</h3>
                 <p className="text-gray-400 text-sm mb-6">
-                  Sign a message to prove you're 18+. No transaction needed.
+                  Driver's license, passport, or national ID card (front side)
                 </p>
-                
-                <div className="bg-black/50 border border-gray-800 p-4 rounded-lg mb-6 text-left">
-                  <p className="text-[10px] text-gray-500 font-mono mb-2">MESSAGE TO SIGN:</p>
-                  <code className="text-xs text-[#39FF14] font-mono break-all">
-                    I confirm I am 18+ years old and agree to view adult content on CyberDope. Timestamp: {Date.now()}
-                  </code>
-                </div>
 
-                <GlitchButton 
-                  onClick={handleVerify}
-                  disabled={isVerifying}
-                  className="w-full py-4"
+                {/* Upload Area */}
+                <div 
+                  onClick={() => idInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-700 hover:border-[#39FF14] rounded-lg p-8 transition-all cursor-pointer bg-black/30 hover:bg-[#39FF14]/5 group"
                 >
-                  {isVerifying ? (
-                    <span className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      VERIFYING...
-                    </span>
+                  {idPhotoUrl ? (
+                    <div className="space-y-3">
+                      <img src={idPhotoUrl} alt="ID" className="max-h-32 mx-auto rounded-lg border border-gray-700" />
+                      <p className="text-[#39FF14] text-sm font-bold">✓ ID Uploaded</p>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIdPhotoUrl(null);
+                        }}
+                        className="text-gray-500 hover:text-white text-xs"
+                      >
+                        Change
+                      </button>
+                    </div>
                   ) : (
-                    'SIGN WITH WALLET'
+                    <>
+                      <Upload className="mx-auto text-gray-500 mb-2 group-hover:text-[#39FF14] transition-colors" size={32} />
+                      <p className="text-gray-400 text-sm">Click to upload or drag & drop</p>
+                      <p className="text-gray-600 text-xs mt-1">JPG, PNG up to 10MB</p>
+                    </>
                   )}
-                </GlitchButton>
+                </div>
+
+                <input 
+                  ref={idInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'id')}
+                  className="hidden"
+                />
+
+                {error && (
+                  <div className="mt-4 text-red-500 text-sm border border-red-500/30 bg-red-500/10 p-3 rounded-lg">
+                    {error}
+                  </div>
+                )}
+
+                <div className="mt-6 flex gap-3">
+                  <button 
+                    onClick={() => setStep('intro')}
+                    className="flex-1 py-2 border border-gray-700 text-gray-400 hover:text-white transition-colors rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={() => idPhotoUrl && setStep('selfie-upload')}
+                    disabled={!idPhotoUrl || isLoading}
+                    className="flex-1 py-2 bg-[#39FF14]/20 text-[#39FF14] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#39FF14]/30 transition-colors rounded-lg font-bold"
+                  >
+                    {isLoading ? 'Uploading...' : 'Next'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
-          {step === 'verify' && selectedMethod === 'document' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-              <button onClick={handleBack} className="text-gray-500 hover:text-white text-sm flex items-center gap-1">
+          {step === 'selfie-upload' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <button 
+                onClick={() => setStep('id-upload')} 
+                className="text-gray-500 hover:text-white text-sm flex items-center gap-1 mb-2"
+              >
                 ← Back
               </button>
-              
-              <div className="text-center py-4">
+
+              <div className="text-center">
                 <div className="w-20 h-20 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
-                  <Upload className="text-blue-500" size={40} />
+                  <Camera className="text-blue-500" size={40} />
                 </div>
-                <h3 className="text-white font-bold text-lg mb-2">Upload ID Document</h3>
+                <h3 className="text-white font-bold text-lg mb-2">Take a Selfie</h3>
                 <p className="text-gray-400 text-sm mb-6">
-                  We accept driver's license, passport, or government ID.
+                  Recent photo of your face. Used to verify it's really you.
                 </p>
-                
-                <div className="border-2 border-dashed border-gray-700 hover:border-blue-500 rounded-lg p-8 transition-colors cursor-pointer mb-6">
-                  <Upload className="mx-auto text-gray-500 mb-2" size={32} />
-                  <p className="text-gray-400 text-sm">Click to upload or drag & drop</p>
-                  <p className="text-gray-600 text-xs mt-1">JPG, PNG, PDF up to 10MB</p>
-                </div>
 
-                <div className="bg-blue-500/10 border border-blue-500/30 p-3 rounded-lg mb-6 text-left">
-                  <p className="text-[10px] text-blue-400 font-mono">
-                    🔒 Your document is encrypted and processed by our secure verification partner. 
-                    It's never stored on our servers.
-                  </p>
-                </div>
-
-                <GlitchButton 
-                  onClick={handleVerify}
-                  disabled={isVerifying}
-                  className="w-full py-4"
-                  variant="secondary"
+                {/* Upload Area */}
+                <div 
+                  onClick={() => selfieInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-700 hover:border-blue-500 rounded-lg p-8 transition-all cursor-pointer bg-black/30 hover:bg-blue-500/5 group"
                 >
-                  {isVerifying ? 'UPLOADING...' : 'UPLOAD DOCUMENT'}
-                </GlitchButton>
+                  {selfieUrl ? (
+                    <div className="space-y-3">
+                      <img src={selfieUrl} alt="Selfie" className="max-h-32 mx-auto rounded-lg border border-gray-700" />
+                      <p className="text-blue-500 text-sm font-bold">✓ Selfie Uploaded</p>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelfieUrl(null);
+                        }}
+                        className="text-gray-500 hover:text-white text-xs"
+                      >
+                        Retake
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Camera className="mx-auto text-gray-500 mb-2 group-hover:text-blue-500 transition-colors" size={32} />
+                      <p className="text-gray-400 text-sm">Click to upload or drag & drop</p>
+                      <p className="text-gray-600 text-xs mt-1">JPG, PNG up to 10MB</p>
+                    </>
+                  )}
+                </div>
+
+                <input 
+                  ref={selfieInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'selfie')}
+                  className="hidden"
+                />
+
+                {error && (
+                  <div className="mt-4 text-red-500 text-sm border border-red-500/30 bg-red-500/10 p-3 rounded-lg">
+                    {error}
+                  </div>
+                )}
+
+                <div className="mt-6 flex gap-3">
+                  <button 
+                    onClick={() => setStep('id-upload')}
+                    className="flex-1 py-2 border border-gray-700 text-gray-400 hover:text-white transition-colors rounded-lg"
+                  >
+                    Back
+                  </button>
+                  <button 
+                    onClick={() => selfieUrl && setStep('review')}
+                    disabled={!selfieUrl || isLoading}
+                    className="flex-1 py-2 bg-blue-500/20 text-blue-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-500/30 transition-colors rounded-lg font-bold"
+                  >
+                    {isLoading ? 'Uploading...' : 'Review'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
-          {step === 'verify' && selectedMethod === 'nft' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-              <button onClick={handleBack} className="text-gray-500 hover:text-white text-sm flex items-center gap-1">
-                ← Back
-              </button>
-              
-              <div className="text-center py-4">
-                <div className="w-20 h-20 rounded-full bg-purple-500/10 flex items-center justify-center mx-auto mb-4">
-                  <Lock className="text-purple-500" size={40} />
-                </div>
-                <h3 className="text-white font-bold text-lg mb-2">Purchase Verification NFT</h3>
-                <p className="text-gray-400 text-sm mb-6">
-                  One-time purchase. Valid forever. Can be resold.
-                </p>
-                
-                <div className="bg-purple-500/10 border border-purple-500/30 p-6 rounded-lg mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-gray-400 text-sm">Verification NFT</span>
-                    <span className="text-purple-400 font-bold">$5.00</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span>Platform Fee</span>
-                    <span>$0.50</span>
-                  </div>
-                  <div className="border-t border-gray-700 mt-3 pt-3 flex items-center justify-between">
-                    <span className="text-white font-bold">Total</span>
-                    <span className="text-purple-400 font-bold text-lg">$5.50</span>
-                  </div>
-                </div>
+          {step === 'review' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <h3 className="text-white font-bold text-lg">Review Your Documents</h3>
 
-                <GlitchButton 
-                  onClick={handleVerify}
-                  disabled={isVerifying}
-                  className="w-full py-4"
-                  variant="danger"
+              <div className="grid grid-cols-2 gap-4">
+                <div className="border border-gray-800 rounded-lg p-3 bg-black/50">
+                  {idPhotoUrl && <img src={idPhotoUrl} alt="ID" className="w-full rounded-lg mb-2" />}
+                  <p className="text-gray-400 text-xs text-center">Government ID</p>
+                </div>
+                <div className="border border-gray-800 rounded-lg p-3 bg-black/50">
+                  {selfieUrl && <img src={selfieUrl} alt="Selfie" className="w-full rounded-lg mb-2" />}
+                  <p className="text-gray-400 text-xs text-center">Selfie</p>
+                </div>
+              </div>
+
+              {error && (
+                <div className="text-red-500 text-sm border border-red-500/30 bg-red-500/10 p-3 rounded-lg">
+                  {error}
+                </div>
+              )}
+
+              <p className="text-gray-500 text-xs">
+                By submitting, you confirm these are accurate photos of your valid government ID 
+                and a recent photo of yourself.
+              </p>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setStep('selfie-upload')}
+                  className="flex-1 py-2 border border-gray-700 text-gray-400 hover:text-white transition-colors rounded-lg"
                 >
-                  {isVerifying ? 'PROCESSING...' : 'PURCHASE NFT'}
+                  Back
+                </button>
+                <GlitchButton 
+                  onClick={handleSubmitVerification}
+                  disabled={isLoading}
+                  className="flex-1 py-2"
+                >
+                  {isLoading ? 'SUBMITTING...' : 'SUBMIT FOR VERIFICATION'}
                 </GlitchButton>
               </div>
             </div>
@@ -289,23 +423,32 @@ const AgeVerificationModal: React.FC<AgeVerificationModalProps> = ({ isOpen, onC
               <div className="w-24 h-24 rounded-full bg-[#39FF14]/20 flex items-center justify-center mx-auto mb-6">
                 <Check className="text-[#39FF14]" size={48} />
               </div>
-              <h3 className="text-[#39FF14] font-bold text-2xl mb-2">VERIFICATION COMPLETE</h3>
-              <p className="text-gray-400 text-sm mb-4">
+              <h3 className="text-[#39FF14] font-bold text-2xl mb-2">VERIFIED!</h3>
+              <p className="text-gray-400 text-sm mb-6">
                 You now have access to all 18+ content on CyberDope.
               </p>
               <div className="inline-flex items-center gap-2 bg-pink-600/20 border border-pink-600 px-4 py-2 rounded-full">
-                <EyeOff size={14} className="text-pink-500" />
-                <span className="text-pink-500 text-xs font-mono">18+ ACCESS GRANTED</span>
+                <Shield size={14} className="text-pink-500" />
+                <span className="text-pink-500 text-xs font-mono">18+ VERIFIED</span>
               </div>
             </div>
           )}
-        </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-pink-600/30 bg-black/50">
-          <p className="text-[10px] text-gray-600 text-center font-mono">
-            By verifying, you agree to our Terms of Service and confirm you are of legal age.
-          </p>
+          {step === 'error' && (
+            <div className="text-center py-12 animate-in fade-in duration-300">
+              <div className="w-24 h-24 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-6">
+                <AlertTriangle className="text-red-500" size={48} />
+              </div>
+              <h3 className="text-red-500 font-bold text-xl mb-2">Verification Failed</h3>
+              <p className="text-gray-400 text-sm mb-6">{error}</p>
+              <button 
+                onClick={handleReset}
+                className="bg-red-500/20 text-red-500 hover:bg-red-500/30 transition-colors px-6 py-2 rounded-lg font-bold"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
