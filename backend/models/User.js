@@ -57,7 +57,7 @@ const userSchema = new mongoose.Schema({
   
   // Verification
   isVerified: { type: Boolean, default: false },
-  isAgeVerified: { type: Boolean, default: true },
+  isAgeVerified: { type: Boolean, default: false },
   ageVerifiedAt: Date,
   
   // Admin access (role-based)
@@ -178,6 +178,7 @@ userSchema.methods.toPublicProfile = function() {
     factionColor: this.factionColor,
     zodiacSign: this.zodiacSign,
     isVerified: this.isVerified,
+    isAgeVerified: this.isAgeVerified,
     isCreator: this.isCreator,
     followersCount: this.followersCount,
     followingCount: this.followingCount,
