@@ -273,12 +273,6 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
             )}
 
             {/* Coinbase Smart Wallet Login - Only show if age verified */}
-            {!isAgeVerified && (
-              <div className="text-[#FF00FF] text-[10px] font-bold tracking-widest text-center mt-3 p-2 bg-[#FF00FF]/10 border border-[#FF00FF]/20 rounded-lg">
-                🚨 AGE VERIFICATION REQUIRED TO ACCESS MONETIZATION
-              </div>
-            )}
-
             {isAgeVerified ? (
               <button
                 onClick={handleCoinbaseLogin}

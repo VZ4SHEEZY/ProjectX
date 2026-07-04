@@ -17,17 +17,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   const [status, setStatus] = useState<AuthStatus>('idle');
   const [errorFlash, setErrorFlash] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [isAgeVerified, setIsAgeVerified] = useState(false);
   const [bootSequence, setBootSequence] = useState(true);
-  
-  // Coinbase Smart Wallet login handler
-  const handleCoinbaseLogin = async () => {
-    try {
-      alert("Connecting to Coinbase Smart Wallet...")
-    } catch (error) {
-      console.error("Coinbase login failed:", error)
-    }
-  }
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -272,21 +262,6 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
               </div>
             )}
 
-            {/* Coinbase Smart Wallet Login - Only show if age verified */}
-            {!isAgeVerified && (
-              <div className="text-[#FF00FF] text-[10px] font-bold tracking-widest text-center mt-3 p-2 bg-[#FF00FF]/10 border border-[#FF00FF]/20 rounded-lg">
-                🚨 AGE VERIFICATION REQUIRED TO ACCESS MONETIZATION
-              </div>
-            )}
-
-            {isAgeVerified ? (
-              <button
-                onClick={handleCoinbaseLogin}
-                className="w-full mt-3 py-2 bg-[#0050D6] hover:bg-[#003db3] text-white font-bold tracking-widest rounded-lg transition-all flex items-center justify-center gap-2"
-              >
-                <span>Coinbase Smart Wallet</span>
-              </button>
-            ) : null}
             {status === 'idle' || status === 'error' ? (
               <GlitchButton type="submit" fullWidth className="h-14 text-lg mt-2">
                 {mode === 'login' ? 'ESTABLISH LINK' : 'CREATE NODE'}
