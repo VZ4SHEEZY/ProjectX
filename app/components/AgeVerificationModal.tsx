@@ -39,7 +39,7 @@ const AgeVerificationModal: React.FC<AgeVerificationModalProps> = ({ isOpen, onC
       formData.append('type', type);
 
       const token = localStorage.getItem('cdToken');
-      const res = await fetch('https://cyberdope-api.onrender.com/api/upload', {
+      const res = await fetch('https://cyberdope-api.onrender.com/api/upload/file', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData

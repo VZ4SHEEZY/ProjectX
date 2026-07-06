@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
-const { uploadToGridFS } = require('../utils/gridfs');
 
 // @route   POST /api/age-verification/request
 // @desc    Request age verification (upload ID + selfie)

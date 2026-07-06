@@ -169,4 +169,26 @@ router.use((error, req, res, next) => {
   res.status(400).json({ success: false, message: error.message });
 });
 
+// @route   POST /api/upload/file (generic file upload for age verification)
+router.post('/file', protect, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
+    
+    // Upload to Cloudinary (images only for now - age verification files)
+    const result = await uploadToCloudinary(req.file.buffer, {
+      folder: 'cyberdope/verification',  // Separate folder for ID/selfie files
+      resource_type: 'image',
+      transformation: [{ quality: 'auto', fetch_format: 'auto' }]
+    });
+    
+    res.json({ 
+      success: true, 
+      data: { url: result.secure_url, publicId: result.public_id, type: req.file.mimetype } 
+    });
+  } catch (error) {
+    console.error('File upload error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 module.exports = router;
