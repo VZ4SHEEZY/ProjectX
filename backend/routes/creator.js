@@ -7,14 +7,20 @@ const Tip = require('../models/Tip');
 /**
  * Creator Routes
  * 
- * Handles:
- * - Creator application (apply → pending → approved on age verification)
- * - Creator dashboard (earnings, tips, stats)
- * - Creator settings
+ * Verification Tiers (SEPARATE CONCERNS):
+ * - isAgeVerified: User can VIEW 18+ content (viewer check)
+ * - isCreatorVerified: User can POST 18+ content and monetize (creator document check)
+ * 
+ * Creator Application Flow:
+ * 1. User applies (POST /api/creator/apply)
+ * 2. Status goes to pending
+ * 3. Admin verifies identity (POST /api/creator/verify-admin)
+ * 4. isCreatorVerified set to true
+ * 5. Creator status auto-approved
  */
 
 // @route   POST /api/creator/apply
-// @desc    Apply to become a creator
+// @desc    Apply to become a creator (requires admin verification)
 // @access  Private
 router.post('/apply', protect, async (req, res) => {
   try {
@@ -35,8 +41,8 @@ router.post('/apply', protect, async (req, res) => {
     user.creatorStatus = 'pending';
     user.creatorApplicationDate = new Date();
 
-    // If already age verified, approve immediately
-    if (user.isAgeVerified) {
+    // If already creator verified (admin has verified their documents), approve immediately
+    if (user.isCreatorVerified) {
       user.creatorStatus = 'approved';
       user.isCreator = true;
       user.creatorApprovedDate = new Date();
@@ -46,11 +52,13 @@ router.post('/apply', protect, async (req, res) => {
 
     res.json({
       success: true,
-      message: user.isAgeVerified 
-        ? 'Creator status approved! You can now monetize content.' 
-        : 'Application submitted. Complete age verification to unlock creator features.',
+      message: user.isCreatorVerified 
+        ? 'Creator status approved! You can now post 18+ content and monetize.' 
+        : 'Application submitted. Admin verification of your identity required to unlock creator features.',
       creatorStatus: user.creatorStatus,
-      isCreator: user.isCreator
+      isCreator: user.isCreator,
+      isAgeVerified: user.isAgeVerified,
+      isCreatorVerified: user.isCreatorVerified
     });
   } catch (error) {
     console.error('Creator apply error:', error);
@@ -74,6 +82,7 @@ router.get('/status', protect, async (req, res) => {
       creatorStatus: user.creatorStatus,
       isCreator: user.isCreator,
       isAgeVerified: user.isAgeVerified,
+      isCreatorVerified: user.isCreatorVerified,
       applicationDate: user.creatorApplicationDate,
       approvedDate: user.creatorApprovedDate
     });
@@ -203,6 +212,57 @@ router.get('/dashboard', protect, async (req, res) => {
   } catch (error) {
     console.error('Dashboard error:', error);
     res.status(500).json({ error: 'Failed to fetch dashboard' });
+  }
+});
+
+// @route   POST /api/creator/verify-admin
+// @desc    Admin: Set isCreatorVerified for a user (document identity check)
+// @access  Private (admin only)
+router.post('/verify-admin', protect, async (req, res) => {
+  try {
+    // Check if requester is admin
+    const admin = await User.findById(req.user._id);
+    if (!admin.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID required' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Set creator verified
+    user.isCreatorVerified = true;
+    user.creatorVerifiedAt = new Date();
+
+    // If pending, auto-approve
+    if (user.creatorStatus === 'pending') {
+      user.creatorStatus = 'approved';
+      user.isCreator = true;
+      user.creatorApprovedDate = new Date();
+    }
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: `${user.username} is now creator verified`,
+      user: {
+        id: user._id,
+        username: user.username,
+        isCreatorVerified: user.isCreatorVerified,
+        creatorStatus: user.creatorStatus,
+        isCreator: user.isCreator
+      }
+    });
+  } catch (error) {
+    console.error('Admin verify error:', error);
+    res.status(500).json({ error: 'Failed to verify creator' });
   }
 });
 

@@ -55,10 +55,12 @@ const userSchema = new mongoose.Schema({
   zodiacSign: { type: String, default: '' },
   dateOfBirth: { type: String, default: '' },
   
-  // Verification
+  // Verification (separate concerns)
   isVerified: { type: Boolean, default: false },
-  isAgeVerified: { type: Boolean, default: false },
+  isAgeVerified: { type: Boolean, default: false },       // Viewer age check (18+) - unlocks viewing adult content
   ageVerifiedAt: Date,
+  isCreatorVerified: { type: Boolean, default: false },   // Creator document identity check - unlocks posting 18+ content
+  creatorVerifiedAt: Date,
   
   // Admin access (role-based)
   isAdmin: { type: Boolean, default: false, index: true },
@@ -97,6 +99,8 @@ const userSchema = new mongoose.Schema({
   },
   creatorApplicationDate: Date,
   creatorApprovedDate: Date,
+  // Creator verification is separate - admin-verified document check
+  // Will wire to Yoti later for automated verification
   subscriptionTiers: [subscriptionTierSchema],
   
   // Stats

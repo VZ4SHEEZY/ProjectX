@@ -93,6 +93,7 @@ app.use('/api/upload', require('./routes/upload'));
 app.use('/api/upload', require('./routes/upload-gridfs')); // GridFS uploads
 app.use('/api/age-verification', require('./routes/age-verification'));
 app.use('/api/announcements', require('./routes/announcements'));
+app.use('/api/verify/yoti', require('./routes/verify-yoti'));
 
 // NEW FEATURES - AI, Live Streams, Wallet, Stories, Voice, Groups, Creator
 app.use('/api/ai', require('./routes/ai'));
