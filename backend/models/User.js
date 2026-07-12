@@ -90,6 +90,13 @@ const userSchema = new mongoose.Schema({
   
   // Creator settings
   isCreator: { type: Boolean, default: false },
+  creatorStatus: {
+    type: String,
+    enum: ['none', 'pending', 'approved'],
+    default: 'none'
+  },
+  creatorApplicationDate: Date,
+  creatorApprovedDate: Date,
   subscriptionTiers: [subscriptionTierSchema],
   
   // Stats

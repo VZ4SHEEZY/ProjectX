@@ -94,13 +94,14 @@ app.use('/api/upload', require('./routes/upload-gridfs')); // GridFS uploads
 app.use('/api/age-verification', require('./routes/age-verification'));
 app.use('/api/announcements', require('./routes/announcements'));
 
-// NEW FEATURES - AI, Live Streams, Wallet, Stories, Voice, Groups
+// NEW FEATURES - AI, Live Streams, Wallet, Stories, Voice, Groups, Creator
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/streams', require('./routes/streams'));
 app.use('/api/wallet', require('./routes/wallet'));
 app.use('/api/stories', require('./routes/stories'));
 app.use('/api/voice', require('./routes/voice'));
 app.use('/api/groups', require('./routes/groups'));
+app.use('/api/creator', require('./routes/creator'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -275,4 +276,4 @@ connectDB().then(() => {
   });
 });
 
-module.exports = { io };
+module.exports = { io, app };
