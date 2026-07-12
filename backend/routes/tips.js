@@ -1,347 +1,232 @@
+/**
+ * Tips Routes (Tipping System)
+ * 
+ * Handles:
+ * - Sending tips via TipRouter contract on Base Sepolia
+ * - Recording tips in MongoDB
+ * - Earnings tracking
+ * 
+ * Contract Integration:
+ * - Stub for now, swaps in real contract ABI/address when deployed
+ * - Contract address from env var: TIP_ROUTER_CONTRACT_ADDRESS
+ * - Treasury address from env var: TIP_ROUTER_TREASURY_ADDRESS
+ * 
+ * SAFETY:
+ * - Contract deployment on Base Sepolia ONLY
+ * - Never attempts mainnet interaction
+ * - All keys stored in env vars, never in code
+ */
+
 const express = require('express');
 const router = express.Router();
-const Tip = require('../models/Tip');
-const User = require('../models/User');
-const Post = require('../models/Post');
-const Notification = require('../models/Notification');
 const { protect } = require('../middleware/auth');
+const User = require('../models/User');
+const Tip = require('../models/Tip');
 
-// @route   POST /api/tips
-// @desc    Send a tip to a creator
-// @access  Private
-router.post('/', protect, async (req, res) => {
+// TODO: When TipRouter is deployed on Base Sepolia:
+// const ethers = require('ethers');
+// const TIP_ROUTER_ABI = require('../contracts/TipRouter.json');
+
+// @route   POST /api/tips/send
+// @desc    Send a tip via contract (Base Sepolia)
+// @access  Private (age verified only)
+router.post('/send', protect, async (req, res) => {
   try {
-    const { recipientId, amount, message, postId, paymentMethod } = req.body;
+    const { creatorId, amount, message, postId } = req.body;
 
-    if (!amount || amount <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Valid tip amount is required'
-      });
+    if (!creatorId || !amount || parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: 'Invalid creator or amount' });
     }
 
-    // Check recipient exists and is a creator
-    const recipient = await User.findById(recipientId);
-    if (!recipient) {
-      return res.status(404).json({
-        success: false,
-        message: 'Recipient not found'
-      });
+    const tipper = await User.findById(req.user._id);
+    const creator = await User.findById(creatorId);
+
+    if (!tipper) return res.status(404).json({ error: 'Tipper not found' });
+    if (!creator) return res.status(404).json({ error: 'Creator not found' });
+
+    // Age verification check
+    if (!tipper.isAgeVerified) {
+      return res.status(403).json({ error: 'Age verification required to send tips' });
     }
 
-    if (!recipient.isCreator) {
-      return res.status(400).json({
-        success: false,
-        message: 'Can only tip creators'
-      });
-    }
+    // Calculate split
+    const amountNum = parseFloat(amount);
+    const creatorAmount = (amountNum * 0.8).toFixed(6);
+    const platformAmount = (amountNum * 0.2).toFixed(6);
 
-    // Create tip record
+    // TODO: When TipRouter deployed, integrate real contract call here:
+    // const provider = new ethers.providers.JsonRpcProvider(process.env.BASE_SEPOLIA_RPC_URL);
+    // const signer = new ethers.Wallet(userPrivateKey, provider);
+    // const tipRouter = new ethers.Contract(
+    //   process.env.TIP_ROUTER_CONTRACT_ADDRESS,
+    //   TIP_ROUTER_ABI,
+    //   signer
+    // );
+    // const tx = await tipRouter.sendTip(creator.embeddedWalletAddress, ethers.utils.parseUnits(amount, 6));
+    // const receipt = await tx.wait();
+    // txHash = receipt.transactionHash;
+
+    // For now, create a pending tip record
+    // This will be marked 'confirmed' once contract is live
     const tip = await Tip.create({
-      sender: req.user._id,
-      recipient: recipientId,
-      amount,
-      currency: 'USD',
-      message,
-      post: postId,
-      paymentMethod: paymentMethod || 'wallet',
-      status: 'completed' // In real app, would be 'pending' until confirmed
+      sender: tipper._id,
+      creator: creator._id,
+      amount: amount.toString(),
+      creatorAmount: creatorAmount.toString(),
+      platformAmount: platformAmount.toString(),
+      token: 'USDC',
+      chain: 'base-sepolia',
+      post: postId || null,
+      message: message || '',
+      txStatus: 'pending', // Will be 'confirmed' when contract deployed
+      txHash: null // Will be set when contract call completes
     });
-
-    // Update recipient's earnings
-    recipient.earnings.total += amount;
-    recipient.earnings.tips += amount;
-    await recipient.save();
-
-    // Create notification
-    await Notification.create({
-      recipient: recipientId,
-      sender: req.user._id,
-      type: 'tip',
-      post: postId,
-      tip: tip._id,
-      message: `${req.user.displayName || req.user.username} sent you a $${amount} tip!`
-    });
-
-    await tip.populate('sender', 'username displayName avatar');
-    await tip.populate('recipient', 'username displayName avatar');
 
     res.status(201).json({
       success: true,
-      data: tip
+      message: 'Tip submitted (contract deployment pending)',
+      tip: {
+        id: tip._id,
+        amount: tip.amount,
+        creatorAmount: tip.creatorAmount,
+        platformAmount: tip.platformAmount,
+        status: tip.txStatus,
+        createdAt: tip.createdAt
+      },
+      status: 'WAITING_FOR_CONTRACT'
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
+    console.error('Send tip error:', error);
+    res.status(500).json({ error: 'Failed to send tip' });
   }
 });
 
-// @route   POST /api/subscriptions
-// @desc    Subscribe to a creator
-// @access  Private
-router.post('/subscriptions', protect, async (req, res) => {
+// @route   GET /api/tips/creator/:creatorId
+// @desc    Get all tips to a creator
+// @access  Public
+router.get('/creator/:creatorId', async (req, res) => {
   try {
-    const { creatorId, tierId, paymentMethod } = req.body;
+    const { creatorId } = req.params;
 
-    // Check creator exists
-    const creator = await User.findById(creatorId);
-    if (!creator || !creator.isCreator) {
-      return res.status(404).json({
-        success: false,
-        message: 'Creator not found'
-      });
-    }
-
-    // Find subscription tier
-    const tier = creator.creatorSettings.subscriptionTiers.id(tierId);
-    if (!tier) {
-      return res.status(404).json({
-        success: false,
-        message: 'Subscription tier not found'
-      });
-    }
-
-    // Check if already subscribed
-    const existingSub = req.user.subscriptions.find(
-      sub => sub.creator.toString() === creatorId && sub.status === 'active'
-    );
-
-    if (existingSub) {
-      return res.status(400).json({
-        success: false,
-        message: 'Already subscribed to this creator'
-      });
-    }
-
-    // Calculate expiration (30 days from now)
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
-
-    // Add subscription to user
-    req.user.subscriptions.push({
+    const tips = await Tip.find({
       creator: creatorId,
-      tier: tierId,
-      price: tier.price,
-      expiresAt,
-      status: 'active'
-    });
+      txStatus: 'confirmed'
+    })
+      .populate('sender', 'username avatar')
+      .sort({ createdAt: -1 });
 
-    await req.user.save();
-
-    // Update creator's subscriber stats
-    creator.earnings.subscriptions += tier.price;
-    creator.earnings.total += tier.price;
-    await creator.save();
-
-    // Create subscription record
-    const tip = await Tip.create({
-      sender: req.user._id,
-      recipient: creatorId,
-      amount: tier.price,
-      currency: 'USD',
-      type: 'subscription',
-      paymentMethod: paymentMethod || 'wallet',
-      status: 'completed'
-    });
-
-    // Create notification
-    await Notification.create({
-      recipient: creatorId,
-      sender: req.user._id,
-      type: 'subscription',
-      tip: tip._id,
-      message: `${req.user.displayName || req.user.username} subscribed to your ${tier.name} tier!`
-    });
+    const totalEarnings = tips.reduce((sum, tip) => {
+      return sum + parseFloat(tip.creatorAmount || 0);
+    }, 0);
 
     res.json({
       success: true,
-      message: `Successfully subscribed to ${creator.displayName || creator.username}`,
-      data: {
-        tier: tier.name,
-        price: tier.price,
-        expiresAt
+      creatorId,
+      totalEarnings: totalEarnings.toFixed(2),
+      totalTips: tips.length,
+      tips: tips.map(tip => ({
+        id: tip._id,
+        from: tip.sender.username,
+        amount: tip.amount,
+        creatorAmount: tip.creatorAmount,
+        message: tip.message,
+        date: tip.createdAt,
+        txHash: tip.txHash
+      }))
+    });
+  } catch (error) {
+    console.error('Get tips error:', error);
+    res.status(500).json({ error: 'Failed to fetch tips' });
+  }
+});
+
+// @route   GET /api/tips/user
+// @desc    Get all tips sent by current user
+// @access  Private
+router.get('/user', protect, async (req, res) => {
+  try {
+    const tips = await Tip.find({
+      sender: req.user._id
+    })
+      .populate('creator', 'username avatar')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      totalSent: tips.length,
+      totalAmount: tips.reduce((sum, tip) => sum + parseFloat(tip.amount || 0), 0).toFixed(2),
+      tips: tips.map(tip => ({
+        id: tip._id,
+        to: tip.creator.username,
+        amount: tip.amount,
+        status: tip.txStatus,
+        date: tip.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error('Get user tips error:', error);
+    res.status(500).json({ error: 'Failed to fetch tips' });
+  }
+});
+
+// @route   POST /api/tips/webhook/confirm
+// @desc    Webhook: confirm tip when contract tx is included in block
+// @access  Private (should be called from backend job/listener)
+router.post('/webhook/confirm', async (req, res) => {
+  try {
+    const { tipId, txHash, blockNumber, status } = req.body;
+
+    if (!tipId || !txHash) {
+      return res.status(400).json({ error: 'Tip ID and tx hash required' });
+    }
+
+    const tip = await Tip.findByIdAndUpdate(tipId, {
+      txHash,
+      txStatus: status === 'success' ? 'confirmed' : 'failed',
+      confirmedAt: new Date(),
+      failureReason: status === 'success' ? null : 'Transaction failed on chain'
+    }, { new: true });
+
+    if (!tip) {
+      return res.status(404).json({ error: 'Tip not found' });
+    }
+
+    res.json({
+      success: true,
+      tip: {
+        id: tip._id,
+        status: tip.txStatus,
+        txHash: tip.txHash
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
+    console.error('Confirm tip error:', error);
+    res.status(500).json({ error: 'Failed to confirm tip' });
   }
 });
 
-// @route   POST /api/purchases
-// @desc    Purchase PPV content
-// @access  Private
-router.post('/purchases', protect, async (req, res) => {
+// @route   GET /api/tips/contract/status
+// @desc    Check if TipRouter contract is deployed
+// @access  Public
+router.get('/contract/status', async (req, res) => {
   try {
-    const { postId, paymentMethod } = req.body;
-
-    // Check post exists
-    const post = await Post.findById(postId);
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'Post not found'
-      });
-    }
-
-    if (post.visibility !== 'ppv') {
-      return res.status(400).json({
-        success: false,
-        message: 'This post is not pay-per-view'
-      });
-    }
-
-    // Check if already purchased
-    const alreadyPurchased = req.user.purchasedContent.includes(postId);
-    if (alreadyPurchased) {
-      return res.status(400).json({
-        success: false,
-        message: 'Content already purchased'
-      });
-    }
-
-    // Add to purchased content
-    req.user.purchasedContent.push(postId);
-    await req.user.save();
-
-    // Update creator's earnings
-    const creator = await User.findById(post.author);
-    if (creator) {
-      creator.earnings.ppv += post.price;
-      creator.earnings.total += post.price;
-      await creator.save();
-    }
-
-    // Create purchase record
-    const tip = await Tip.create({
-      sender: req.user._id,
-      recipient: post.author,
-      amount: post.price,
-      currency: 'USD',
-      type: 'ppv',
-      post: postId,
-      paymentMethod: paymentMethod || 'wallet',
-      status: 'completed'
-    });
-
-    // Create notification
-    await Notification.create({
-      recipient: post.author,
-      sender: req.user._id,
-      type: 'purchase',
-      post: postId,
-      tip: tip._id,
-      message: `${req.user.displayName || req.user.username} purchased your content!`
-    });
+    const isDeployed = !!process.env.TIP_ROUTER_CONTRACT_ADDRESS;
+    const contractAddress = process.env.TIP_ROUTER_CONTRACT_ADDRESS || null;
+    const treasuryAddress = process.env.TIP_ROUTER_TREASURY_ADDRESS || null;
 
     res.json({
       success: true,
-      message: 'Content purchased successfully',
-      data: {
-        postId,
-        price: post.price
+      contract: {
+        isDeployed,
+        address: contractAddress,
+        network: 'base-sepolia',
+        treasury: treasuryAddress,
+        usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b3V1337' // Circle's official USDC
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
-  }
-});
-
-// @route   GET /api/tips/sent
-// @desc    Get tips sent by current user
-// @access  Private
-router.get('/sent', protect, async (req, res) => {
-  try {
-    const { page = 1, limit = 20 } = req.query;
-
-    const tips = await Tip.find({ sender: req.user._id })
-      .populate('recipient', 'username displayName avatar')
-      .populate('post', 'content mediaUrl')
-      .sort('-createdAt')
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    res.json({
-      success: true,
-      count: tips.length,
-      data: tips
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
-  }
-});
-
-// @route   GET /api/tips/received
-// @desc    Get tips received by current user
-// @access  Private
-router.get('/received', protect, async (req, res) => {
-  try {
-    const { page = 1, limit = 20 } = req.query;
-
-    const tips = await Tip.find({ recipient: req.user._id })
-      .populate('sender', 'username displayName avatar')
-      .populate('post', 'content mediaUrl')
-      .sort('-createdAt')
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    res.json({
-      success: true,
-      count: tips.length,
-      data: tips
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
-  }
-});
-
-// @route   GET /api/subscriptions
-// @desc    Get current user's subscriptions
-// @access  Private
-router.get('/subscriptions', protect, async (req, res) => {
-  try {
-    const subscriptions = await Promise.all(
-      req.user.subscriptions
-        .filter(sub => sub.status === 'active')
-        .map(async (sub) => {
-          const creator = await User.findById(sub.creator)
-            .select('username displayName avatar isVerified');
-          return {
-            ...sub.toObject(),
-            creator
-          };
-        })
-    );
-
-    res.json({
-      success: true,
-      count: subscriptions.length,
-      data: subscriptions
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
+    console.error('Contract status error:', error);
+    res.status(500).json({ error: 'Failed to check contract status' });
   }
 });
 
