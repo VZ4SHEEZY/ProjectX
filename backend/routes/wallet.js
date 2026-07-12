@@ -3,6 +3,7 @@ const router = express.Router();
 const { protect: auth } = require('../middleware/auth');
 const User = require('../models/User');
 const crypto = require('crypto');
+const cdpService = require('../services/cdp');
 
 // Web3 message to sign for verification
 const generateAuthMessage = (nonce) => {
@@ -106,7 +107,7 @@ router.post('/verify', async (req, res) => {
   }
 });
 
-// Connect wallet to existing account
+// Connect external wallet to existing account
 router.post('/connect', auth, async (req, res) => {
   try {
     const { walletAddress, signature } = req.body;
@@ -117,7 +118,7 @@ router.post('/connect', auth, async (req, res) => {
     
     // Check if wallet is already connected to another account
     const existingUser = await User.findOne({ 
-      walletAddress: walletAddress.toLowerCase(),
+      externalWalletAddress: walletAddress.toLowerCase(),
       _id: { $ne: req.user._id }
     });
     
@@ -125,13 +126,12 @@ router.post('/connect', auth, async (req, res) => {
       return res.status(400).json({ error: 'Wallet already connected to another account' });
     }
     
-    // Update user
+    // Update user - set external wallet
     const user = await User.findByIdAndUpdate(
       req.user._id,
       {
-        walletAddress: walletAddress.toLowerCase(),
-        isWalletConnected: true,
-        walletConnectedAt: new Date()
+        externalWalletAddress: walletAddress.toLowerCase(),
+        // Keep payoutWallet as is (default is embedded)
       },
       { new: true }
     );
@@ -141,8 +141,9 @@ router.post('/connect', auth, async (req, res) => {
       user: {
         _id: user._id,
         username: user.username,
-        walletAddress: user.walletAddress,
-        isWalletConnected: true
+        embeddedWalletAddress: user.embeddedWalletAddress,
+        externalWalletAddress: user.externalWalletAddress,
+        payoutWallet: user.payoutWallet
       }
     });
   } catch (error) {
@@ -151,21 +152,27 @@ router.post('/connect', auth, async (req, res) => {
   }
 });
 
-// Disconnect wallet
+// Disconnect external wallet (keep embedded)
 router.post('/disconnect', auth, async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(
       req.user._id,
       {
-        walletAddress: null,
-        isWalletConnected: false
+        externalWalletAddress: '',
+        // If payout was set to external, switch back to embedded
+        payoutWallet: user.payoutWallet === 'external' ? 'embedded' : user.payoutWallet
       },
       { new: true }
     );
     
     res.json({
       success: true,
-      message: 'Wallet disconnected'
+      message: 'External wallet disconnected',
+      wallets: {
+        embedded: user.embeddedWalletAddress,
+        external: user.externalWalletAddress,
+        payoutWallet: user.payoutWallet
+      }
     });
   } catch (error) {
     console.error('Wallet Disconnect Error:', error);
@@ -173,29 +180,34 @@ router.post('/disconnect', auth, async (req, res) => {
   }
 });
 
-// Get wallet balance (mock for demo)
+// Get wallet balance (real Base Sepolia data)
 router.get('/balance', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     
-    if (!user.walletAddress) {
+    // Use embedded wallet by default, fall back to external
+    const activeWallet = user.embeddedWalletAddress || user.externalWalletAddress;
+    
+    if (!activeWallet) {
       return res.status(400).json({ error: 'No wallet connected' });
     }
     
-    // Mock balances - in production, fetch from blockchain
+    // Get real USDC balance from Base Sepolia
+    const usdcBalance = await cdpService.getUSDCBalance(activeWallet);
+    
+    // For now, only return USDC (most important for tipping)
+    // Can expand to other tokens later
     const balances = {
-      ETH: (Math.random() * 2).toFixed(4),
-      USDC: (Math.random() * 1000).toFixed(2),
-      USDT: (Math.random() * 500).toFixed(2),
-      MATIC: (Math.random() * 100).toFixed(2),
-      SOL: (Math.random() * 50).toFixed(4)
+      USDC: usdcBalance
     };
     
     res.json({
       success: true,
-      walletAddress: user.walletAddress,
+      walletAddress: activeWallet,
+      walletType: user.embeddedWalletAddress === activeWallet ? 'embedded' : 'external',
+      chain: 'base-sepolia',
       balances,
-      totalUSD: Object.values(balances).reduce((a, b) => a + parseFloat(b), 0).toFixed(2)
+      totalUSD: usdcBalance
     });
   } catch (error) {
     console.error('Get Balance Error:', error);
@@ -203,52 +215,26 @@ router.get('/balance', auth, async (req, res) => {
   }
 });
 
-// Get transaction history (mock for demo)
+// Get transaction history (from Base Sepolia)
 router.get('/transactions', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     
-    if (!user.walletAddress) {
+    const activeWallet = user.embeddedWalletAddress || user.externalWalletAddress;
+    
+    if (!activeWallet) {
       return res.status(400).json({ error: 'No wallet connected' });
     }
     
-    // Mock transactions - in production, fetch from blockchain explorer API
-    const transactions = [
-      {
-        id: 'tx_1',
-        type: 'receive',
-        amount: '0.5',
-        token: 'ETH',
-        from: '0x1234...5678',
-        to: user.walletAddress,
-        timestamp: new Date(Date.now() - 86400000).toISOString(),
-        status: 'confirmed'
-      },
-      {
-        id: 'tx_2',
-        type: 'send',
-        amount: '100',
-        token: 'USDC',
-        from: user.walletAddress,
-        to: '0xabcd...efgh',
-        timestamp: new Date(Date.now() - 172800000).toISOString(),
-        status: 'confirmed'
-      },
-      {
-        id: 'tx_3',
-        type: 'tip',
-        amount: '0.01',
-        token: 'ETH',
-        from: user.walletAddress,
-        to: '0x9876...5432',
-        timestamp: new Date(Date.now() - 259200000).toISOString(),
-        status: 'confirmed'
-      }
-    ];
+    // Get real transaction history from Base Sepolia
+    // In production: call Base Sepolia block explorer API (Basescan)
+    const transactions = await cdpService.getTransactionHistory(activeWallet);
     
     res.json({
       success: true,
-      transactions
+      walletAddress: activeWallet,
+      chain: 'base-sepolia',
+      transactions: transactions || []
     });
   } catch (error) {
     console.error('Get Transactions Error:', error);
@@ -292,49 +278,24 @@ router.post('/send-tip', auth, async (req, res) => {
   }
 });
 
-// Get supported chains/tokens
+// Get supported chains/tokens for Base Sepolia
 router.get('/supported-tokens', async (req, res) => {
   try {
     const tokens = [
       {
-        symbol: 'ETH',
-        name: 'Ethereum',
-        chain: 'ethereum',
-        decimals: 18,
-        logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.png'
-      },
-      {
         symbol: 'USDC',
         name: 'USD Coin',
-        chain: 'ethereum',
+        chain: 'base-sepolia',
+        chainId: 84532,
         decimals: 6,
+        address: process.env.USDC_SEPOLIA_ADDRESS || '0x0',
         logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png'
-      },
-      {
-        symbol: 'USDT',
-        name: 'Tether',
-        chain: 'ethereum',
-        decimals: 6,
-        logo: 'https://cryptologos.cc/logos/tether-usdt-logo.png'
-      },
-      {
-        symbol: 'MATIC',
-        name: 'Polygon',
-        chain: 'polygon',
-        decimals: 18,
-        logo: 'https://cryptologos.cc/logos/polygon-matic-logo.png'
-      },
-      {
-        symbol: 'SOL',
-        name: 'Solana',
-        chain: 'solana',
-        decimals: 9,
-        logo: 'https://cryptologos.cc/logos/solana-sol-logo.png'
       }
     ];
     
     res.json({
       success: true,
+      chain: 'base-sepolia',
       tokens
     });
   } catch (error) {
@@ -344,3 +305,4 @@ router.get('/supported-tokens', async (req, res) => {
 });
 
 module.exports = router;
+

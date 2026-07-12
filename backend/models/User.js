@@ -76,8 +76,16 @@ const userSchema = new mongoose.Schema({
     mobileOrder: [String]    // Mobile vertical stack order
   },
   
-  // Wallet
-  walletAddress: { type: String, default: '' },
+  // Wallets
+  embeddedWalletAddress: { type: String, default: '' },  // Coinbase CDP embedded wallet (auto-created)
+  externalWalletAddress: { type: String, default: '' },   // User's external wallet (optional)
+  payoutWallet: {                                          // Which wallet receives earnings
+    type: String,
+    enum: ['embedded', 'external'],
+    default: 'embedded'
+  },
+  embeddedWalletCreatedAt: Date,
+  walletAddress: { type: String, default: '' },            // Legacy - can deprecate later
   btcAddress: { type: String, default: '' },
   
   // Creator settings
@@ -150,7 +158,12 @@ const userSchema = new mongoose.Schema({
 
   // Session
   lastActive: { type: Date, default: Date.now },
-  isOnline: { type: Boolean, default: false }
+  isOnline: { type: Boolean, default: false },
+  
+  // Email verification for OTP
+  emailVerified: { type: Boolean, default: false },
+  emailVerificationCode: { type: String, select: false },
+  emailVerificationCodeExpiry: Date
 }, {
   timestamps: true
 });

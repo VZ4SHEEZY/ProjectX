@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { body, validationResult } = require('express-validator');
+const cdpService = require('../services/cdp');
 
 const router = express.Router();
 
@@ -112,6 +113,18 @@ router.post('/register', [
       dateOfBirth: dateOfBirth || ''
     });
 
+    // Create embedded wallet (silent, no user interaction)
+    try {
+      const walletData = await cdpService.createEmbeddedWallet(email, user._id.toString());
+      user.embeddedWalletAddress = walletData.address;
+      user.embeddedWalletCreatedAt = walletData.createdAt;
+      await user.save();
+    } catch (walletError) {
+      // Log but don't fail signup if wallet creation fails
+      console.error('Warning: Embedded wallet creation failed during signup:', walletError.message);
+      // User can still use platform, wallet will be retried on login
+    }
+
     // Generate token
     const token = generateToken(user._id);
 
@@ -158,6 +171,19 @@ router.post('/login', [
     // Update last active
     user.lastActive = new Date();
     user.isOnline = true;
+
+    // Create embedded wallet if not exists (for existing users)
+    if (!user.embeddedWalletAddress) {
+      try {
+        const walletData = await cdpService.createEmbeddedWallet(user.email, user._id.toString());
+        user.embeddedWalletAddress = walletData.address;
+        user.embeddedWalletCreatedAt = walletData.createdAt;
+      } catch (walletError) {
+        console.error('Warning: Embedded wallet creation failed during login:', walletError.message);
+        // Don't fail login if wallet creation fails
+      }
+    }
+
     await user.save();
 
     // Generate token
@@ -281,3 +307,4 @@ router.post('/verify-age', async (req, res) => {
 });
 
 module.exports = router;
+
