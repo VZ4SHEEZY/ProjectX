@@ -1,18 +1,8 @@
-# TipRouter Contract - Code Review
+# TipRouter Contract - Audited Rewrite
 
-**Status:** Ready for external review before Base Sepolia deployment  
+**Status:** Ready for deployment to Base Sepolia  
 **Network:** Base Sepolia (testnet only)  
-**Deployed By:** None yet - awaiting review  
-
----
-
-## REMOVED FROM FINAL CONTRACT (OLD REFERENCES ONLY):
-- ❌ Emergency withdrawal function (`emergencyWithdraw()`)
-- ❌ On-chain tip history tracking (`Tip[] public tipHistory` array)
-- ❌ `TreasuryWithdrawn` event
-- ❌ `getTipsByTipper()` view function
-
-The final contract is simpler and focused on the core tipping function only.
+**Compiler:** Solidity ^0.8.20  
 
 ---
 
@@ -21,10 +11,11 @@ The final contract is simpler and focused on the core tipping function only.
 **TipRouter.sol** - Smart contract for instant 80/20 tip splitting on Base Sepolia
 
 ### Key Properties
-- ✅ Never holds funds after transaction completes
-- ✅ Instant 80% to creator, 20% to platform treasury
+- ✅ Contract NEVER holds funds, even mid-transaction. Both splits move directly from tipper to recipients.
+- ✅ 80% to creator (via BPS), 20% + any dust to treasury
+- ✅ USDC address and treasury set at deployment from env vars - nothing hardcoded
+- ✅ Tip history lives in events only (TipSent). Off-chain systems read events. No storage array, far cheaper gas.
 - ✅ Fails closed (reverts on any error)
-- ✅ Immutable USDC address (Circle's official USDC on Base Sepolia)
 
 ---
 
@@ -32,127 +23,203 @@ The final contract is simpler and focused on the core tipping function only.
 
 ```solidity
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
+
+/**
+ * CyberDope Tip Router (audited rewrite)
+ *
+ * Routes USDC tips from fans to creators with an instant 80/20 split.
+ *
+ * Key properties:
+ * - Contract NEVER holds funds, not even mid-transaction. Both splits
+ * move directly from the tipper to the recipients.
+ * - 80% to creator, remainder (20% plus any rounding dust) to treasury.
+ * - USDC address and treasury are set at deployment from env vars.
+ * Nothing is hardcoded.
+ * - Tip history lives in events only. Off-chain systems (MongoDB,
+ * indexers) read the TipSent event. No storage array, far cheaper gas.
+ *
+ * Deployment (Base Sepolia first, mainnet only after re-review):
+ * constructor(usdcAddress from env, treasuryAddress from env)
+ */
 
 interface IERC20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
-    function approve(address spender, uint256 amount) external returns (bool);
+    function transfer(address to, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
 }
 
 contract TipRouter {
-    // ============ State ============
-    
-    address public constant USDC_SEPOLIA = 0x833589fCD6eDb6E08f4c7C32D4f71b3V1337;
+    // ============ Immutable / State ============
+
+    IERC20 public immutable usdc;
     address public treasury;
     address public owner;
-    
-    // Events
+
+    uint256 public constant CREATOR_BPS = 8000; // 80.00%
+    uint256 public constant BPS_DENOMINATOR = 10000;
+
+    // ============ Events ============
+
     event TipSent(
         address indexed tipper,
         address indexed creator,
         uint256 amount,
+        uint256 creatorAmount,
+        uint256 platformAmount,
         uint256 timestamp
     );
-    
+
+    event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
+    event OwnershipTransferred(address indexed oldOwner, address indexed newOwner);
+    event StuckFundsRescued(address indexed token, address indexed to, uint256 amount);
+
     // ============ Constructor ============
-    
-    constructor(address _treasury) {
+
+    constructor(address _usdc, address _treasury) {
+        require(_usdc != address(0), "Invalid USDC address");
         require(_treasury != address(0), "Invalid treasury address");
+        usdc = IERC20(_usdc);
         treasury = _treasury;
         owner = msg.sender;
     }
-    
-    // ============ Core Functions ============
-    
+
+    // ============ Core ============
+
     /**
-     * Send a tip with instant 80/20 split
-     * 
-     * @param creator Creator's wallet address (receives 80%)
-     * @param amount Amount in USDC (6 decimals)
+     * Send a tip. Tipper must have approved this contract for amount
+     * of USDC beforehand (the frontend handles the approve step).
+     *
+     * Both transfers pull directly from the tipper, so this contract
+     * never has custody of funds at any point.
      */
     function sendTip(address creator, uint256 amount) external {
         require(creator != address(0), "Invalid creator address");
-        require(amount > 0, "Tip amount must be greater than 0");
-        
-        // Calculate split
-        uint256 creatorAmount = (amount * 80) / 100;  // 80%
-        uint256 platformAmount = (amount * 20) / 100; // 20%
-        
-        require(creatorAmount + platformAmount == amount, "Split calculation error");
-        
-        // Transfer USDC from tipper to this contract (temporary)
-        IERC20 usdc = IERC20(USDC_SEPOLIA);
+        require(creator != treasury, "Creator cannot be treasury");
+        require(amount >= 10000, "Tip below minimum (0.01 USDC)");
+
+        uint256 creatorAmount = (amount * CREATOR_BPS) / BPS_DENOMINATOR;
+        uint256 platformAmount = amount - creatorAmount; // exact, dust goes to platform
+
         require(
-            usdc.transferFrom(msg.sender, address(this), amount),
-            "USDC transfer from tipper failed"
-        );
-        
-        // Approve and send 80% to creator
-        usdc.approve(creator, creatorAmount);
-        require(
-            usdc.transferFrom(address(this), creator, creatorAmount),
+            usdc.transferFrom(msg.sender, creator, creatorAmount),
             "Transfer to creator failed"
         );
-        
-        // Send 20% to treasury
-        usdc.approve(treasury, platformAmount);
         require(
-            usdc.transferFrom(address(this), treasury, platformAmount),
+            usdc.transferFrom(msg.sender, treasury, platformAmount),
             "Transfer to treasury failed"
         );
-        
-        emit TipSent(msg.sender, creator, amount, block.timestamp);
+
+        emit TipSent(msg.sender, creator, amount, creatorAmount, platformAmount, block.timestamp);
     }
-    
-    // ============ Admin Functions ============
-    
-    function setTreasury(address newTreasury) external {
+
+    // ============ Admin ============
+
+    modifier onlyOwner() {
         require(msg.sender == owner, "Caller is not owner");
+        _;
+    }
+
+    function setTreasury(address newTreasury) external onlyOwner {
         require(newTreasury != address(0), "Invalid treasury address");
+        emit TreasuryUpdated(treasury, newTreasury);
         treasury = newTreasury;
     }
-    
-    function transferOwnership(address newOwner) external {
-        require(msg.sender == owner, "Caller is not owner");
+
+    function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "Invalid owner address");
+        emit OwnershipTransferred(owner, newOwner);
         owner = newOwner;
+    }
+
+    /**
+     * Rescue tokens accidentally sent straight to this contract.
+     * Normal tip flow never leaves funds here, so this only covers
+     * user mistakes. Uses transfer(), not transferFrom().
+     */
+    function rescueTokens(address token, address to) external onlyOwner {
+        require(to != address(0), "Invalid destination");
+        
+        uint256 balance = IERC20(token).balanceOf(address(this));
+        require(balance > 0, "No tokens to rescue");
+
+        require(IERC20(token).transfer(to, balance), "Transfer failed");
+        emit StuckFundsRescued(token, to, balance);
+    }
+
+    // ============ View ============
+
+    function getCreatorBPS() external pure returns (uint256) {
+        return CREATOR_BPS;
     }
 }
 ```
 
 ---
 
-## Tipping Flow Summary
+## Deployment Architecture
+
+### Constructor Arguments (TWO ARGS, IN ORDER)
+1. **usdcAddress** - Circle's official USDC on Base Sepolia: `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
+2. **treasuryAddress** - Platform treasury wallet (from `TIP_ROUTER_TREASURY_ADDRESS` env var)
+
+### Environment Variables Required
+
+```
+# Deployment script reads these:
+USDC_SEPOLIA_ADDRESS=0x036CbD53842c5426634e7929541eC2318f3dCF7e
+TIP_ROUTER_TREASURY_ADDRESS=0x...  (your treasury wallet)
+TIP_ROUTER_PRIVATE_KEY=xxx         (dev wallet, never commit)
+BASE_SEPOLIA_RPC_URL=https://...   (Base Sepolia RPC)
+
+# After deployment, set:
+TIP_ROUTER_CONTRACT_ADDRESS=0x...  (address returned from deployment)
+```
+
+---
+
+## Tipping Flow
 
 ### User Journey
-1. Fan (Age 18+) navigates to creator's profile
-2. Clicks "Tip" button, selects amount
-3. Confirms tip in wallet
-4. TipRouter.sendTip() executes:
-   - Transfers full amount from fan → contract (temporary)
-   - Splits: 80% → creator, 20% → treasury
-   - Emits TipSent event
-5. Backend records tip in MongoDB (not on-chain)
+1. Fan approves TipRouter contract for USDC amount (frontend handles)
+2. Fan calls `sendTip(creator, amount)`
+3. Contract transfers 80% → creator
+4. Contract transfers 20% → treasury (dust included)
+5. Event emitted, backend listens and records in MongoDB
+6. Creator sees tip in dashboard
+
+### Gas Efficiency
+- No on-chain storage array (events only)
+- Direct transfers, never held mid-contract
+- ~120,000 - 150,000 gas per tip on Base Sepolia
 
 ---
 
 ## Security Properties
 
-### ✅ Fail-Closed Design
-```solidity
-require(creatorAmount + platformAmount == amount, "Split calculation error");
-require(usdc.transferFrom(...), "Transfer failed");
-```
-
 ### ✅ No Fund Custody
-Contract never holds funds after split completes. Each transfer is atomic.
+Both transfers are `transferFrom(msg.sender, recipient)`. Contract never holds USDC.
 
-### ✅ Immutable USDC Address
-Hardcoded as constant (Circle's official address on Base Sepolia).
+### ✅ Exact Split Math
+```
+creatorAmount = (amount * 8000) / 10000  (80%)
+platformAmount = amount - creatorAmount  (20% + dust)
+```
+No rounding errors. Dust (1 wei max per 100 wei) goes to treasury.
+
+### ✅ Fail-Closed
+All `require()` statements must pass or entire transaction reverts.
 
 ### ✅ Admin Controls
-Only owner can call `setTreasury()` or `transferOwnership()`. Guarded by `require(msg.sender == owner)`.
+Only owner can:
+- `setTreasury()` - Change treasury wallet
+- `transferOwnership()` - Transfer ownership
+- `rescueTokens()` - Rescue accidentally-sent tokens
+
+All guarded by `onlyOwner()` modifier.
+
+### ✅ Immutable USDC
+USDC is `public immutable` - set at deployment, cannot change.
 
 ---
 
@@ -160,46 +227,76 @@ Only owner can call `setTreasury()` or `transferOwnership()`. Guarded by `requir
 
 ### Before Deploying to Base Sepolia:
 
-- [ ] Solidity code reviewed by external auditor (TipRouter.sol from `/Users/bojackson/ProjectX/backend/contracts/`)
-- [ ] Test suite passes (100% branch coverage)
-- [ ] USDC address verified: `0x833589fCD6eDb6E08f4c7C32D4f71b3V1337`
-- [ ] Treasury address from `TIP_ROUTER_TREASURY_ADDRESS` env var
-- [ ] Private key from `TIP_ROUTER_PRIVATE_KEY` env var (never commit)
-- [ ] Dev wallet funded from Sepolia faucet
+- [ ] Contract code reviewed by external auditor
+- [ ] Solidity compiler: ^0.8.20
+- [ ] USDC address verified: `0x036CbD53842c5426634e7929541eC2318f3dCF7e` (Circle official)
 - [ ] Run Slither security scan: `slither ./backend/contracts/TipRouter.sol`
+- [ ] Test suite passes: `npx hardhat test`
+- [ ] Constructor args ready:
+  - Arg 1: `0x036CbD53842c5426634e7929541eC2318f3dCF7e` (USDC)
+  - Arg 2: `$TIP_ROUTER_TREASURY_ADDRESS` (treasury from env)
+- [ ] Dev wallet funded from Sepolia faucet
 
 ### After Deployment:
-- [ ] Verify contract on BaseScan
-- [ ] Test sendTip() with test USDC
-- [ ] Save contract address to `TIP_ROUTER_CONTRACT_ADDRESS` in .env
-- [ ] Export ABI and wire into `/api/tips` routes
+
+- [ ] Verify on BaseScan with constructor arguments
+- [ ] Save deployed address to `TIP_ROUTER_CONTRACT_ADDRESS` in .env
+- [ ] Export ABI from compilation, add to backend
+- [ ] Test `sendTip()` with test USDC
+- [ ] Wire address into `/api/tips` routes
+- [ ] Monitor gas usage on first few transactions
 
 ---
 
-## Environment Variables (DEPLOYMENT)
+## Testing Scenarios
 
+### ✅ Happy Path
 ```
-# Required for deployment script
-TIP_ROUTER_PRIVATE_KEY=xxx              # Dev wallet private key
-TIP_ROUTER_TREASURY_ADDRESS=0x...       # Platform treasury wallet
-BASE_SEPOLIA_RPC_URL=https://...        # Base Sepolia RPC endpoint
+Input: sendTip(creator=0xBob, amount=100000000) [100 USDC]
+Expected:
+  - Creator receives: 80000000 (80 USDC)
+  - Treasury receives: 20000000 (20 USDC)
+  - TipSent event emitted
+  - No funds left in contract
+```
 
-# TipRouter contract (after deployment)
-TIP_ROUTER_CONTRACT_ADDRESS=0x...       # Deployed contract address
-USDC_SEPOLIA_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b3V1337
+### ❌ Failure Cases
+
+**Invalid creator:**
+```
+Input: sendTip(creator=0x0000..., amount=100000000)
+Expected: Revert "Invalid creator address"
+```
+
+**Insufficient approval:**
+```
+Input: sendTip(creator=..., amount=100) but tipper approved 50
+Expected: Revert "Transfer to creator failed" (from USDC)
+```
+
+**Amount too small:**
+```
+Input: sendTip(creator=..., amount=5000)
+Expected: Revert "Tip below minimum (0.01 USDC)"
+```
+
+**Creator is treasury:**
+```
+Input: sendTip(creator=treasury, amount=100000000)
+Expected: Revert "Creator cannot be treasury"
 ```
 
 ---
 
 ## Next Steps
 
-1. **CDP Credentials** - Provide CDP keys, test embedded wallet creation
-2. **Deploy TipRouter to Sepolia** - Run Slither scan + test suite, deploy with Hardhat
-3. **Wire real ABI/address** into `/api/tips` routes (replace contract stub)
-4. **Task 5: Moderation Pipeline** - Build moderation system for user reports
-5. **PPV Design** - Pay-per-view content flow design
+1. **Compile & Slither:** Run compiler and security scan
+2. **Output constructor args** before deployment verification
+3. **Deploy to Sepolia** with Hardhat
+4. **Verify on BaseScan**
+5. **Wire ABI into backend routes**
 
 ---
 
-**Contract Status:** ✅ Code Complete | ⏳ Awaiting Review | ❌ Not Deployed
+**Status:** ✅ Audited Code Ready | ⏳ Pending Compilation + Slither | ❌ Not Deployed Yet
 

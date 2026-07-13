@@ -202,7 +202,7 @@ BASE_SEPOLIA_RPC_URL=https://...
 # TipRouter Contract
 TIP_ROUTER_PRIVATE_KEY=xxx (dev wallet private key)
 TIP_ROUTER_TREASURY_ADDRESS=0x... (platform treasury wallet)
-USDC_SEPOLIA_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b3V1337 (Circle's USDC)
+USDC_SEPOLIA_ADDRESS=0x036CbD53842c5426634e7929541eC2318f3dCF7e (Circle's official Base Sepolia USDC)
 
 # Coinbase CDP (Embedded Wallets)
 CDP_API_KEY_ID=xxx
@@ -227,15 +227,17 @@ When deploying TipRouter to Base Sepolia:
 - `TIP_ROUTER_PRIVATE_KEY` - Dev wallet private key (never commit)
 - `TIP_ROUTER_TREASURY_ADDRESS` - Platform treasury wallet (from env var, never hardcoded)
 - `BASE_SEPOLIA_RPC_URL` - Base Sepolia RPC endpoint
-- `USDC_SEPOLIA_ADDRESS` - Circle's official USDC on Base Sepolia: `0x833589fCD6eDb6E08f4c7C32D4f71b3V1337`
+- `USDC_SEPOLIA_ADDRESS` - Circle's official Base Sepolia USDC: `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
 
-**Constructor Call:**
+**Constructor Call (TWO ARGS):**
 ```solidity
-constructor(address _treasury) {
+constructor(address _usdc, address _treasury) {
+    require(_usdc != address(0), "Invalid USDC address");
     require(_treasury != address(0), "Invalid treasury address");
-    treasury = _treasury;  // Receives TIP_ROUTER_TREASURY_ADDRESS from deployment
-    owner = msg.sender;    // Deployer becomes owner
+    usdc = IERC20(_usdc);         // USDC from env var (first arg)
+    treasury = _treasury;          // Treasury from env var (second arg)
+    owner = msg.sender;            // Deployer becomes owner
 }
 ```
 
-The USDC address is hardcoded as a constant in the contract (immutable, cannot be changed).
+Both USDC and treasury addresses come from environment variables at deployment. Nothing is hardcoded.
