@@ -1,15 +1,8 @@
-require("@nomicfoundation/hardhat-toolbox");
+import '@nomicfoundation/hardhat-toolbox';
 
-module.exports = {
-  solidity: {
-    version: "0.8.20",
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 200,
-      },
-    },
-  },
+/** @type import('hardhat/config').HardhatUserConfig */
+export default {
+  solidity: "0.8.20",
   networks: {
     baseSepolia: {
       url: process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org",

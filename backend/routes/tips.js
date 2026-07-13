@@ -221,7 +221,7 @@ router.get('/contract/status', async (req, res) => {
         address: contractAddress,
         network: 'base-sepolia',
         treasury: treasuryAddress,
-        usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b3V1337' // Circle's official USDC
+        usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' // Circle's official Base Sepolia USDC
       }
     });
   } catch (error) {
