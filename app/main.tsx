@@ -1,7 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { WagmiProvider } from 'wagmi';
 import App from './App';
+import { wagmiConfig } from './wagmi';
 import './index.css';
+
+const queryClient = new QueryClient();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -11,8 +16,12 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <div className="scanlines w-full h-full">
-      <App />
-    </div>
+    <WagmiProvider config={wagmiConfig} reconnectOnMount="never">
+      <QueryClientProvider client={queryClient}>
+        <div className="scanlines w-full h-full">
+          <App />
+        </div>
+      </QueryClientProvider>
+    </WagmiProvider>
   </React.StrictMode>
 );

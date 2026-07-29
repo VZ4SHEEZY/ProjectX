@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import VideoFeed from './components/Feed';
 import ProfileGrid from './components/ProfileGrid';
 import AuthPage from './components/AuthPage';
@@ -99,6 +100,28 @@ const App: React.FC = () => {
   const [walletBalance, setWalletBalance] = useState<string>('0');
   
   const [activeCreatorAddress, setActiveCreatorAddress] = useState<string>('');
+
+  // Wagmi wallet integration (Base network via wagmi.ts)
+  const { address: wagmiAddress, isConnected: wagmiConnected } = useAccount();
+  const { connectAsync, connectors } = useConnect();
+  const { disconnectAsync } = useDisconnect();
+
+  useEffect(() => {
+    if (wagmiConnected && wagmiAddress) {
+      setWalletAddress(wagmiAddress);
+      // Update stored user wallet address for downstream usage
+      const storedUser = localStorage.getItem('cdUser');
+      if (storedUser) {
+        try {
+          const u = JSON.parse(storedUser);
+          u.walletAddress = wagmiAddress;
+          localStorage.setItem('cdUser', JSON.stringify(u));
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+  }, [wagmiConnected, wagmiAddress]);
 
   // Initial loading + session restore (validates token against real API)
 
@@ -255,23 +278,41 @@ const [showNSFWPrompt, setShowNSFWPrompt] = useState(false);
     setIsAgeVerificationOpen(false);
   };
 
-  // Wallet handlers
-  const handleWalletConnect = (address: string, balance: string) => {
-    setWalletAddress(address);
-    setWalletBalance(balance);
-    const storedUser = localStorage.getItem('cdUser');
-    if (storedUser) {
-      try {
-        const u = JSON.parse(storedUser);
-        u.walletAddress = address;
-        localStorage.setItem('cdUser', JSON.stringify(u));
-      } catch (e) {}
+  // Wallet handlers (wagmi-based)
+  const handleWalletConnect = async () => {
+    try {
+      if (!connectors || connectors.length === 0) {
+        alert('No wallet connector found. Please install MetaMask or Coinbase Wallet.');
+        return;
+      }
+
+      // Prefer MetaMask first, then Coinbase Wallet
+      const metaMaskConnector = connectors.find(  c => c.id === 'metaMask') || connectors[0];
+      await connectAsync({ connector: metaMaskConnector });
+    } catch (err) {
+      console.error('Wallet connection error:', err);
+      // Don't show internal technicals; user sees wallet prompt anyway
     }
   };
 
-  const handleWalletDisconnect = () => {
-    setWalletAddress('');
-    setWalletBalance('0');
+  const handleWalletDisconnect = async () => {
+    try {
+      await disconnectAsync();
+      setWalletAddress('');
+      // Also clean local user wallet field for consistency
+      const storedUser = localStorage.getItem('cdUser');
+      if (storedUser) {
+        try {
+          const u = JSON.parse(storedUser);
+          delete u.walletAddress;
+          localStorage.setItem('cdUser', JSON.stringify(u));
+        } catch (e) {
+          // ignore
+        }
+      }
+    } catch (err) {
+      console.error('Disconnect error:', err);
+    }
   };
 
   // Logout function
@@ -482,6 +523,31 @@ const [showNSFWPrompt, setShowNSFWPrompt] = useState(false);
                </span>
              )}
           </button>
+
+          {/* Connect Wallet (Wagmi) */}
+          {!wagmiConnected ? (
+            <button
+              onClick={handleWalletConnect}
+              className="flex items-center gap-1.5 px-2 py-1.5 md:px-3 md:py-2 bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-lg hover:brightness-110 transition-all font-medium text-xs"
+            >
+              <Wallet size={14} />
+              <span className="hidden sm:inline">Connect Wallet</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="px-2 py-1.5 bg-gray-900 border border-[var(--primary-color,#39FF14)]/40 rounded-lg text-xs font-mono flex items-center gap-2">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-white">{walletAddress ? walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4) : ''}</span>
+              </div>
+              <button
+                onClick={handleWalletDisconnect}
+                className="p-1.5 text-gray-400 hover:text-red-400"
+                title="Disconnect Wallet"
+              >
+                <LogOut size={12} />
+              </button>
+            </div>
+          )}
 
           {/* Settings */}
           <button 

@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.101.4",
+    "@wagmi/core": "^3.6.4",
     "axios": "^1.6.0",
     "lodash": "4.17.21",
     "lucide-react": "^0.555.0",
@@ -17,7 +19,9 @@
     "react-dom": "^19.2.0",
     "react-grid-layout": "1.4.4",
     "react-resizable": "3.0.5",
-    "socket.io-client": "^4.7.2"
+    "socket.io-client": "^4.7.2",
+    "viem": "^2.55.10",
+    "wagmi": "^3.7.4"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^6.1.2",
