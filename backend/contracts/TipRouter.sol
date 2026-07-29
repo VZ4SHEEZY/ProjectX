@@ -114,12 +114,11 @@ contract TipRouter {
      * user mistakes. Uses transfer(), not transferFrom().
      */
     function rescueTokens(address token, address to) external onlyOwner {
-        require(to != address(0), "Invalid destination");
-        
-        uint256 balance = IERC20(token).balanceOf(address(this));
-        require(balance > 0, "No tokens to rescue");
-
-        require(IERC20(token).transfer(to, balance), "Transfer failed");
+        require(to != address(0), "Invalid recipient");
+        IERC20 t = IERC20(token);
+        uint256 balance = t.balanceOf(address(this));
+        require(balance > 0, "No funds to rescue");
+        require(t.transfer(to, balance), "Rescue transfer failed");
         emit StuckFundsRescued(token, to, balance);
     }
 
