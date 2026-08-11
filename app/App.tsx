@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import VideoFeed from './components/Feed';
 import ProfileGrid from './components/ProfileGrid';
 import AuthPage from './components/AuthPage';
@@ -81,7 +80,6 @@ const App: React.FC = () => {
   
   // New functional components
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isWalletOpen, setIsWalletOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -95,40 +93,17 @@ const App: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   
-  // Wallet state
+  // Wallet state (managed by WalletConnect component)
   const [walletAddress, setWalletAddress] = useState<string>('');
-  const [walletBalance, setWalletBalance] = useState<string>('0');
   
   const [activeCreatorAddress, setActiveCreatorAddress] = useState<string>('');
 
-  // Wagmi wallet integration (Base network via wagmi.ts)
-  const { address: wagmiAddress, isConnected: wagmiConnected } = useAccount();
-  const { connectAsync, connectors } = useConnect();
-  const { disconnectAsync } = useDisconnect();
-
-  useEffect(() => {
-    if (wagmiConnected && wagmiAddress) {
-      setWalletAddress(wagmiAddress);
-      // Update stored user wallet address for downstream usage
-      const storedUser = localStorage.getItem('cdUser');
-      if (storedUser) {
-        try {
-          const u = JSON.parse(storedUser);
-          u.walletAddress = wagmiAddress;
-          localStorage.setItem('cdUser', JSON.stringify(u));
-        } catch (e) {
-          // ignore
-        }
-      }
-    }
-  }, [wagmiConnected, wagmiAddress]);
+  // Admin modal state (inside component)
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [showNSFWPrompt, setShowNSFWPrompt] = useState(false);
 
   // Initial loading + session restore (validates token against real API)
-
-// Admin modal state
-const [isAdminOpen, setIsAdminOpen] = useState(false);
-const [isAgeVerificationOpen, setIsAgeVerificationOpen] = useState(false);
-const [showNSFWPrompt, setShowNSFWPrompt] = useState(false);
+  useEffect(() => {
     const restore = async () => {
       const token = localStorage.getItem('cdToken');
       const storedUser = localStorage.getItem('cdUser');
@@ -278,52 +253,21 @@ const [showNSFWPrompt, setShowNSFWPrompt] = useState(false);
     setIsAgeVerificationOpen(false);
   };
 
-  // Wallet handlers (wagmi-based)
-  const handleWalletConnect = async () => {
-    try {
-      if (!connectors || connectors.length === 0) {
-        alert('No wallet connector found. Please install MetaMask or Coinbase Wallet.');
-        return;
-      }
-
-      // Prefer MetaMask first, then Coinbase Wallet
-      const metaMaskConnector = connectors.find(  c => c.id === 'metaMask') || connectors[0];
-      await connectAsync({ connector: metaMaskConnector });
-    } catch (err) {
-      console.error('Wallet connection error:', err);
-      // Don't show internal technicals; user sees wallet prompt anyway
-    }
-  };
-
-  const handleWalletDisconnect = async () => {
-    try {
-      await disconnectAsync();
-      setWalletAddress('');
-      // Also clean local user wallet field for consistency
-      const storedUser = localStorage.getItem('cdUser');
-      if (storedUser) {
-        try {
-          const u = JSON.parse(storedUser);
-          delete u.walletAddress;
-          localStorage.setItem('cdUser', JSON.stringify(u));
-        } catch (e) {
-          // ignore
-        }
-      }
-    } catch (err) {
-      console.error('Disconnect error:', err);
-    }
-  };
-
-  // Logout function
+  // Logout function - clears all local state and auth
   const handleLogout = () => {
     localStorage.removeItem('cdToken');
     localStorage.removeItem('cdUser');
     setUser(null);
     setOnboardingStep('auth');
     setCurrentView('feed');
-    setWalletAddress('');
-    setWalletBalance('0');
+  };
+
+  // Navigation handler - switches between main views
+  const navigateTo = (view: MainView, userId?: string) => {
+    if (view === 'userprofile' && userId) {
+      setSelectedUserId(userId);
+    }
+    setCurrentView(view);
   };
 
   // Handle post publish
@@ -336,28 +280,6 @@ const [showNSFWPrompt, setShowNSFWPrompt] = useState(false);
   const handleSaveTiers = (tiers: any[]) => {
     console.log('Saving tiers:', tiers);
     setIsSubscriptionTiersOpen(false);
-  };
-
-  // Navigation handler - switches between main views
-  const navigateTo = (view: MainView, userId?: string) => {
-    if (view === 'userprofile' && userId) {
-      setSelectedUserId(userId);
-    }
-    setCurrentView(view);
-  };
-
-  // Handle user clicks (accepts username OR userId)
-  const handleUserClick = (userIdOrUsername: string) => {
-    setSelectedUserId(userIdOrUsername);
-    setCurrentView('userprofile');
-  };
-
-  const handleViewUserProfile = (userIdOrUsername: string) => {
-    // Can accept either userId or username
-    console.log('Viewing profile:', userIdOrUsername);
-    setSelectedUserId(userIdOrUsername);
-    setCurrentView('userprofile');
-    console.log('Set currentView to userprofile, selectedUserId:', userIdOrUsername);
   };
 
   // Handle creator mode toggle from Settings
@@ -524,30 +446,31 @@ const [showNSFWPrompt, setShowNSFWPrompt] = useState(false);
              )}
           </button>
 
-          {/* Connect Wallet (Wagmi) */}
-          {!wagmiConnected ? (
-            <button
-              onClick={handleWalletConnect}
-              className="flex items-center gap-1.5 px-2 py-1.5 md:px-3 md:py-2 bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-lg hover:brightness-110 transition-all font-medium text-xs"
-            >
-              <Wallet size={14} />
-              <span className="hidden sm:inline">Connect Wallet</span>
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <div className="px-2 py-1.5 bg-gray-900 border border-[var(--primary-color,#39FF14)]/40 rounded-lg text-xs font-mono flex items-center gap-2">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-white">{walletAddress ? walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4) : ''}</span>
-              </div>
-              <button
-                onClick={handleWalletDisconnect}
-                className="p-1.5 text-gray-400 hover:text-red-400"
-                title="Disconnect Wallet"
-              >
-                <LogOut size={12} />
-              </button>
-            </div>
-          )}
+          {/* Wallet Connect - Main visible wallet button */}
+          <WalletConnect 
+            onConnect={(address) => {
+              setWalletAddress(address);
+              const storedUser = localStorage.getItem('cdUser');
+              if (storedUser) {
+                try {
+                  const u = JSON.parse(storedUser);
+                  u.walletAddress = address;
+                  localStorage.setItem('cdUser', JSON.stringify(u));
+                } catch (e) {}
+              }
+            }}
+            onDisconnect={() => {
+              setWalletAddress('');
+              const storedUser = localStorage.getItem('cdUser');
+              if (storedUser) {
+                try {
+                  const u = JSON.parse(storedUser);
+                  delete u.walletAddress;
+                  localStorage.setItem('cdUser', JSON.stringify(u));
+                } catch (e) {}
+              }
+            }}
+          />
 
           {/* Settings */}
           <button 
@@ -821,15 +744,7 @@ const [showNSFWPrompt, setShowNSFWPrompt] = useState(false);
         isAgeVerified={user.isAgeVerified || false}
       />
 
-      {/* Wallet Connect */}
-      <WalletConnect 
-        isOpen={isWalletOpen}
-        onClose={() => setIsWalletOpen(false)}
-        onConnect={handleWalletConnect}
-        onDisconnect={handleWalletDisconnect}
-        connectedAddress={walletAddress}
-        connectedBalance={walletBalance}
-      />
+      {/* Wallet Connect - embedded in header via WalletConnect component */}
 
       {/* Notifications */}
       <NotificationSystem 
