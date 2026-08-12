@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Gift, X, Check, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Gift, X, Check, AlertCircle, Zap } from 'lucide-react';
 import GlitchButton from './GlitchButton';
 
 interface TipButtonProps {
@@ -26,6 +26,12 @@ const TipButton: React.FC<TipButtonProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
+  
+  // USDC balance and approval state
+  const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
+  const [allowance, setAllowance] = useState<number | null>(null);
+  const [isApproving, setIsApproving] = useState(false);
+  const [hasWallet, setHasWallet] = useState(true);
 
   const tipPresets: { amount: TipAmount; label: string; emoji: string }[] = [
     { amount: '1', label: '$1', emoji: '💝' },
@@ -41,6 +47,39 @@ const TipButton: React.FC<TipButtonProps> = ({
     }
     return selectedAmount;
   };
+
+  // Check wallet connection and USDC balance when modal opens
+  useEffect(() => {
+    const checkWalletStatus = async () => {
+      try {
+        if (typeof window !== 'undefined' && window.ethereum) {
+          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+          setHasWallet(!!accounts[0]);
+          
+          // Fetch USDC balance and allowance
+          if (accounts[0]) {
+            try {
+              const res = await fetch('https://cyberdope-api.onrender.com/api/wallet/balance', {
+                headers: { 'Authorization': `Bearer ${userToken}` }
+              });
+              const data = await res.json();
+              if (data?.balances) {
+                setUsdcBalance(parseFloat(data.balances.USDC || '0'));
+              }
+            } catch (err) {
+              console.warn('Could not fetch balance:', err);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Wallet check error:', error);
+      }
+    };
+
+    if (showModal) {
+      checkWalletStatus();
+    }
+  }, [showModal, userToken]);
 
   const handleSendTip = async () => {
     const amount = getTipAmount();

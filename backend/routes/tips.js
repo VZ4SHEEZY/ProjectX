@@ -7,9 +7,9 @@
  * - Earnings tracking
  * 
  * Contract Integration:
- * - Stub for now, swaps in real contract ABI/address when deployed
- * - Contract address from env var: TIP_ROUTER_CONTRACT_ADDRESS
- * - Treasury address from env var: TIP_ROUTER_TREASURY_ADDRESS
+ * - Uses TipRouter service for real USDC transfers
+ * - Checks USDC allowance before sending tip
+ * - Returns needApproval flag if approval required
  * 
  * SAFETY:
  * - Contract deployment on Base Sepolia ONLY
@@ -22,10 +22,9 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const Tip = require('../models/Tip');
+const tipService = require('../services/tip');
 
-// TODO: When TipRouter is deployed on Base Sepolia:
-// const ethers = require('ethers');
-// const TIP_ROUTER_ABI = require('../contracts/TipRouter.json');
+
 
 // @route   POST /api/tips/send
 // @desc    Send a tip via contract (Base Sepolia)
@@ -49,52 +48,119 @@ router.post('/send', protect, async (req, res) => {
       return res.status(403).json({ error: 'Age verification required to send tips' });
     }
 
-    // Calculate split
     const amountNum = parseFloat(amount);
-    const creatorAmount = (amountNum * 0.8).toFixed(6);
-    const platformAmount = (amountNum * 0.2).toFixed(6);
+    
+    // Validate tip parameters (minimum $0.01)
+    const validation = tipService.validateTip(req.user._id, creatorId, amountNum);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.errors.join(', ') });
+    }
 
-    // TODO: When TipRouter deployed, integrate real contract call here:
-    // const provider = new ethers.providers.JsonRpcProvider(process.env.BASE_SEPOLIA_RPC_URL);
-    // const signer = new ethers.Wallet(userPrivateKey, provider);
-    // const tipRouter = new ethers.Contract(
-    //   process.env.TIP_ROUTER_CONTRACT_ADDRESS,
-    //   TIP_ROUTER_ABI,
-    //   signer
-    // );
-    // const tx = await tipRouter.sendTip(creator.embeddedWalletAddress, ethers.utils.parseUnits(amount, 6));
-    // const receipt = await tx.wait();
-    // txHash = receipt.transactionHash;
+    // Get wallet addresses
+    const tipperWallet = tipper.embeddedWalletAddress || tipper.externalWalletAddress;
+    if (!tipperWallet) {
+      return res.status(400).json({ 
+        error: 'Tipper has no connected wallet',
+        needWallet: true 
+      });
+    }
 
-    // For now, create a pending tip record
-    // This will be marked 'confirmed' once contract is live
-    const tip = await Tip.create({
-      sender: tipper._id,
-      creator: creator._id,
-      amount: amount.toString(),
-      creatorAmount: creatorAmount.toString(),
-      platformAmount: platformAmount.toString(),
-      token: 'USDC',
-      chain: 'base-sepolia',
-      post: postId || null,
-      message: message || '',
-      txStatus: 'pending', // Will be 'confirmed' when contract deployed
-      txHash: null // Will be set when contract call completes
-    });
+    const creatorWallet = creator.embeddedWalletAddress || creator.externalWalletAddress;
+    if (!creatorWallet) {
+      return res.status(400).json({
+        error: 'Creator has no wallet set up',
+        needCreatorWallet: true
+      });
+    }
 
-    res.status(201).json({
-      success: true,
-      message: 'Tip submitted (contract deployment pending)',
-      tip: {
-        id: tip._id,
-        amount: tip.amount,
-        creatorAmount: tip.creatorAmount,
-        platformAmount: tip.platformAmount,
-        status: tip.txStatus,
-        createdAt: tip.createdAt
-      },
-      status: 'WAITING_FOR_CONTRACT'
-    });
+    // Check USDC allowance for TipRouter contract
+    let allowance;
+    try {
+      allowance = await tipService.getAllowance(tipperWallet);
+    } catch (error) {
+      console.warn('Failed to get allowance:', error.message);
+      return res.status(500).json({ error: 'Failed to check wallet balance' });
+    }
+
+    // If allowance insufficient, require approval first
+    if (parseFloat(allowance) < amountNum) {
+      return res.status(402).json({
+        success: false,
+        needApproval: true,
+        currentAllowance: parseFloat(allowance),
+        requiredAmount: amountNum,
+        message: `Approve TipRouter for ${amountNum} USDC first`
+      });
+    }
+
+    // Get private key from environment (for signing)
+    const privateKey = process.env.TIP_ROUTER_PRIVATE_KEY;
+    
+    if (!privateKey) {
+      return res.status(500).json({
+        error: 'TipRouter private key not configured',
+        needConfig: true
+      });
+    }
+
+    // Attempt to send tip via TipRouter contract
+    let txReceipt;
+    try {
+      txReceipt = await tipService.sendTip(privateKey, creatorWallet, amountNum);
+      
+      // Record successful tip in MongoDB
+      const tip = await Tip.create({
+        sender: tipper._id,
+        creator: creator._id,
+        amount: amount.toString(),
+        creatorAmount: (amountNum * 0.8).toFixed(6),
+        platformAmount: (amountNum * 0.2).toFixed(6),
+        token: 'USDC',
+        chain: 'base-sepolia',
+        post: postId || null,
+        message: message || '',
+        txStatus: 'confirmed',
+        txHash: txReceipt.txHash
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Tip sent successfully',
+        tip: {
+          id: tip._id,
+          amount: tip.amount,
+          creatorAmount: tip.creatorAmount,
+          platformAmount: tip.platformAmount,
+          status: tip.txStatus,
+          txHash: tip.txHash,
+          createdAt: tip.createdAt
+        }
+      });
+    } catch (error) {
+      console.error('Send tip transaction error:', error);
+      
+      // Record failed attempt for debugging
+      const failedTip = await Tip.create({
+        sender: tipper._id,
+        creator: creator._id,
+        amount: amount.toString(),
+        creatorAmount: (amountNum * 0.8).toFixed(6),
+        platformAmount: (amountNum * 0.2).toFixed(6),
+        token: 'USDC',
+        chain: 'base-sepolia',
+        post: postId || null,
+        message: message || '',
+        txStatus: 'failed',
+        failureReason: error.message
+      });
+
+      res.status(500).json({
+        success: false,
+        error: 'Transaction failed on chain',
+        tipId: failedTip._id,
+        failureReason: error.message
+      });
+    }
   } catch (error) {
     console.error('Send tip error:', error);
     res.status(500).json({ error: 'Failed to send tip' });
@@ -206,23 +272,16 @@ router.post('/webhook/confirm', async (req, res) => {
 });
 
 // @route   GET /api/tips/contract/status
-// @desc    Check if TipRouter contract is deployed
+// @desc    Check if TipRouter service is configured
 // @access  Public
 router.get('/contract/status', async (req, res) => {
   try {
-    const isDeployed = !!process.env.TIP_ROUTER_CONTRACT_ADDRESS;
-    const contractAddress = process.env.TIP_ROUTER_CONTRACT_ADDRESS || null;
-    const treasuryAddress = process.env.TIP_ROUTER_TREASURY_ADDRESS || null;
-
+    const status = tipService.getStatus();
+    
     res.json({
       success: true,
-      contract: {
-        isDeployed,
-        address: contractAddress,
-        network: 'base-sepolia',
-        treasury: treasuryAddress,
-        usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' // Circle's official Base Sepolia USDC
-      }
+      contract: status,
+      note: status.configured ? 'TipRouter is ready for use' : 'Configure env vars to enable tipping'
     });
   } catch (error) {
     console.error('Contract status error:', error);

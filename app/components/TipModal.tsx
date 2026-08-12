@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle, AlertTriangle, Cpu, Loader, Bitcoin, QrCode, Copy, Star, Crown } from 'lucide-react';
+import { X, CheckCircle, AlertTriangle, Cpu, Loader, Copy, Zap, Shield } from 'lucide-react';
 import GlitchButton from './GlitchButton';
 
 interface TipModalProps {
@@ -10,7 +10,7 @@ interface TipModalProps {
 }
 
 type TransactionStatus = 'idle' | 'processing' | 'success' | 'error';
-type Currency = 'ETH' | 'BTC';
+type Currency = 'USDC';
 type Mode = 'TIP' | 'MEMBERSHIP';
 
 const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorAddress }) => {
