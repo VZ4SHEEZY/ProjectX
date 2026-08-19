@@ -1,229 +1,174 @@
-
-import React, { useState, useEffect } from 'react';
-import { X, CheckCircle, AlertTriangle, Cpu, Loader, Copy, Zap, Shield } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { AlertTriangle, CheckCircle, Cpu, Loader, X } from 'lucide-react';
 import GlitchButton from './GlitchButton';
+import api from '../services/api';
 
 interface TipModalProps {
   isOpen: boolean;
   onClose: () => void;
-  creatorAddress: string;
+  creatorId: string;
 }
 
-type TransactionStatus = 'idle' | 'processing' | 'success' | 'error';
-type Currency = 'USDC';
-type Mode = 'TIP' | 'MEMBERSHIP';
+type TransactionStatus = 'idle' | 'sending' | 'success' | 'error';
 
-const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorAddress }) => {
-  const [mode, setMode] = useState<Mode>('TIP');
-  const [currency, setCurrency] = useState<Currency>('ETH');
-  const [amount, setAmount] = useState('0.01');
+interface TipResponse {
+  success?: boolean;
+  needApproval?: boolean;
+  message?: string;
+  error?: string;
+  failureReason?: string;
+  tip?: { txHash?: string };
+}
+
+const getErrorMessage = (error: unknown): string => {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as TipResponse | undefined;
+    return data?.error || data?.failureReason || data?.message || error.message;
+  }
+  return error instanceof Error ? error.message : 'Unable to send tip. Please try again.';
+};
+
+const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
+  const [amount, setAmount] = useState('1.00');
   const [status, setStatus] = useState<TransactionStatus>('idle');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [txHash, setTxHash] = useState('');
+  const [needApproval, setNeedApproval] = useState(false);
 
-  // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
+      setAmount('1.00');
       setStatus('idle');
-      setAmount('0.01');
-      setErrorMsg('');
-      setMode('TIP');
+      setErrorMessage('');
+      setSuccessMessage('');
+      setTxHash('');
+      setNeedApproval(false);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(creatorAddress);
-    // Could add visual toast here
-  };
+  const sendTip = async () => {
+    const numericAmount = Number(amount);
 
-  const handleAction = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatus('processing');
-    setErrorMsg('');
+    if (!creatorId) {
+      setStatus('error');
+      setErrorMessage('No creator selected. Close this window and try again.');
+      return;
+    }
+    if (!Number.isFinite(numericAmount) || numericAmount < 0.01) {
+      setStatus('error');
+      setErrorMessage('Enter an amount of at least 0.01 USDC.');
+      return;
+    }
 
-    // Simulate Processing Delay
-    setTimeout(() => {
-        // Mock Success
-        if (Math.random() > 0.1) {
-            setStatus('success');
-            setTimeout(() => onClose(), 2500);
-        } else {
-            setStatus('error');
-            setErrorMsg('Network Congestion: Gas too low.');
+    setStatus('sending');
+    setErrorMessage('');
+    setNeedApproval(false);
+
+    try {
+      const response = await api.post('/tips/send', { creatorId, amount });
+      const data = response.data as TipResponse;
+
+      if (data.needApproval) {
+        setNeedApproval(true);
+        setErrorMessage(data.error || data.message || 'USDC approval is required to send this tip.');
+        setStatus('error');
+        return;
+      }
+      if (!data.success) {
+        throw new Error(data.error || data.message || 'The tip was not completed.');
+      }
+
+      setTxHash(data.tip?.txHash || '');
+      setSuccessMessage(data.message || 'Tip sent successfully.');
+      setStatus('success');
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const data = error.response?.data as TipResponse | undefined;
+        if (data?.needApproval) {
+          setNeedApproval(true);
+          setErrorMessage(data.error || data.message || 'USDC approval is required to send this tip.');
+          setStatus('error');
+          return;
         }
-    }, 2000);
+      }
+      setStatus('error');
+      setErrorMessage(getErrorMessage(error));
+    }
   };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await sendTip();
+  };
+
+  const busy = status === 'sending';
 
   return (
     <>
-    {/* Backdrop */}
-    <div 
-        className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md transition-opacity"
-        onClick={onClose}
-    />
-
-    {/* Modal / Bottom Sheet */}
-    <div className={`
-        fixed z-[101] bg-[#0a0a0a] border-t-2 border-[#39FF14] shadow-[0_-10px_40px_rgba(57,255,20,0.2)]
-        
-        /* Mobile: Bottom Sheet */
-        bottom-0 left-0 w-full rounded-t-xl
-        
-        /* Desktop: Centered Modal */
-        md:top-1/2 md:left-1/2 md:w-[480px] md:h-auto md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg md:border-2
-        
-        transition-transform duration-300 ease-out transform
-    `}>
-      
-      {/* Handle for Mobile Drag */}
-      <div className="w-full flex justify-center pt-2 md:hidden">
-         <div className="w-12 h-1 bg-gray-700 rounded-full" />
-      </div>
-
-      <div className="p-6">
-          
-          {/* Header */}
-          <div className="flex justify-between items-start mb-6">
+      <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md" onClick={busy ? undefined : onClose} />
+      <div className="fixed bottom-0 left-0 z-[101] w-full rounded-t-xl border-t-2 border-[#39FF14] bg-[#0a0a0a] shadow-[0_-10px_40px_rgba(57,255,20,0.2)] md:bottom-auto md:left-1/2 md:top-1/2 md:w-[480px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg md:border-2">
+        <div className="flex w-full justify-center pt-2 md:hidden"><div className="h-1 w-12 rounded-full bg-gray-700" /></div>
+        <div className="p-6">
+          <div className="mb-6 flex items-start justify-between">
             <div className="flex items-center gap-2 text-[#39FF14]">
-               <Cpu className="animate-pulse" />
-               <span className="font-mono tracking-widest text-xs font-bold">VALUE_EXCHANGE_PROTOCOL</span>
+              <Cpu className="animate-pulse" />
+              <span className="font-mono text-xs font-bold tracking-widest">BASE_SEPOLIA_TIP</span>
             </div>
-            <button onClick={onClose} className="text-gray-500 hover:text-white">
-              <X size={24} />
-            </button>
+            <button onClick={onClose} disabled={busy} className="text-gray-500 hover:text-white disabled:opacity-40" aria-label="Close tip modal"><X size={24} /></button>
           </div>
 
-          {/* Mode Tabs */}
-          <div className="flex bg-gray-900 rounded-lg p-1 mb-6 border border-gray-800">
-             <button 
-               onClick={() => setMode('TIP')}
-               className={`flex-1 py-2 text-xs font-bold font-mono rounded flex items-center justify-center gap-2 transition-all ${mode === 'TIP' ? 'bg-[#39FF14] text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
-             >
-                <Star size={14} /> SEND TIP
-             </button>
-             <button 
-               onClick={() => setMode('MEMBERSHIP')}
-               className={`flex-1 py-2 text-xs font-bold font-mono rounded flex items-center justify-center gap-2 transition-all ${mode === 'MEMBERSHIP' ? 'bg-[#FF00FF] text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
-             >
-                <Crown size={14} /> JOIN MEMBER
-             </button>
-          </div>
-
-          {status === 'idle' ? (
-             <form onSubmit={handleAction} className="flex flex-col gap-6">
-               
-               {/* 1. Currency Selector */}
-               <div className="grid grid-cols-2 gap-4">
-                  <div 
-                    onClick={() => setCurrency('ETH')}
-                    className={`cursor-pointer border p-3 flex items-center gap-3 rounded transition-all ${currency === 'ETH' ? 'border-[#39FF14] bg-[#39FF14]/10' : 'border-gray-800 bg-black hover:border-gray-600'}`}
-                  >
-                      <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">Ξ</div>
-                      <div>
-                          <div className="text-xs font-bold text-white">Ethereum</div>
-                          <div className="text-[9px] text-gray-500">Web3 Wallet</div>
-                      </div>
-                  </div>
-
-                  <div 
-                    onClick={() => setCurrency('BTC')}
-                    className={`cursor-pointer border p-3 flex items-center gap-3 rounded transition-all ${currency === 'BTC' ? 'border-orange-500 bg-orange-500/10' : 'border-gray-800 bg-black hover:border-gray-600'}`}
-                  >
-                      <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-black">
-                         <Bitcoin size={18} />
-                      </div>
-                      <div>
-                          <div className="text-xs font-bold text-white">Bitcoin</div>
-                          <div className="text-[9px] text-gray-500">Native SegWit</div>
-                      </div>
-                  </div>
-               </div>
-
-               {/* 2. Amount / Subscription Info */}
-               {mode === 'TIP' ? (
-                  <div className="text-center py-4 bg-black/40 border border-gray-800 rounded">
-                     <label className="block text-gray-500 text-[10px] font-mono mb-2 uppercase tracking-wider">
-                        AMOUNT ({currency})
-                     </label>
-                     <input 
-                        type="number" 
-                        step="0.001"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        className={`w-full bg-transparent border-none text-center text-5xl font-mono outline-none py-2 placeholder-gray-800 transition-colors ${currency === 'BTC' ? 'text-orange-500' : 'text-[#39FF14]'}`}
-                        placeholder="0.00"
-                     />
-                  </div>
-               ) : (
-                  <div className="bg-gradient-to-br from-purple-900/40 to-black border border-[#FF00FF]/30 p-4 rounded text-center relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-1 bg-[#FF00FF] text-black text-[9px] font-bold">MONTHLY</div>
-                      <h3 className="text-white font-bold text-lg mb-1">NEON TIER ACCESS</h3>
-                      <ul className="text-[10px] text-gray-400 font-mono mb-4 space-y-1">
-                          <li>+ Exclusive Video Logs</li>
-                          <li>+ Private Discord Access</li>
-                          <li>+ Hex-Badge on Profile</li>
-                      </ul>
-                      <div className={`text-2xl font-bold font-mono ${currency === 'BTC' ? 'text-orange-500' : 'text-[#39FF14]'}`}>
-                          {currency === 'ETH' ? '0.05 ETH' : '0.003 BTC'}
-                      </div>
-                  </div>
-               )}
-
-               {/* 3. Address / QR (Mainly for BTC) */}
-               <div className="bg-gray-900/50 p-3 border border-gray-800 rounded text-xs font-mono text-gray-400">
-                  <div className="flex justify-between items-center mb-2">
-                     <span className="text-[9px] uppercase">Destination Address ({currency})</span>
-                     <button type="button" onClick={handleCopy} className="text-gray-500 hover:text-white flex items-center gap-1">
-                        <Copy size={10} /> COPY
-                     </button>
-                  </div>
-                  <div className="flex gap-3 items-center">
-                      <div className="bg-white p-1 rounded-sm">
-                          <QrCode size={48} className="text-black" />
-                      </div>
-                      <div className="flex-1 break-all text-[10px] leading-relaxed text-gray-300">
-                          {creatorAddress || '0x...'}
-                      </div>
-                  </div>
-               </div>
-
-               <GlitchButton type="submit" fullWidth className="h-12 text-md" variant={mode === 'MEMBERSHIP' ? 'danger' : 'primary'}>
-                  {mode === 'TIP' ? 'INITIATE TRANSFER' : 'ACTIVATE SUBSCRIPTION'}
-               </GlitchButton>
-
-             </form>
-          ) : status === 'processing' ? (
-             <div className="flex flex-col items-center justify-center py-12 gap-6">
-                <Loader className={`w-12 h-12 animate-spin ${currency === 'BTC' ? 'text-orange-500' : 'text-[#39FF14]'}`} />
-                <div className="text-center font-mono">
-                   <h3 className="text-lg text-white animate-pulse">BROADCASTING TO {currency} NODE...</h3>
-                   <p className="text-xs text-gray-500 mt-2">Waiting for confirmations...</p>
-                </div>
-             </div>
-          ) : status === 'success' ? (
-             <div className="flex flex-col items-center justify-center py-12 gap-6">
-                <CheckCircle className="w-16 h-16 text-[#39FF14] drop-shadow-[0_0_15px_rgba(57,255,20,0.5)]" />
-                <div className="text-center font-mono">
-                   <h3 className="text-xl font-bold text-white tracking-widest">TRANSACTION CONFIRMED</h3>
-                   <p className="text-xs text-gray-500 mt-2">{mode === 'TIP' ? 'Funds Transferred.' : 'Welcome to the Inner Circle.'}</p>
-                </div>
-             </div>
+          {status === 'success' ? (
+            <div className="flex flex-col items-center justify-center gap-6 py-10">
+              <CheckCircle className="h-16 w-16 text-[#39FF14] drop-shadow-[0_0_15px_rgba(57,255,20,0.5)]" />
+              <div className="text-center font-mono">
+                <h3 className="text-xl font-bold tracking-widest text-white">TIP CONFIRMED</h3>
+                <p className="mt-2 text-xs text-gray-400">{successMessage}</p>
+                {txHash && <p className="mt-3 break-all text-[10px] text-[#39FF14]">TX: {txHash}</p>}
+              </div>
+              <GlitchButton onClick={onClose}>DONE</GlitchButton>
+            </div>
+          ) : status === 'error' ? (
+            <div className="flex flex-col items-center justify-center gap-6 py-8 text-[#FF00FF]">
+              <AlertTriangle className="h-16 w-16" />
+              <div className="text-center font-mono">
+                <h3 className="text-xl font-bold tracking-widest">TIP FAILED</h3>
+                <p className="mt-2 text-xs text-white">{errorMessage}</p>
+              </div>
+              {needApproval ? (
+                <GlitchButton onClick={sendTip}>APPROVE USDC FOR TIPPING</GlitchButton>
+              ) : (
+                <GlitchButton variant="danger" onClick={() => { setStatus('idle'); setErrorMessage(''); }}>TRY AGAIN</GlitchButton>
+              )}
+            </div>
+          ) : busy ? (
+            <div className="flex flex-col items-center justify-center gap-6 py-12">
+              <Loader className="h-12 w-12 animate-spin text-[#39FF14]" />
+              <div className="text-center font-mono">
+                <h3 className="animate-pulse text-lg text-white">SENDING USDC...</h3>
+                <p className="mt-2 text-xs text-gray-500">Base Sepolia</p>
+              </div>
+            </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-8 gap-6 text-[#FF00FF]">
-                <AlertTriangle className="w-16 h-16" />
-                <div className="text-center font-mono">
-                   <h3 className="text-xl font-bold tracking-widest">TRANSACTION FAILED</h3>
-                   <p className="text-xs text-white mt-2">{errorMsg}</p>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              <div className="rounded border border-[#39FF14]/40 bg-[#39FF14]/10 p-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2775CA] text-xs font-bold text-white">$</div>
+                  <div><div className="text-sm font-bold text-white">USDC</div><div className="text-[10px] text-gray-400">Base Sepolia</div></div>
                 </div>
-                <GlitchButton variant="danger" onClick={() => setStatus('idle')}>
-                   RETRY
-                </GlitchButton>
-             </div>
+              </div>
+              <div className="rounded border border-gray-800 bg-black/40 py-4 text-center">
+                <label htmlFor="tip-amount" className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-gray-500">Amount (USDC)</label>
+                <input id="tip-amount" type="number" min="0.01" step="0.01" inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)} className="w-full border-none bg-transparent py-2 text-center font-mono text-5xl text-[#39FF14] outline-none placeholder:text-gray-800" placeholder="1.00" />
+              </div>
+              <GlitchButton type="submit" fullWidth className="h-12 text-md">SEND USDC TIP</GlitchButton>
+            </form>
           )}
-
+        </div>
       </div>
-    </div>
     </>
   );
 };

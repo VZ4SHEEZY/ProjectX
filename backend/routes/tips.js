@@ -18,12 +18,61 @@
  */
 
 const express = require('express');
+const { ethers } = require('ethers');
 const router = express.Router();
-const { protect } = require('../middleware/auth');
+const { protect, requireAgeVerified } = require('../middleware/auth');
 const User = require('../models/User');
 const Tip = require('../models/Tip');
 const tipService = require('../services/tip');
 
+
+// @route   POST /api/tips/approve
+// @desc    Approve TipRouter to spend the tipper's USDC (Base Sepolia)
+// @access  Private (age verified only)
+router.post('/approve', protect, requireAgeVerified, async (req, res) => {
+  try {
+    const requestedAmount = req.body && req.body.amount;
+    const amount = requestedAmount === undefined ? 1000 : Number(requestedAmount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'Amount must be a positive USDC value' });
+    }
+
+    const owner = req.user.embeddedWalletAddress || req.user.externalWalletAddress;
+    if (!owner || !ethers.isAddress(owner)) {
+      return res.status(400).json({ error: 'Tipper has no valid connected wallet' });
+    }
+
+    const privateKey = process.env.TIP_ROUTER_PRIVATE_KEY;
+    if (!privateKey) {
+      return res.status(500).json({ error: 'TipRouter private key is not configured' });
+    }
+
+    // ERC-20 approve always applies to the transaction signer (the owner).
+    let signerAddress;
+    try {
+      signerAddress = new ethers.Wallet(privateKey).address;
+    } catch (error) {
+      return res.status(500).json({ error: 'TipRouter private key is invalid' });
+    }
+
+    if (signerAddress.toLowerCase() !== owner.toLowerCase()) {
+      return res.status(403).json({
+        error: 'Configured signing wallet does not match the tipper wallet'
+      });
+    }
+
+    const approval = await tipService.approveTipRouter(privateKey, amount);
+
+    return res.json({ success: true, txHash: approval.txHash });
+  } catch (error) {
+    console.error('Approve tip transaction error:', error.message);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to approve USDC for TipRouter'
+    });
+  }
+});
 
 
 // @route   POST /api/tips/send
