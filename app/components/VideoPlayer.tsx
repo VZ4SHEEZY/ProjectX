@@ -8,7 +8,7 @@ import { postAPI } from '../services/api';
 interface VideoPlayerProps {
   video: Video;
   isActive: boolean;
-  onTip: (address: string) => void;
+  onTip: (creatorId: string) => void;
   onComment?: () => void;
   userAgeVerified?: boolean;
   isTransitioning?: boolean;
@@ -106,12 +106,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const handleTipClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onTip(video.user.walletAddress);
+    onTip(video.user.id);
   };
 
   const handlePurchase = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onTip(video.user.walletAddress);
+    onTip(video.user.id);
     setTimeout(() => {
         setUnlocked(true);
     }, 5000);

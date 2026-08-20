@@ -6,7 +6,7 @@ interface DesktopFeedWrapperProps {
   video: Video;
   currentUser: User;
   allVideos: Video[];
-  onTipClick: (address: string) => void;
+  onTipClick: (creatorId: string) => void;
   onVideoSelect?: (video: Video) => void;
   onCreatorClick?: (username: string) => void;
 }

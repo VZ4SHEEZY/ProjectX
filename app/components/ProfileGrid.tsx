@@ -21,7 +21,7 @@ interface ProfileGridProps {
   onOpenAdmin?: () => void;
   onFollowUpdate?: () => void;
   user: User;
-  onTip?: (address: string) => void;
+  onTip?: (creatorId: string) => void;
   onProfileUpdate?: (updates: Partial<User>) => void;
   creatorModeEnabled?: boolean;
   onUsernameClick?: (userId: string) => void;
@@ -239,7 +239,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
 
   const handlePurchaseKey = () => {
     if (onTip) {
-      onTip(user.walletAddress);
+      onTip(user.id);
       setTimeout(() => setIsVaultUnlocked(true), 5000);
     } else {
       alert('Wallet not connected');
@@ -437,7 +437,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
           <button onClick={() => setIsHudVisible(false)} className="px-3 py-2 border border-gray-700 text-gray-400 hover:text-white bg-black/50" title="Hide Interface">
             <EyeOff size={14} />
           </button>
-          <button onClick={() => onTip && onTip(user.walletAddress)} className="flex items-center gap-2 px-4 py-2 bg-[#FF00FF]/10 border border-[#FF00FF] text-[#FF00FF] text-xs font-bold hover:bg-[#FF00FF] hover:text-black transition-all">
+          <button onClick={() => onTip && onTip(user.id)} className="flex items-center gap-2 px-4 py-2 bg-[#FF00FF]/10 border border-[#FF00FF] text-[#FF00FF] text-xs font-bold hover:bg-[#FF00FF] hover:text-black transition-all">
             <Crown size={14} /> SUBSCRIBE
           </button>
           <button onClick={() => setIsDesignOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-gray-700 text-gray-400 text-xs font-bold hover:border-[#39FF14] hover:text-[#39FF14] transition-all bg-black/50">

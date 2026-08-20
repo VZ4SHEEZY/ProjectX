@@ -5,7 +5,7 @@ import ProfileGrid from './ProfileGrid';
 
 interface ProfileProps {
   user: User;
-  onTip?: (address: string) => void;
+  onTip?: (creatorId: string) => void;
 }
 
 const Profile: React.FC<ProfileProps> = ({ user, onTip }) => {

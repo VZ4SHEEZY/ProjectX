@@ -9,7 +9,7 @@ import { User, Video } from '../types';
 import { ChevronUp, ChevronDown, Radio, Wifi, Battery } from 'lucide-react';
 
 interface FeedProps {
-  onTipClick: (address: string) => void;
+  onTipClick: (creatorId: string) => void;
   onCommentClick: () => void;
   currentUser: User;
   activeTab: 'discover' | 'friends' | 'faction';

@@ -96,7 +96,7 @@ const App: React.FC = () => {
   // Wallet state (managed by WalletConnect component)
   const [walletAddress, setWalletAddress] = useState<string>('');
   
-  const [activeCreatorAddress, setActiveCreatorAddress] = useState<string>('');
+  const [activeCreatorId, setActiveCreatorId] = useState<string>('');
 
   // Admin modal state (inside component)
   const [isAdminOpen, setIsAdminOpen] = useState(false);
@@ -211,8 +211,8 @@ const App: React.FC = () => {
   };
 
   // Tip Modal Handler
-  const handleTipClick = (address: string) => {
-    setActiveCreatorAddress(address);
+  const handleTipClick = (creatorId: string) => {
+    setActiveCreatorId(creatorId);
     setIsTipModalOpen(true);
   };
 
@@ -791,7 +791,7 @@ const App: React.FC = () => {
       <TipModal 
         isOpen={isTipModalOpen} 
         onClose={() => setIsTipModalOpen(false)} 
-        creatorAddress={activeCreatorAddress} 
+        creatorId={activeCreatorId}
       />
 
       <UploadModal 

@@ -225,8 +225,8 @@ export const messageAPI = {
 
 // ==================== TIP & SUBSCRIPTION API ====================
 export const tipAPI = {
-  sendTip: (data: { recipientId: string; amount: number; message?: string; postId?: string; paymentMethod?: string }) =>
-    api.post('/tips', data),
+  sendTip: (data: { creatorId: string; amount: string; message?: string; postId?: string }) =>
+    api.post('/tips/send', data),
 
   getSentTips: (params?: { page?: number; limit?: number }) =>
     api.get('/tips/sent', { params }),
