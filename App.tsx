@@ -22,7 +22,6 @@ import SubscriptionTiers from './components/SubscriptionTiers';
 // New Components
 import SearchSystem from './components/SearchSystem';
 import WalletConnect from './components/WalletConnect';
-import NotificationSystem from './components/NotificationSystem';
 import CommentSystem from './components/CommentSystem';
 import DMSystem from './components/DMSystem';
 import SettingsPage from './components/SettingsPage';
@@ -246,13 +245,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Handle Age Verification success from modal (user completed verification)
-  const handleAgeVerifySuccess = () => {
-    // Refresh user data to get updated isAgeVerified from API
-    restore();
-    setIsAgeVerificationOpen(false);
-  };
-
   // Logout function - clears all local state and auth
   const handleLogout = () => {
     localStorage.removeItem('cdToken');
@@ -268,6 +260,12 @@ const App: React.FC = () => {
       setSelectedUserId(userId);
     }
     setCurrentView(view);
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleViewUserProfile = (userId: string) => {
+    if (!userId) return;
+    navigateTo('userprofile', userId);
   };
 
   // Handle post publish
@@ -495,7 +493,15 @@ const App: React.FC = () => {
       {isMobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-30 bg-black/95 backdrop-blur-xl pt-14">
           <div className="p-4 space-y-2">
-            {/* Mobile Navigation - simplified, moved to bottom nav */}
+            <MobileMenuItem active={currentView === 'feed'} onClick={() => navigateTo('feed')} icon={Home} label="HOME" />
+            <MobileMenuItem active={currentView === 'explore'} onClick={() => navigateTo('explore')} icon={Compass} label="EXPLORE" />
+            <MobileMenuItem active={currentView === 'messages'} onClick={() => navigateTo('messages')} icon={Mail} label="MESSAGES" />
+            <MobileMenuItem active={currentView === 'profile'} onClick={() => navigateTo('profile')} icon={UserIcon} label="PROFILE" />
+            <MobileMenuItem onClick={() => { setIsStoriesOpen(true); setIsMobileMenuOpen(false); }} icon={Image} label="STORIES" />
+            <MobileMenuItem onClick={() => { setIsGroupsOpen(true); setIsMobileMenuOpen(false); }} icon={Users} label="COMMUNITIES" />
+            {user.isAdmin && (
+              <MobileMenuItem active={currentView === 'admin'} onClick={() => navigateTo('admin')} icon={BarChart3} label="ADMIN" />
+            )}
           </div>
         </div>
       )}
@@ -740,17 +746,13 @@ const App: React.FC = () => {
       <SearchSystem 
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
-        onResultClick={(result) => console.log('Selected:', result)}
+        onResultClick={(result) => {
+          if (result.type === 'user') handleViewUserProfile(result.title);
+        }}
         isAgeVerified={user.isAgeVerified || false}
       />
 
       {/* Wallet Connect - embedded in header via WalletConnect component */}
-
-      {/* Notifications */}
-      <NotificationSystem 
-        isOpen={isNotificationsOpen}
-        onClose={() => setIsNotificationsOpen(false)}
-      />
 
       {/* Comments */}
       <CommentSystem 
