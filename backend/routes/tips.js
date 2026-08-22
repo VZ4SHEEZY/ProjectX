@@ -21,6 +21,21 @@ const express = require('express');
 const { ethers } = require('ethers');
 const router = express.Router();
 const { protect, requireAgeVerified } = require('../middleware/auth');
+const crypto = require('crypto');
+
+const requireWebhookSecret = (req, res, next) => {
+  const expected = process.env.TIP_WEBHOOK_SECRET;
+  const provided = req.get('x-webhook-secret');
+  if (!expected || !provided) {
+    return res.status(401).json({ error: 'Webhook authentication required' });
+  }
+  const expectedBuffer = Buffer.from(expected);
+  const providedBuffer = Buffer.from(provided);
+  if (expectedBuffer.length !== providedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, providedBuffer)) {
+    return res.status(401).json({ error: 'Webhook authentication required' });
+  }
+  next();
+};
 const User = require('../models/User');
 const Tip = require('../models/Tip');
 const tipService = require('../services/tip');
@@ -287,7 +302,7 @@ router.get('/user', protect, async (req, res) => {
 // @route   POST /api/tips/webhook/confirm
 // @desc    Webhook: confirm tip when contract tx is included in block
 // @access  Private (should be called from backend job/listener)
-router.post('/webhook/confirm', async (req, res) => {
+router.post('/webhook/confirm', requireWebhookSecret, async (req, res) => {
   try {
     const { tipId, txHash, blockNumber, status } = req.body;
 
