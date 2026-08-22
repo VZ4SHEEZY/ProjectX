@@ -2,6 +2,7 @@
 import React, { lazy, Suspense, useState, useEffect } from 'react';
 import AuthPage from './components/AuthPage';
 import { userAPI } from './services/api';
+import { API_BASE_URL } from './config';
 
 import BiometricScanner from './components/BiometricScanner';
 import FactionReveal from './components/FactionReveal';
@@ -119,7 +120,7 @@ const App: React.FC = () => {
         const timeout = setTimeout(() => controller.abort(), 8000);
 
         const res = await fetch(
-          'https://cyberdope-api.onrender.com/api/auth/me',
+          `${API_BASE_URL}/auth/me`,
           { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal }
         );
         clearTimeout(timeout);
@@ -136,9 +137,9 @@ const App: React.FC = () => {
           localStorage.removeItem('cdUser');
         }
       } catch (e) {
-        // Network error / timeout — don't trust stale cache, send to auth
-        localStorage.removeItem('cdToken');
-        localStorage.removeItem('cdUser');
+        // Preserve credentials through transient backend failures/cold starts.
+        // Cached roles are not activated until the server validates them.
+        console.error('Session validation unavailable:', e);
       }
 
       setIsLoading(false);
@@ -172,6 +173,21 @@ const App: React.FC = () => {
     const interval = setInterval(fetchUnreadCount, 30000); // Check every 30 seconds
     return () => clearInterval(interval);
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let service: typeof import('./services/socket').socketService | undefined;
+    let cancelled = false;
+    void import('./services/socket').then(({ socketService }) => {
+      if (cancelled) return;
+      service = socketService;
+      socketService.connect(user.id);
+    });
+    return () => {
+      cancelled = true;
+      service?.disconnect();
+    };
+  }, [user?.id]);
 
   // 1. Auth Success -> Handle Routing based on user status
   const handleLoginSuccess = (isNewUser: boolean) => {

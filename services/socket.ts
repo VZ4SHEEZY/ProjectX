@@ -1,32 +1,34 @@
 import { io, Socket } from 'socket.io-client';
-
-const SOCKET_URL = 'https://cyberdope-api.onrender.com';
+import { SOCKET_URL } from '../config';
 
 class SocketService {
   private socket: Socket | null = null;
   private userId: string | null = null;
 
   connect(userId: string) {
-    if (this.socket?.connected) {
+    if (this.socket && this.userId === userId) {
+      if (!this.socket.connected) this.socket.connect();
       return;
     }
+
+    this.disconnect();
 
     this.userId = userId;
     this.socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       autoConnect: true,
+      auth: { token: localStorage.getItem('cdToken') },
     });
 
     this.socket.on('connect', () => {
       console.log('Socket connected:', this.socket?.id);
-      this.socket?.emit('join', userId);
     });
 
     this.socket.on('disconnect', () => {
       console.log('Socket disconnected');
     });
 
-    this.socket.on('error', (error) => {
+    this.socket.on('connect_error', (error) => {
       console.error('Socket error:', error);
     });
 

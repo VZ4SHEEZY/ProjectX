@@ -38,7 +38,7 @@ interface ChatResponse {
 const callSecureAPI = async (_systemPrompt: string, userMessage: string): Promise<string> => {
   try {
     const token = localStorage.getItem('cdToken');
-    const response = await fetch(`${API_BASE_URL}/api/ai/chat-assistant`, {
+    const response = await fetch(`${API_BASE_URL}/ai/chat-assistant`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

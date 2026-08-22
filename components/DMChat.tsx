@@ -47,7 +47,9 @@ const DMChat: React.FC<DMChatProps> = ({
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const loadingRef = useRef(false);
 
   // Load messages on open or when recipient changes
   useEffect(() => {
@@ -64,10 +66,13 @@ const DMChat: React.FC<DMChatProps> = ({
   }, [messages]);
 
   const loadMessages = async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
       const response = await messageAPI.getMessages(recipientId, { limit: 50 });
       if (response.data?.success) {
         setMessages(response.data.data);
+        setLoadError('');
         
         // Mark unread messages as read
         response.data.data.forEach((msg: Message) => {
@@ -78,7 +83,9 @@ const DMChat: React.FC<DMChatProps> = ({
       }
     } catch (error) {
       console.error('Failed to load messages:', error);
+      setLoadError('Messages could not be refreshed. Retrying…');
     } finally {
+      loadingRef.current = false;
       setIsLoading(false);
     }
   };
@@ -98,7 +105,7 @@ const DMChat: React.FC<DMChatProps> = ({
       );
 
       if (response.data?.success) {
-        setMessages([...messages, response.data.data]);
+        setMessages((current) => [...current, response.data.data]);
         setInputText('');
       }
     } catch (error) {
@@ -112,7 +119,7 @@ const DMChat: React.FC<DMChatProps> = ({
   const handleDeleteMessage = async (messageId: string) => {
     try {
       await messageAPI.deleteMessage(messageId);
-      setMessages(messages.filter(m => m._id !== messageId));
+      setMessages((current) => current.filter(m => m._id !== messageId));
     } catch (error) {
       console.error('Failed to delete message:', error);
     }
@@ -162,6 +169,7 @@ const DMChat: React.FC<DMChatProps> = ({
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {loadError && <div className="text-xs text-amber-400 text-center">{loadError}</div>}
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-500 text-sm">
               No messages yet. Start a conversation!
