@@ -258,6 +258,18 @@ export interface SubscriptionTier {
   isActive: boolean;
 }
 
+export interface AdminStats {
+  totals: { users: number; posts: number; likes: number; activeFactions: number };
+  factions: Array<{ name: string; users: number; posts: number; likes: number; points: number }>;
+  generatedAt: string;
+}
+
+export const adminAPI = {
+  getStats: () => api.get<{ success: true; data: AdminStats }>('/admin/stats'),
+  createAnnouncement: (data: { message: string; targetType: 'all' | 'faction'; targetFaction?: string }) =>
+    api.post('/announcements', data),
+};
+
 // ==================== SEARCH API ====================
 export const searchAPI = {
   search: (query: string, type?: 'all' | 'users' | 'posts', params?: { page?: number; limit?: number }) =>

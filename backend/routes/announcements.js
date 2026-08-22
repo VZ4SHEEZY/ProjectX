@@ -11,13 +11,19 @@ router.post('/', protect, requireAdmin, logAdminAction('broadcast_announcement')
 
     const { message, targetType, targetFaction } = req.body;
 
-    if (!message) {
+    if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ success: false, message: 'Message required' });
+    }
+    if (!['all', 'faction'].includes(targetType)) {
+      return res.status(400).json({ success: false, message: 'Invalid announcement target' });
+    }
+    if (targetType === 'faction' && !targetFaction) {
+      return res.status(400).json({ success: false, message: 'Target faction required' });
     }
 
     const announcement = new Announcement({
       title: 'Announcement',
-      message,
+      message: message.trim(),
       targetType,
       targetFaction: targetType === 'faction' ? targetFaction : null,
       createdBy: req.user.id,
@@ -28,9 +34,10 @@ router.post('/', protect, requireAdmin, logAdminAction('broadcast_announcement')
     // If faction announcement, create a post in that faction
     if (targetType === 'faction' && targetFaction) {
       const post = new Post({
-        creator: req.user.id,
-        caption: message,
-        mediaUrl: announcement.mediaUrl || null,
+        author: req.user.id,
+        type: 'text',
+        content: message.trim(),
+        description: message.trim(),
         visibility: 'faction',
         faction: targetFaction,
       });

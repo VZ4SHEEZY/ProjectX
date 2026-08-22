@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { BarChart3, Bell } from 'lucide-react';
+import { adminAPI, AdminStats } from '../services/api';
 
 interface AdminDashboardProps {
   user: User & { isAdmin?: boolean };
@@ -8,13 +9,21 @@ interface AdminDashboardProps {
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<'stats' | 'announcements'>('stats');
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    // TODO: Fetch stats from backend
-    setLoading(false);
-  }, []);
+    if (user.isAdmin !== true) {
+      setLoading(false);
+      return;
+    }
+    setError('');
+    adminAPI.getStats()
+      .then(response => setStats(response.data.data))
+      .catch(err => setError(err.response?.data?.message || 'Failed to load platform statistics'))
+      .finally(() => setLoading(false));
+  }, [user.isAdmin]);
 
   // Fail-closed: if isAdmin is not explicitly true, deny access
   if (user.isAdmin !== true) {
@@ -63,8 +72,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
         {/* Content */}
         {loading ? (
           <div className="text-center text-gray-400">Loading...</div>
+        ) : error ? (
+          <div className="border border-red-500/50 bg-red-950/40 p-4 text-red-300">{error}</div>
         ) : activeTab === 'stats' ? (
-          <StatsView />
+          stats ? <StatsView stats={stats} /> : null
         ) : (
           <AnnouncementsView />
         )}
@@ -74,7 +85,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 };
 
 // Stats View Component
-const StatsView: React.FC = () => {
+const StatsView: React.FC<{ stats: AdminStats }> = ({ stats }) => {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-white">PLATFORM STATISTICS</h2>
@@ -82,14 +93,14 @@ const StatsView: React.FC = () => {
       {/* Global Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Users', value: '0' },
-          { label: 'Total Posts', value: '0' },
-          { label: 'Total Likes', value: '0' },
-          { label: 'Active Factions', value: '20' },
+          { label: 'Total Users', value: stats.totals.users },
+          { label: 'Total Posts', value: stats.totals.posts },
+          { label: 'Total Likes', value: stats.totals.likes },
+          { label: 'Active Factions', value: stats.totals.activeFactions },
         ].map((stat) => (
           <div key={stat.label} className="bg-gray-950 border border-[#39FF14]/20 p-4 rounded">
             <p className="text-gray-400 text-sm">{stat.label}</p>
-            <p className="text-3xl font-bold text-[#39FF14] mt-2">{stat.value}</p>
+            <p className="text-3xl font-bold text-[#39FF14] mt-2">{stat.value.toLocaleString()}</p>
           </div>
         ))}
       </div>
@@ -109,21 +120,18 @@ const StatsView: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {[
-                'Neon Wraith', 'Iron Veil', 'Crimson Static', 'Void Circuit',
-                'Gold Syndicate', 'Azure Phantom', 'Toxic Bloom', 'Scarlet Dominion',
-                'Chrome Legion', 'Phantom Signal', 'Obsidian Pact', 'Ember Protocol',
-                'Violet Surge', 'Steel Covenant', 'Binary Ghost', 'Copper Throne',
-                'Nova Rift', 'Silver Wraith', 'Inferno Grid', 'Quantum Veil'
-              ].map((faction) => (
-                <tr key={faction} className="border-b border-gray-800 hover:bg-gray-900">
-                  <td className="p-4 text-white font-mono">{faction}</td>
-                  <td className="p-4 text-right text-gray-400">0</td>
-                  <td className="p-4 text-right text-gray-400">0</td>
-                  <td className="p-4 text-right text-gray-400">0</td>
-                  <td className="p-4 text-right text-[#39FF14] font-bold">0</td>
+              {stats.factions.map((faction) => (
+                <tr key={faction.name} className="border-b border-gray-800 hover:bg-gray-900">
+                  <td className="p-4 text-white font-mono">{faction.name}</td>
+                  <td className="p-4 text-right text-gray-400">{faction.users.toLocaleString()}</td>
+                  <td className="p-4 text-right text-gray-400">{faction.posts.toLocaleString()}</td>
+                  <td className="p-4 text-right text-gray-400">{faction.likes.toLocaleString()}</td>
+                  <td className="p-4 text-right text-[#39FF14] font-bold">{faction.points.toLocaleString()}</td>
                 </tr>
               ))}
+              {stats.factions.length === 0 && (
+                <tr><td colSpan={5} className="p-8 text-center text-gray-500">No faction activity yet.</td></tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -140,28 +148,22 @@ const AnnouncementsView: React.FC = () => {
   const [isPosting, setIsPosting] = useState(false);
 
   const handlePost = async () => {
-    if (!message) {
+    if (!message.trim()) {
       alert('Enter a message');
+      return;
+    }
+    if (target === 'faction' && !selectedFaction) {
+      alert('Select a faction');
       return;
     }
 
     setIsPosting(true);
     try {
-      const token = localStorage.getItem('cdToken');
-      const response = await fetch('https://cyberdope-api.onrender.com/api/announcements', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message,
+      await adminAPI.createAnnouncement({
+          message: message.trim(),
           targetType: target,
-          targetFaction: target === 'faction' ? selectedFaction : null,
-        }),
+          ...(target === 'faction' ? { targetFaction: selectedFaction } : {}),
       });
-
-      if (!response.ok) throw new Error('Post failed');
       
       alert('Announcement posted!');
       setMessage('');

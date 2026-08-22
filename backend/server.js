@@ -103,6 +103,7 @@ app.use('/api/stories', require('./routes/stories'));
 app.use('/api/voice', require('./routes/voice'));
 app.use('/api/groups', require('./routes/groups'));
 app.use('/api/creator', require('./routes/creator'));
+app.use('/api/admin', require('./routes/admin'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
