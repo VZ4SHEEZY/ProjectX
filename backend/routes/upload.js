@@ -14,22 +14,17 @@ cloudinary.config({
 });
 
 // Use memory storage — stream directly to Cloudinary, no disk writes
-const upload = multer({
+const uploader = (allowedTypes, maxBytes) => multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
-  fileFilter: (req, file, cb) => {
-    const allowed = [
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-      'video/mp4', 'video/webm', 'video/quicktime',
-      'audio/mpeg', 'audio/wav', 'audio/ogg'
-    ];
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type.'), false);
-    }
-  }
+  limits: { fileSize: maxBytes, files: 1 },
+  fileFilter: (req, file, cb) => cb(
+    allowedTypes.includes(file.mimetype) ? null : new Error('Invalid file type.'),
+    allowedTypes.includes(file.mimetype)
+  )
 });
+const imageUpload = uploader(['image/jpeg', 'image/png', 'image/gif', 'image/webp'], 25 * 1024 * 1024);
+const videoUpload = uploader(['video/mp4', 'video/webm', 'video/quicktime'], 100 * 1024 * 1024);
+const audioUpload = uploader(['audio/mpeg', 'audio/wav', 'audio/ogg'], 25 * 1024 * 1024);
 
 // Helper: upload buffer to Cloudinary
 const uploadToCloudinary = (buffer, options) => {
@@ -43,7 +38,7 @@ const uploadToCloudinary = (buffer, options) => {
 };
 
 // @route   POST /api/upload/image
-router.post('/image', protect, upload.single('image'), async (req, res) => {
+router.post('/image', protect, imageUpload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
     const result = await uploadToCloudinary(req.file.buffer, {
@@ -58,7 +53,7 @@ router.post('/image', protect, upload.single('image'), async (req, res) => {
 });
 
 // @route   POST /api/upload/video
-router.post('/video', protect, upload.single('video'), async (req, res) => {
+router.post('/video', protect, videoUpload.single('video'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
     
@@ -114,7 +109,7 @@ router.post('/video', protect, upload.single('video'), async (req, res) => {
 });
 
 // @route   POST /api/upload/audio
-router.post('/audio', protect, upload.single('audio'), async (req, res) => {
+router.post('/audio', protect, audioUpload.single('audio'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
     const result = await uploadToCloudinary(req.file.buffer, {
@@ -129,7 +124,7 @@ router.post('/audio', protect, upload.single('audio'), async (req, res) => {
 });
 
 // @route   POST /api/upload/avatar
-router.post('/avatar', protect, upload.single('avatar'), async (req, res) => {
+router.post('/avatar', protect, imageUpload.single('avatar'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
     const result = await uploadToCloudinary(req.file.buffer, {
@@ -146,7 +141,7 @@ router.post('/avatar', protect, upload.single('avatar'), async (req, res) => {
 });
 
 // @route   POST /api/upload/banner
-router.post('/banner', protect, upload.single('banner'), async (req, res) => {
+router.post('/banner', protect, imageUpload.single('banner'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
     const result = await uploadToCloudinary(req.file.buffer, {
@@ -161,16 +156,8 @@ router.post('/banner', protect, upload.single('banner'), async (req, res) => {
   }
 });
 
-// Multer error handler
-router.use((error, req, res, next) => {
-  if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({ success: false, message: 'File too large. Max 100MB.' });
-  }
-  res.status(400).json({ success: false, message: error.message });
-});
-
 // @route   POST /api/upload/file (generic file upload for age verification)
-router.post('/file', protect, upload.single('file'), async (req, res) => {
+router.post('/file', protect, imageUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
     
@@ -189,6 +176,13 @@ router.post('/file', protect, upload.single('file'), async (req, res) => {
     console.error('File upload error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
+});
+
+router.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ success: false, message: 'File too large.' });
+  }
+  res.status(400).json({ success: false, message: error.message });
 });
 
 module.exports = router;

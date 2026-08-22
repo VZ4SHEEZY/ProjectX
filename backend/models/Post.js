@@ -132,6 +132,9 @@ postSchema.index({ views: -1 });
 postSchema.index({ status: 1 });
 postSchema.index({ visibility: 1 });
 postSchema.index({ faction: 1 });
+postSchema.index({ status: 1, visibility: 1, createdAt: -1 });
+postSchema.index({ author: 1, status: 1, createdAt: -1 });
+postSchema.index({ faction: 1, visibility: 1, status: 1, createdAt: -1 });
 
 // Virtual for engagement rate
 postSchema.virtual('engagementRate').get(function() {
@@ -140,20 +143,32 @@ postSchema.virtual('engagementRate').get(function() {
 });
 
 // Method to check if user has access
-postSchema.methods.canAccess = function(userId, userSubscriptions = []) {
+postSchema.methods.canAccess = function(userOrId, userSubscriptions = []) {
+  const userId = userOrId?._id?.toString?.() || userOrId?.toString?.();
+  if (!userId) return this.visibility === 'public' && this.monetizationType === 'free';
+  if (Array.isArray(userOrId?.subscriptions)) {
+    userSubscriptions = userOrId.subscriptions
+      .filter((subscription) => subscription.status === 'active' && subscription.expiresAt > new Date())
+      .map((subscription) => subscription.creator.toString());
+  }
   // Author always has access
   if (this.author.toString() === userId) return true;
+
+  if (this.visibility === 'faction') return userOrId?.faction === this.faction;
+  const accessType = ['subscribers', 'ppv'].includes(this.visibility)
+    ? this.visibility
+    : this.monetizationType;
   
   // Free content
-  if (this.monetizationType === 'free') return true;
+  if (accessType === 'free') return true;
   
   // Check if user unlocked PPV
-  if (this.monetizationType === 'ppv') {
+  if (accessType === 'ppv') {
     return this.unlocks.some(u => u.user.toString() === userId);
   }
   
   // Check subscription
-  if (this.monetizationType === 'subscribers') {
+  if (accessType === 'subscribers') {
     return userSubscriptions.includes(this.author.toString());
   }
   

@@ -188,6 +188,9 @@ userSchema.pre('save', async function(next) {
   next();
 });
 
+userSchema.index({ isActive: 1, isCreator: 1, followersCount: -1 });
+userSchema.index({ following: 1 });
+
 // Compare password method
 userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);

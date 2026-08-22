@@ -68,6 +68,10 @@ router.get('/', optionalAuth, async (req, res) => {
       try {
         const postObj = post.toObject();
         postObj.canAccess = post.canAccess(req.user);
+        if (!postObj.canAccess) {
+          postObj.mediaUrl = '';
+          postObj.thumbnailUrl = '';
+        }
         return postObj;
       } catch (err) {
         console.error('Error processing post:', post._id, err);
@@ -328,6 +332,14 @@ router.get('/:id', optionalAuth, async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Post not found'
+      });
+    }
+
+    if (post.isNSFW && (!req.user || !req.user.isAgeVerified)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Age verification required to access this content',
+        requiresAgeVerification: true
       });
     }
 

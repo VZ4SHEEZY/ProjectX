@@ -8,13 +8,11 @@ const Post = require('../models/Post');
 // Use memory storage — stream directly to GridFS, no disk writes
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB for videos
+  limits: { fileSize: 100 * 1024 * 1024, files: 1 },
   fileFilter: (req, file, cb) => {
-    const allowed = [
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-      'video/mp4', 'video/webm', 'video/quicktime', 'video/mpeg',
-      'audio/mpeg', 'audio/wav', 'audio/ogg'
-    ];
+    const allowed = file.fieldname === 'video'
+      ? ['video/mp4', 'video/webm', 'video/quicktime', 'video/mpeg']
+      : ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -273,7 +271,7 @@ router.get('/image/:fileId', async (req, res) => {
 // Multer error handler
 router.use((error, req, res, next) => {
   if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({ success: false, message: 'File too large. Max 500MB.' });
+    return res.status(413).json({ success: false, message: 'File too large. Max 100MB.' });
   }
   res.status(400).json({ success: false, message: error.message });
 });
