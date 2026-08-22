@@ -1,34 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
-import VideoFeed from './components/Feed';
-import ProfileGrid from './components/ProfileGrid';
+import React, { lazy, Suspense, useState, useEffect } from 'react';
 import AuthPage from './components/AuthPage';
-import TipModal from './components/TipModal';
-import UploadModal from './components/UploadModal';
 import { userAPI } from './services/api';
 
 import BiometricScanner from './components/BiometricScanner';
 import FactionReveal from './components/FactionReveal';
-import AgeVerificationModal from './components/AgeVerificationModal';
-import NSFWPrompt from './components/NSFWPrompt';
-import CreatorDashboard from './components/CreatorDashboard';
-import AdminDashboard from './components/AdminDashboard';
-import PostComposer from './components/PostComposer';
-import ExplorePage from './components/ExplorePage';
-import UserProfilePage from './components/UserProfilePage';
-import NotificationPanel from './components/NotificationPanel';
-import SubscriptionTiers from './components/SubscriptionTiers';
-
-// New Components
-import SearchSystem from './components/SearchSystem';
 import WalletConnect from './components/WalletConnect';
-import CommentSystem from './components/CommentSystem';
-import DMSystem from './components/DMSystem';
-import SettingsPage from './components/SettingsPage';
-import ThemeEditor from './components/ThemeEditor';
-import LiveStream from './components/LiveStream';
-import { Stories, CreateStory } from './components/Stories';
-import { Groups } from './components/Groups';
 
 
 import { User } from './types';
@@ -37,6 +14,28 @@ import {
   Mail, Bell, Search, LogOut, LayoutGrid, Crown, Plus,
   BarChart3, Home, Compass, Radio, Image, Users, Menu, X
 } from 'lucide-react';
+
+const VideoFeed = lazy(() => import('./components/Feed'));
+const ProfileGrid = lazy(() => import('./components/ProfileGrid'));
+const TipModal = lazy(() => import('./components/TipModal'));
+const UploadModal = lazy(() => import('./components/UploadModal'));
+const AgeVerificationModal = lazy(() => import('./components/AgeVerificationModal'));
+const NSFWPrompt = lazy(() => import('./components/NSFWPrompt'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const PostComposer = lazy(() => import('./components/PostComposer'));
+const ExplorePage = lazy(() => import('./components/ExplorePage'));
+const UserProfilePage = lazy(() => import('./components/UserProfilePage'));
+const NotificationPanel = lazy(() => import('./components/NotificationPanel'));
+const SubscriptionTiers = lazy(() => import('./components/SubscriptionTiers'));
+const SearchSystem = lazy(() => import('./components/SearchSystem'));
+const CommentSystem = lazy(() => import('./components/CommentSystem'));
+const DMSystem = lazy(() => import('./components/DMSystem'));
+const SettingsPage = lazy(() => import('./components/SettingsPage'));
+const ThemeEditor = lazy(() => import('./components/ThemeEditor'));
+const LiveStream = lazy(() => import('./components/LiveStream'));
+const Stories = lazy(() => import('./components/Stories').then(module => ({ default: module.Stories })));
+const CreateStory = lazy(() => import('./components/Stories').then(module => ({ default: module.CreateStory })));
+const Groups = lazy(() => import('./components/Groups').then(module => ({ default: module.Groups })));
 
 type OnboardingStep = 'auth' | 'scanning' | 'reveal' | 'app';
 type MainView = 'feed' | 'explore' | 'messages' | 'profile' | 'userprofile' | 'admin';
@@ -348,6 +347,7 @@ const App: React.FC = () => {
   }
 
   return (
+    <Suspense fallback={<div className="min-h-screen bg-black text-[#39FF14] flex items-center justify-center font-mono animate-pulse">LOADING MODULE...</div>}>
     <div className="min-h-screen bg-[var(--background-color,#050505)] text-[var(--primary-color,#39FF14)] font-mono flex flex-col relative overflow-hidden">
       {/* Scanlines Effect */}
       <div className="scanlines-effect fixed inset-0 pointer-events-none z-[1] opacity-30" 
@@ -629,7 +629,7 @@ const App: React.FC = () => {
       </main>
 
       {/* Notification Panel */}
-      <NotificationPanel 
+      {isNotificationsOpen && <NotificationPanel
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
         onUserClick={(username) => {
@@ -637,7 +637,7 @@ const App: React.FC = () => {
           setCurrentView('userprofile');
           setIsNotificationsOpen(false);
         }}
-      />
+      />}
 
       {/* 3. Mobile Bottom Navigation Bar - 5 items: Home, Explore, Create, Messages, Profile */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[9999] h-[calc(3.5rem+var(--sab))] bg-black/95 backdrop-blur-xl border-t border-[var(--primary-color,#39FF14)]/30 grid grid-cols-5 items-start pt-2 safe-bottom will-change-transform">
@@ -733,27 +733,27 @@ const App: React.FC = () => {
       {/* 4. Global Modals - All the new functional components */}
       
       {/* Search */}
-      <SearchSystem 
+      {isSearchOpen && <SearchSystem
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
         onResultClick={(result) => {
           if (result.type === 'user') handleViewUserProfile(result.title);
         }}
         isAgeVerified={user.isAgeVerified || false}
-      />
+      />}
 
       {/* Wallet Connect - embedded in header via WalletConnect component */}
 
       {/* Comments */}
-      <CommentSystem 
+      {isCommentsOpen && <CommentSystem
         isOpen={isCommentsOpen}
         onClose={() => setIsCommentsOpen(false)}
         contentId={activePostId}
         currentUser={{ name: user.username, avatar: user.avatar }}
-      />
+      />}
 
       {/* Settings */}
-      <SettingsPage
+      {isSettingsOpen && <SettingsPage
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         currentUser={{ 
@@ -765,37 +765,37 @@ const App: React.FC = () => {
         onVerify={handleVerificationUpdate}
         onCreatorModeToggle={handleCreatorModeToggle}
         onProfileUpdate={handleProfileUpdate}
-      />
+      />}
 
       {/* Theme Editor */}
-      <ThemeEditor 
+      {isThemeEditorOpen && <ThemeEditor
         isOpen={isThemeEditorOpen}
         onClose={() => setIsThemeEditorOpen(false)}
-      />
+      />}
 
       {/* Live Stream */}
-      <LiveStream 
+      {isLiveStreamOpen && <LiveStream
         isOpen={isLiveStreamOpen}
         onClose={() => setIsLiveStreamOpen(false)}
         currentUser={{ name: user.username, avatar: user.avatar }}
-      />
+      />}
 
       {/* Legacy Modals */}
-      <TipModal 
+      {isTipModalOpen && <TipModal
         isOpen={isTipModalOpen} 
         onClose={() => setIsTipModalOpen(false)} 
         creatorId={activeCreatorId}
-      />
+      />}
 
-      <UploadModal 
+      {isUploadModalOpen && <UploadModal
         isOpen={isUploadModalOpen} 
         onClose={() => setIsUploadModalOpen(false)} 
         currentUser={user}
-      />
+      />}
 
 
 
-      <AgeVerificationModal 
+      {isAgeVerificationOpen && <AgeVerificationModal
         isOpen={isAgeVerificationOpen}
         onClose={() => setIsAgeVerificationOpen(false)}
         onVerifySuccess={() => {
@@ -809,7 +809,7 @@ const App: React.FC = () => {
             setUser(mapApiUser(updatedUser));
           }
         }}
-      />
+      />}
 
       {showNSFWPrompt && (
         <NSFWPrompt
@@ -821,17 +821,17 @@ const App: React.FC = () => {
         />
       )}
 
-      <PostComposer 
+      {isPostComposerOpen && <PostComposer
         isOpen={isPostComposerOpen}
         onClose={() => setIsPostComposerOpen(false)}
         onPublish={handlePublishPost}
-      />
+      />}
 
-      <SubscriptionTiers 
+      {isSubscriptionTiersOpen && <SubscriptionTiers
         isOpen={isSubscriptionTiersOpen}
         onClose={() => setIsSubscriptionTiersOpen(false)}
         onSave={handleSaveTiers}
-      />
+      />}
 
       {/* NEW FEATURES */}
       
@@ -885,6 +885,7 @@ const App: React.FC = () => {
       )}
 
     </div>
+    </Suspense>
   );
 };
 
