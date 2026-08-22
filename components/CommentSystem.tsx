@@ -1,9 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  X, Send, Heart, MessageCircle, MoreHorizontal, Flag, 
-  Trash2, Check, ChevronDown, ChevronUp, Smile, Image as ImageIcon
+  X, Send, Heart, MessageCircle,
+  Check, ChevronDown, ChevronUp, Smile
 } from 'lucide-react';
+import { commentAPI } from '../services/api';
 
 interface CommentSystemProps {
   isOpen: boolean;
@@ -111,8 +112,35 @@ const MOCK_COMMENTS: Comment[] = [
 
 const EMOJIS = ['🔥', '❤️', '😍', '👏', '🎨', '💯', '✨', '😂', '🤯', '👀'];
 
+const mapApiComment = (comment: any): Comment => ({
+  id: comment._id || comment.id,
+  author: {
+    name: comment.author?.displayName || comment.author?.username || 'Unknown',
+    avatar: comment.author?.avatar || '',
+    verified: Boolean(comment.author?.isVerified),
+  },
+  text: comment.content || '',
+  likes: comment.likes || 0,
+  isLiked: Boolean(comment.isLiked),
+  time: comment.createdAt ? new Date(comment.createdAt).toLocaleString() : '',
+  replies: (comment.replies || []).map((reply: any) => ({
+    id: reply._id || reply.id,
+    author: {
+      name: reply.author?.displayName || reply.author?.username || 'Unknown',
+      avatar: reply.author?.avatar || '',
+      verified: Boolean(reply.author?.isVerified),
+    },
+    text: reply.content || '',
+    likes: reply.likes || 0,
+    isLiked: Boolean(reply.isLiked),
+    time: reply.createdAt ? new Date(reply.createdAt).toLocaleString() : '',
+  })),
+});
+
 const CommentSystem: React.FC<CommentSystemProps> = ({ isOpen, onClose, contentId, currentUser }) => {
-  const [comments, setComments] = useState<Comment[]>(MOCK_COMMENTS);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [newComment, setNewComment] = useState('');
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -125,70 +153,68 @@ const CommentSystem: React.FC<CommentSystemProps> = ({ isOpen, onClose, contentI
   const totalComments = comments.reduce((acc, c) => acc + 1 + c.replies.length, 0);
 
   useEffect(() => {
-    if (isOpen && inputRef.current) {
+    if (isOpen && contentId) {
+      setIsLoading(true);
+      setError('');
+      commentAPI.getComments(contentId)
+        .then((response) => setComments((response.data?.data || []).map(mapApiComment)))
+        .catch(() => setError('Comments could not be loaded.'))
+        .finally(() => setIsLoading(false));
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [isOpen]);
+  }, [isOpen, contentId]);
 
-  const handleSubmitComment = () => {
-    if (!newComment.trim()) return;
-
-    const comment: Comment = {
-      id: Date.now().toString(),
-      author: { name: currentUser.name, avatar: currentUser.avatar },
-      text: newComment,
-      likes: 0,
-      isLiked: false,
-      replies: [],
-      time: 'Just now'
-    };
-
-    setComments([comment, ...comments]);
-    setNewComment('');
+  const handleSubmitComment = async () => {
+    if (!newComment.trim() || !contentId) return;
+    try {
+      const response = await commentAPI.createComment(contentId, { content: newComment });
+      setComments([mapApiComment(response.data.data), ...comments]);
+      setNewComment('');
+      setError('');
+    } catch {
+      setError('Comment could not be posted.');
+    }
   };
 
-  const handleSubmitReply = (commentId: string) => {
+  const handleSubmitReply = async (commentId: string) => {
     if (!replyText.trim()) return;
-
-    const reply: Reply = {
-      id: Date.now().toString(),
-      author: { name: currentUser.name, avatar: currentUser.avatar },
-      text: replyText,
-      likes: 0,
-      isLiked: false,
-      time: 'Just now'
-    };
-
-    setComments(comments.map(c => 
-      c.id === commentId 
-        ? { ...c, replies: [...c.replies, reply] }
-        : c
-    ));
-    setReplyText('');
-    setReplyingTo(null);
+    try {
+      const response = await commentAPI.createComment(contentId, { content: replyText, parentCommentId: commentId });
+      const reply = mapApiComment(response.data.data);
+      setComments(comments.map(c => c.id === commentId
+        ? { ...c, replies: [...c.replies, { ...reply, replies: undefined } as Reply] }
+        : c));
+      setReplyText('');
+      setReplyingTo(null);
+      setError('');
+    } catch {
+      setError('Reply could not be posted.');
+    }
   };
 
-  const toggleLikeComment = (commentId: string) => {
-    setComments(comments.map(c => 
-      c.id === commentId 
-        ? { ...c, isLiked: !c.isLiked, likes: c.isLiked ? c.likes - 1 : c.likes + 1 }
-        : c
-    ));
+  const toggleLikeComment = async (commentId: string) => {
+    try {
+      const response = await commentAPI.likeComment(commentId);
+      setComments(comments.map(c => c.id === commentId
+        ? { ...c, isLiked: response.data.isLiked, likes: response.data.likes }
+        : c));
+    } catch {
+      setError('Like could not be updated.');
+    }
   };
 
-  const toggleLikeReply = (commentId: string, replyId: string) => {
-    setComments(comments.map(c => 
-      c.id === commentId 
-        ? { 
-            ...c, 
-            replies: c.replies.map(r => 
-              r.id === replyId 
-                ? { ...r, isLiked: !r.isLiked, likes: r.isLiked ? r.likes - 1 : r.likes + 1 }
-                : r
-            )
-          }
-        : c
-    ));
+  const toggleLikeReply = async (commentId: string, replyId: string) => {
+    try {
+      const response = await commentAPI.likeComment(replyId);
+      setComments(comments.map(c => c.id === commentId ? {
+        ...c,
+        replies: c.replies.map(r => r.id === replyId
+          ? { ...r, isLiked: response.data.isLiked, likes: response.data.likes }
+          : r),
+      } : c));
+    } catch {
+      setError('Like could not be updated.');
+    }
   };
 
   const toggleReplies = (commentId: string) => {
@@ -256,7 +282,14 @@ const CommentSystem: React.FC<CommentSystemProps> = ({ isOpen, onClose, contentI
 
         {/* Comments List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {comments.map((comment) => (
+          {isLoading && <p className="py-8 text-center text-sm text-gray-500">Loading comments…</p>}
+          {!isLoading && error && <p className="py-3 text-center text-sm text-red-400">{error}</p>}
+          {!isLoading && !error && comments.length === 0 && (
+            <p className="py-8 text-center text-sm text-gray-500">No comments yet. Start the conversation.</p>
+          )}
+          {[...comments]
+            .sort((a, b) => sortBy === 'top' ? b.likes - a.likes : sortBy === 'newest' ? b.id.localeCompare(a.id) : b.replies.length - a.replies.length)
+            .map((comment) => (
             <div key={comment.id} className="space-y-3">
               {/* Main Comment */}
               <div className="flex gap-3">
@@ -303,9 +336,6 @@ const CommentSystem: React.FC<CommentSystemProps> = ({ isOpen, onClose, contentI
                     >
                       <MessageCircle size={14} />
                       Reply
-                    </button>
-                    <button className="text-gray-500 hover:text-white transition-colors">
-                      <MoreHorizontal size={14} />
                     </button>
                   </div>
                 </div>
@@ -416,6 +446,12 @@ const CommentSystem: React.FC<CommentSystemProps> = ({ isOpen, onClose, contentI
                   ref={inputRef}
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSubmitComment();
+                    }
+                  }}
                   placeholder="Add a comment..."
                   className="w-full bg-black border border-gray-700 rounded-xl p-3 pr-24 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-[#39FF14] resize-none h-20"
                 />
@@ -446,10 +482,6 @@ const CommentSystem: React.FC<CommentSystemProps> = ({ isOpen, onClose, contentI
                       </div>
                     )}
                   </div>
-                  
-                  <button className="p-2 text-gray-500 hover:text-[#39FF14] transition-colors">
-                    <ImageIcon size={18} />
-                  </button>
                   
                   <button 
                     onClick={handleSubmitComment}

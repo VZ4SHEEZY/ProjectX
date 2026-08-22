@@ -65,17 +65,12 @@ export const authAPI = {
 };
 
 // ==================== USER API ====================
-// Listen for notification updates
-if (typeof window !== 'undefined') {
-  // Set up periodic polling for new notifications (every 30 seconds)
-  setInterval(() => {
-    userAPI.getUnreadCount().catch(() => {});
-  }, 30000);
-}
-
 export const userAPI = {
   getUsers: (params?: { search?: string; faction?: string; isCreator?: boolean; page?: number; limit?: number }) =>
     api.get('/users', { params }),
+
+  searchUsers: (search: string) =>
+    api.get('/users', { params: { search } }),
 
   getSuggestedUsers: () =>
     api.get('/users/suggested'),
@@ -126,7 +121,7 @@ export const userAPI = {
 
 // ==================== POST API ====================
 export const postAPI = {
-  getPosts: (params?: { type?: string; visibility?: string; sort?: string; page?: number; limit?: number; following?: boolean }) =>
+  getPosts: (params?: { type?: string; visibility?: string; sort?: string; page?: number; limit?: number; following?: boolean; author?: string }) =>
     api.get('/posts', { params }),
 
   getForYouFeed: (params?: { page?: number; limit?: number }) =>
@@ -157,7 +152,7 @@ export const postAPI = {
     api.post(`/posts/${id}/like`),
 
   unlikePost: (id: string) =>
-    api.delete(`/posts/${id}/like`),
+    api.post(`/posts/${id}/like`), // Backend toggles like state
 
   viewPost: (id: string) =>
     api.post(`/posts/${id}/view`),
@@ -187,10 +182,10 @@ export const notificationAPI = {
     api.get('/notifications', { params }),
 
   markAsRead: (id: string) =>
-    api.put(`/notifications/${id}/read`),
+    api.patch(`/notifications/${id}/read`),
 
   markAllAsRead: () =>
-    api.put('/notifications/read-all'),
+    api.patch('/notifications/read/all'),
 
   deleteNotification: (id: string) =>
     api.delete(`/notifications/${id}`),

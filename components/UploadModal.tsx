@@ -79,8 +79,8 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
       formData.append('video', file);
       formData.append('title', title || 'Untitled Video');
       formData.append('description', description);
-      formData.append('isNSFW', isNSFW);
-      formData.append('isSensitive', isSensitive);
+      formData.append('isNSFW', String(isNSFW));
+      formData.append('isSensitive', String(isSensitive));
       formData.append('monetizationType', isPremium ? 'ppv' : 'free');
       formData.append('price', isPremium ? price : '0');
       formData.append('duration', '0');

@@ -1,15 +1,15 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Video } from '../types';
-import { Play, AlertTriangle, ShieldCheck, Cpu, ArrowBigUp, MessageSquare, Share2, Lock, Unlock, EyeOff, Heart, Check, Volume2, VolumeX, Bookmark, MoreHorizontal } from 'lucide-react';
+import { Play, AlertTriangle, ShieldCheck, Cpu, ArrowBigUp, MessageSquare, Share2, Lock, Unlock, EyeOff, Heart, Check, Volume2, VolumeX, Bookmark } from 'lucide-react';
 import GlitchButton from './GlitchButton';
-import { postAPI } from '../services/api';
+import { postAPI, userAPI } from '../services/api';
 
 interface VideoPlayerProps {
   video: Video;
   isActive: boolean;
   onTip: (creatorId: string) => void;
-  onComment?: () => void;
+  onComment?: (postId: string) => void;
   userAgeVerified?: boolean;
   isTransitioning?: boolean;
 }
@@ -27,7 +27,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [videoSrc, setVideoSrc] = useState<string>(video.thumbnailUrl || video.url || ''); // Start with blurred thumbnail
   const [isMuted, setIsMuted] = useState(false); // Start unmuted for sound
   const [showControls, setShowControls] = useState(true);
-  const controlsTimeoutRef = useRef<NodeJS.Timeout>();
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Interaction State
   const [isLiked, setIsLiked] = useState(false);
@@ -35,9 +35,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [likeCount, setLikeCount] = useState(video.likes);
   const [showShareToast, setShowShareToast] = useState(false);
   const [showLikeAnimation, setShowLikeAnimation] = useState(false);
-  const [showCommentModal, setShowCommentModal] = useState(false);
-  const [commentText, setCommentText] = useState('');
-  const [isCommentLoading, setIsCommentLoading] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
   
   // Gating Logic
   const [decrypted, setDecrypted] = useState(!video.isSensitive);
@@ -163,28 +161,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const handleComment = (e: React.MouseEvent) => {
       e.stopPropagation();
-      setShowCommentModal(true);
+      onComment?.(video.id);
   };
 
-  const handlePostComment = async () => {
-      if (!commentText.trim()) return;
-      
-      setIsCommentLoading(true);
+  const handleFollow = async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!video.user.id) return;
       try {
-          await postAPI.createComment(video.id, { content: commentText });
-          setCommentText('');
-          setShowCommentModal(false);
-          // Optionally increment comment count
+          const response = await userAPI.followUser(video.user.id);
+          setIsFollowing(Boolean(response.data?.isFollowing));
       } catch (error) {
-          console.error('Comment error:', error);
-      } finally {
-          setIsCommentLoading(false);
+          console.error('Follow error:', error);
       }
-  };
-
-  const handleCloseCommentModal = () => {
-      setShowCommentModal(false);
-      setCommentText('');
   };
 
   const handleShare = async (e: React.MouseEvent) => {
@@ -354,8 +342,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 {video.user.faction || 'UNAFFILIATED'}
                             </p>
                         </div>
-                        <button className="ml-1 sm:ml-2 px-2 sm:px-3 py-0.5 sm:py-1 bg-[#39FF14] text-black text-[9px] sm:text-[10px] font-bold rounded hover:bg-white transition-colors flex-shrink-0">
-                            FOLLOW
+                        <button onClick={handleFollow} className="ml-1 sm:ml-2 px-2 sm:px-3 py-0.5 sm:py-1 bg-[#39FF14] text-black text-[9px] sm:text-[10px] font-bold rounded hover:bg-white transition-colors flex-shrink-0">
+                            {isFollowing ? 'FOLLOWING' : 'FOLLOW'}
                         </button>
                     </div>
                     
@@ -397,8 +385,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 border-white overflow-hidden">
                             <img src={video.user.avatar} alt="user" className="w-full h-full object-cover" />
                         </div>
-                        <button className="absolute -bottom-1.5 sm:-bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 sm:w-6 sm:h-6 bg-[#FF00FF] rounded-full flex items-center justify-center hover:scale-110 transition-transform">
-                            <span className="text-white text-base sm:text-lg leading-none">+</span>
+                        <button onClick={handleFollow} aria-label={isFollowing ? 'Unfollow creator' : 'Follow creator'} className="absolute -bottom-1.5 sm:-bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 sm:w-6 sm:h-6 bg-[#FF00FF] rounded-full flex items-center justify-center hover:scale-110 transition-transform">
+                            <span className="text-white text-base sm:text-lg leading-none">{isFollowing ? '✓' : '+'}</span>
                         </button>
                     </div>
 
@@ -421,7 +409,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         >
                             <MessageSquare className="w-6 h-6 sm:w-7 sm:h-7" />
                         </button>
-                        <span className="text-[10px] sm:text-[11px] font-bold text-white drop-shadow-md">{(video.comments || 240).toLocaleString()}</span>
+                        <span className="text-[10px] sm:text-[11px] font-bold text-white drop-shadow-md">{(video.comments ?? 0).toLocaleString()}</span>
                     </div>
 
                     {/* Bookmark Button */}
@@ -445,7 +433,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         >
                             <Share2 className="w-6 h-6 sm:w-7 sm:h-7" />
                         </button>
-                        <span className="text-[10px] sm:text-[11px] font-bold text-white drop-shadow-md">{(video.shares || 89).toLocaleString()}</span>
+                        <span className="text-[10px] sm:text-[11px] font-bold text-white drop-shadow-md">{(video.shares ?? 0).toLocaleString()}</span>
                     </div>
 
                     {/* Tip Button */}
@@ -458,11 +446,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         </button>
                         <span className="text-[10px] sm:text-[11px] font-bold text-[#39FF14] drop-shadow-md">TIP</span>
                     </div>
-
-                    {/* More Options */}
-                    <button className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:text-gray-300 transition-colors mt-1 sm:mt-2 btn-touch">
-                        <MoreHorizontal className="w-5 h-5 sm:w-6 sm:h-6" />
-                    </button>
 
                     {/* Spinning Record */}
                     <div className="relative mt-1 sm:mt-2">

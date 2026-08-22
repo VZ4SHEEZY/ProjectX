@@ -81,6 +81,7 @@ const App: React.FC = () => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [activePostId, setActivePostId] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isThemeEditorOpen, setIsThemeEditorOpen] = useState(false);
   const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false);
@@ -549,7 +550,10 @@ const App: React.FC = () => {
             <div className="flex-1 overflow-y-auto">
               <VideoFeed 
                 onTipClick={handleTipClick} 
-                onCommentClick={() => setIsCommentsOpen(true)}
+                onCommentClick={(postId) => {
+                  setActivePostId(postId);
+                  setIsCommentsOpen(true);
+                }}
                 currentUser={user}
                 activeTab={feedTab}
                 onTabChange={setFeedTab}
@@ -581,7 +585,7 @@ const App: React.FC = () => {
           <DMSystem
             isOpen={true}
             onClose={() => navigateTo('feed')}
-            currentUser={{ _id: user.id, username: user.username, avatar: user.avatar }}
+            currentUser={{ _id: user.id, name: user.username, avatar: user.avatar }}
           />
         )}
         
@@ -758,7 +762,7 @@ const App: React.FC = () => {
       <CommentSystem 
         isOpen={isCommentsOpen}
         onClose={() => setIsCommentsOpen(false)}
-        contentId="post-123"
+        contentId={activePostId}
         currentUser={{ name: user.username, avatar: user.avatar }}
       />
 

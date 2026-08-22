@@ -35,6 +35,9 @@ interface Post {
   author: { _id: string; username: string; avatar: string };
   createdAt: string;
   type: string;
+  description?: string;
+  likesCount?: number;
+  commentsCount?: number;
 }
 
 const SparkleTrail: React.FC = () => {

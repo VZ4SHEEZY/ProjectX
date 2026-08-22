@@ -10,7 +10,7 @@ import { ChevronUp, ChevronDown, Radio, Wifi, Battery } from 'lucide-react';
 
 interface FeedProps {
   onTipClick: (creatorId: string) => void;
-  onCommentClick: () => void;
+  onCommentClick: (postId: string) => void;
   currentUser: User;
   activeTab: 'discover' | 'friends' | 'faction';
   onTabChange?: (tab: 'discover' | 'friends' | 'faction') => void;

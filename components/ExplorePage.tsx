@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { postAPI, userAPI } from '../services/api';
 import VideoModal from './VideoModal';
+import { User } from '../types';
 
 // Listen for follow updates to refresh
 const useFollowRefresh = () => {
@@ -19,6 +20,7 @@ const useFollowRefresh = () => {
 
 interface ExplorePageProps {
   isAgeVerified: boolean;
+  currentUser: User;
   onContentClick: (content: any) => void;
   onUsernameClick?: (username: string) => void;
 }

@@ -16,6 +16,7 @@ export interface SubscriptionPlan {
 export interface User {
   id: string;
   username: string;
+  displayName?: string;
   walletAddress: string;
   btcAddress?: string;
   avatar: string;
@@ -33,11 +34,15 @@ export interface User {
   followingCount?: number;
   postsCount?: number;
   isFollowing?: boolean;
+  profileLayout?: any;
 }
 export interface Video {
   id: string;
   url: string;
   thumbnail: string;
+  thumbnailUrl?: string;
+  mediaUrl?: string;
+  title?: string;
   user: User;
   description: string;
   likes: number;

@@ -18,6 +18,7 @@ interface SettingsPageProps {
     isAgeVerified?: boolean;
   };
   onVerify: (status: boolean) => void;
+  onCreatorModeToggle?: (enabled: boolean) => void;
 }
 
 type SettingsTab = 'profile' | 'notifications' | 'privacy' | 'wallet' | 'appearance' | 'advanced';

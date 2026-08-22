@@ -8,7 +8,7 @@ interface DMSystemProps {
   onClose: () => void;
   currentUser: {
     _id: string;
-    username: string;
+    name: string;
     avatar: string;
   };
 }
