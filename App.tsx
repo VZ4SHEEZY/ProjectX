@@ -276,8 +276,8 @@ const App: React.FC = () => {
   };
 
   // Handle subscription tiers save
-  const handleSaveTiers = (tiers: any[]) => {
-    console.log('Saving tiers:', tiers);
+  const handleSaveTiers = (tiers: import('./types').SubscriptionTier[]) => {
+    setUser(current => current ? { ...current, subscriptionTiers: tiers } : current);
     setIsSubscriptionTiersOpen(false);
   };
 

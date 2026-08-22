@@ -1,26 +1,16 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   X, Check, Crown, Star, Zap, Users, DollarSign, 
   MessageSquare, Video, Gift, Lock, Edit2, Plus
 } from 'lucide-react';
 import GlitchButton from './GlitchButton';
+import { creatorAPI, SubscriptionTier as Tier } from '../services/api';
 
 interface SubscriptionTiersProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (tiers: Tier[]) => void;
-}
-
-interface Tier {
-  id: string;
-  name: string;
-  price: number;
-  description: string;
-  benefits: string[];
-  color: string;
-  icon: string;
-  isActive: boolean;
 }
 
 const DEFAULT_TIERS: Tier[] = [
@@ -86,7 +76,27 @@ const BENEFIT_OPTIONS = [
 const SubscriptionTiers: React.FC<SubscriptionTiersProps> = ({ isOpen, onClose, onSave }) => {
   const [tiers, setTiers] = useState<Tier[]>(DEFAULT_TIERS);
   const [editingTier, setEditingTier] = useState<Tier | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    creatorAPI.getSubscriptionTiers()
+      .then(response => {
+        if (!cancelled) setTiers(response.data.data.length ? response.data.data : DEFAULT_TIERS);
+      })
+      .catch(err => {
+        if (!cancelled) setError(err.response?.data?.message || 'Could not load saved tiers');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [isOpen]);
 
   const handleToggleTier = (tierId: string) => {
     setTiers(tiers.map(t => 
@@ -125,9 +135,37 @@ const SubscriptionTiers: React.FC<SubscriptionTiersProps> = ({ isOpen, onClose, 
     }
   };
 
-  const handleSaveAll = () => {
-    onSave(tiers);
-    onClose();
+  const handleSaveAll = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const response = await creatorAPI.saveSubscriptionTiers(tiers);
+      onSave(response.data.data);
+      onClose();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not save subscription tiers');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddTier = () => {
+    if (tiers.length >= 6) {
+      setError('You can create up to 6 subscription tiers');
+      return;
+    }
+    const tier: Tier = {
+      id: `new-${Date.now()}`,
+      name: 'New Tier',
+      price: 10,
+      description: '',
+      benefits: [],
+      color: '[#39FF14]',
+      icon: 'star',
+      isActive: true
+    };
+    setTiers(current => [...current, tier]);
+    setEditingTier(tier);
   };
 
   if (!isOpen) return null;
@@ -155,6 +193,9 @@ const SubscriptionTiers: React.FC<SubscriptionTiersProps> = ({ isOpen, onClose, 
 
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto p-6">
+          {error && <div className="mb-4 border border-red-500/50 bg-red-950/40 p-3 text-sm text-red-300">{error}</div>}
+          {loading && <div className="py-12 text-center text-gray-400">Loading saved tiers...</div>}
+          {!loading && <>
           
           {/* Info Banner */}
           <div className="bg-[#39FF14]/10 border border-[#39FF14]/30 p-4 rounded-lg mb-6">
@@ -239,7 +280,7 @@ const SubscriptionTiers: React.FC<SubscriptionTiersProps> = ({ isOpen, onClose, 
 
             {/* Add New Tier */}
             <button 
-              onClick={() => setShowAddModal(true)}
+              onClick={handleAddTier}
               className="border-2 border-dashed border-gray-700 hover:border-[#39FF14] rounded-lg p-4 flex flex-col items-center justify-center text-gray-500 hover:text-[#39FF14] transition-all min-h-[250px]"
             >
               <Plus size={32} className="mb-2" />
@@ -279,6 +320,7 @@ const SubscriptionTiers: React.FC<SubscriptionTiersProps> = ({ isOpen, onClose, 
               * Estimates based on average $10/subscriber. Actual earnings vary.
             </p>
           </div>
+          </>}
         </div>
 
         {/* Footer */}
@@ -293,9 +335,9 @@ const SubscriptionTiers: React.FC<SubscriptionTiersProps> = ({ isOpen, onClose, 
             >
               CANCEL
             </button>
-            <GlitchButton onClick={handleSaveAll} className="px-8 py-2">
+            <GlitchButton onClick={handleSaveAll} disabled={saving || loading} className="px-8 py-2">
               <Check size={16} className="mr-2" />
-              SAVE TIERS
+              {saving ? 'SAVING...' : 'SAVE TIERS'}
             </GlitchButton>
           </div>
         </div>

@@ -6,6 +6,8 @@ const subscriptionTierSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   description: String,
   benefits: [String],
+  color: { type: String, default: 'gray' },
+  icon: { type: String, enum: ['users', 'star', 'crown', 'zap'], default: 'star' },
   isActive: { type: Boolean, default: true }
 });
 
@@ -215,6 +217,7 @@ userSchema.methods.toPublicProfile = function() {
     location: this.location,
     website: this.website,
     socialLinks: this.socialLinks,
+    subscriptionTiers: this.subscriptionTiers,
     isActive: this.isActive,
     createdAt: this.createdAt,
     isAdmin: this.isAdmin,

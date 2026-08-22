@@ -239,6 +239,25 @@ export const tipAPI = {
     api.post('/tips/purchases', data),
 };
 
+export const creatorAPI = {
+  getSubscriptionTiers: () =>
+    api.get('/creator/subscription-tiers'),
+
+  saveSubscriptionTiers: (tiers: SubscriptionTier[]) =>
+    api.put('/creator/subscription-tiers', { tiers }),
+};
+
+export interface SubscriptionTier {
+  id: string;
+  name: string;
+  price: number;
+  description: string;
+  benefits: string[];
+  color: string;
+  icon: string;
+  isActive: boolean;
+}
+
 // ==================== SEARCH API ====================
 export const searchAPI = {
   search: (query: string, type?: 'all' | 'users' | 'posts', params?: { page?: number; limit?: number }) =>

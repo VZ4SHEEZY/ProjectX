@@ -13,6 +13,16 @@ export interface SubscriptionPlan {
   priceBtc: string;
   benefits: string[];
 }
+export interface SubscriptionTier {
+  id: string;
+  name: string;
+  price: number;
+  description: string;
+  benefits: string[];
+  color: string;
+  icon: string;
+  isActive: boolean;
+}
 export interface User {
   id: string;
   username: string;
@@ -27,6 +37,7 @@ export interface User {
   isAdmin?: boolean; // Admin role flag from database
   theme?: ProfileTheme;
   subscriptionPlan?: SubscriptionPlan;
+  subscriptionTiers?: SubscriptionTier[];
   mood?: string;
   interests?: string[];
   memberSince?: string;
