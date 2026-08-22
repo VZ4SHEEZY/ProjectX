@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { body, validationResult } = require('express-validator');
 const cdpService = require('../services/cdp');
+const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -203,7 +204,7 @@ router.post('/login', [
 // @route   POST /api/auth/logout
 // @desc    Logout user
 // @access  Private
-router.post('/logout', async (req, res) => {
+router.post('/logout', protect, async (req, res) => {
   try {
     // In a real app with token blacklisting, add token to blacklist here
     res.json({ success: true, message: 'Logged out successfully' });
@@ -215,51 +216,28 @@ router.post('/logout', async (req, res) => {
 // @route   GET /api/auth/me
 // @desc    Get current user
 // @access  Private
-router.get('/me', async (req, res) => {
+router.get('/me', protect, async (req, res) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({ error: 'No token, authorization denied' });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'cyberdope-secret-key');
-    const user = await User.findById(decoded.userId);
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
     res.json({
       success: true,
-      user: user.toPublicProfile()
+      user: req.user.toPublicProfile()
     });
   } catch (error) {
-    res.status(401).json({ error: 'Token is not valid' });
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
 // @route   POST /api/auth/wallet
 // @desc    Connect wallet
 // @access  Private
-router.post('/wallet', async (req, res) => {
+router.post('/wallet', protect, async (req, res) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
     const { walletAddress } = req.body;
-
-    if (!token) {
-      return res.status(401).json({ error: 'No token' });
+    if (typeof walletAddress !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+      return res.status(400).json({ error: 'Invalid wallet address' });
     }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'cyberdope-secret-key');
-    const user = await User.findById(decoded.userId);
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    user.walletAddress = walletAddress;
-    await user.save();
+    req.user.walletAddress = walletAddress;
+    await req.user.save();
 
     res.json({
       success: true,
@@ -274,32 +252,11 @@ router.post('/wallet', async (req, res) => {
 // @route   POST /api/auth/verify-age
 // @desc    Verify age (18+)
 // @access  Private
-router.post('/verify-age', async (req, res) => {
+router.post('/verify-age', protect, async (req, res) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    const { method, signature } = req.body;
-
-    if (!token) {
-      return res.status(401).json({ error: 'No token' });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'cyberdope-secret-key');
-    const user = await User.findById(decoded.userId);
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // In production, verify the signature against the wallet
-    // For demo, we'll accept any valid request
-    user.isAgeVerified = true;
-    user.ageVerifiedAt = new Date();
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'Age verification completed',
-      isAgeVerified: true
+    res.status(501).json({
+      success: false,
+      message: 'Age verification provider is not configured'
     });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -307,4 +264,3 @@ router.post('/verify-age', async (req, res) => {
 });
 
 module.exports = router;
-

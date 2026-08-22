@@ -3,6 +3,18 @@ const router = express.Router();
 const { protect: auth } = require('../middleware/auth');
 const Story = require('../models/Story');
 const User = require('../models/User');
+const { requireAdmin } = require('../middleware/admin');
+
+// Clean up expired stories. Keep this before /:id routes so Express cannot shadow it.
+router.delete('/cleanup/expired', auth, requireAdmin, async (req, res) => {
+  try {
+    const result = await Story.deleteMany({ expiresAt: { $lt: new Date() } });
+    res.json({ success: true, deleted: result.deletedCount });
+  } catch (error) {
+    console.error('Cleanup Stories Error:', error);
+    res.status(500).json({ error: 'Failed to cleanup stories' });
+  }
+});
 
 // Get stories from users I follow
 router.get('/feed', auth, async (req, res) => {
@@ -312,24 +324,6 @@ router.get('/:id/stats', auth, async (req, res) => {
   } catch (error) {
     console.error('Get Story Stats Error:', error);
     res.status(500).json({ error: 'Failed to fetch stats' });
-  }
-});
-
-// Clean up expired stories (admin endpoint)
-router.delete('/cleanup/expired', auth, async (req, res) => {
-  try {
-    // Only allow admins or run as cron job
-    const result = await Story.deleteMany({
-      expiresAt: { $lt: new Date() }
-    });
-    
-    res.json({
-      success: true,
-      deleted: result.deletedCount
-    });
-  } catch (error) {
-    console.error('Cleanup Stories Error:', error);
-    res.status(500).json({ error: 'Failed to cleanup stories' });
   }
 });
 

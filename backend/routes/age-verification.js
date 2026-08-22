@@ -2,28 +2,14 @@ const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
+const { protect } = require('../middleware/auth');
 
 // @route   POST /api/age-verification/request
 // @desc    Request age verification (upload ID + selfie)
 // @access  Private
-router.post('/request', async (req, res) => {
+router.post('/request', protect, async (req, res) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({ error: 'No token' });
-    }
-
-    // Verify JWT first
-    const jwt = require('jsonwebtoken');
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || 'cyberdope-secret-key');
-    } catch (jwtErr) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    const user = await User.findById(decoded.userId);
+    const user = req.user;
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -41,28 +27,12 @@ router.post('/request', async (req, res) => {
 
     const { idPhotoUrl, selfieUrl } = req.body;
 
-    // For now, accept self-certification without API call
-    // Later: Send to AgeCheck API with the uploaded file IDs
-
-    // Mark user as verified
-    user.isAgeVerified = true;
-    user.ageVerifiedAt = new Date();
-    
-    // Store verification metadata
-    if (!user.verificationData) user.verificationData = {};
-    user.verificationData.idPhotoUrl = idPhotoUrl || null;
-    user.verificationData.selfieUrl = selfieUrl || null;
-    user.verificationData.method = 'manual_review'; // Will be updated when API integrated
-    user.verificationData.verifiedAt = new Date();
-
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'Age verification completed',
-      isAgeVerified: true,
-      ageVerifiedAt: user.ageVerifiedAt,
-      verifiedBy: 'CyberDope Admin System'
+    if (!idPhotoUrl || !selfieUrl) {
+      return res.status(400).json({ error: 'ID photo and selfie are required' });
+    }
+    res.status(501).json({
+      success: false,
+      message: 'Age verification provider is not configured'
     });
   } catch (error) {
     console.error('Age verification error:', error);
@@ -73,23 +43,9 @@ router.post('/request', async (req, res) => {
 // @route   GET /api/age-verification/status
 // @desc    Get current age verification status
 // @access  Private
-router.get('/status', async (req, res) => {
+router.get('/status', protect, async (req, res) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({ error: 'No token' });
-    }
-
-    const jwt = require('jsonwebtoken');
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || 'cyberdope-secret-key');
-    } catch (jwtErr) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    const user = await User.findById(decoded.userId);
+    const user = req.user;
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });

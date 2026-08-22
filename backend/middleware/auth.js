@@ -1,15 +1,15 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+const getBearerToken = (req) => {
+  const match = req.headers.authorization?.match(/^Bearer\s+([^\s]+)$/i);
+  return match?.[1];
+};
+
 // Protect routes - verify JWT token
 exports.protect = async (req, res, next) => {
   try {
-    let token;
-
-    // Check for token in headers
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
-    }
+    const token = getBearerToken(req);
 
     if (!token) {
       return res.status(401).json({
@@ -23,12 +23,12 @@ exports.protect = async (req, res, next) => {
       if (!process.env.JWT_SECRET) {
         throw new Error('JWT_SECRET environment variable is required');
       }
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
       
       // Get user from token
       req.user = await User.findById(decoded.userId);
       
-      if (!req.user) {
+      if (!req.user || req.user.isActive === false) {
         return res.status(401).json({
           success: false,
           message: 'User not found'
@@ -54,18 +54,14 @@ exports.protect = async (req, res, next) => {
 // Optional auth - doesn't require token but adds user if present
 exports.optionalAuth = async (req, res, next) => {
   try {
-    let token;
-
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
-    }
+    const token = getBearerToken(req);
 
     if (token) {
       try {
         if (!process.env.JWT_SECRET) {
           throw new Error('JWT_SECRET environment variable is required');
         }
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
         req.user = await User.findById(decoded.userId);
       } catch (err) {
         // Invalid token, continue without user

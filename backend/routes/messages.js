@@ -3,6 +3,18 @@ const router = express.Router();
 const Message = require('../models/Message');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
+const mongoose = require('mongoose');
+
+// Keep static paths before /:recipientId so they are not interpreted as user IDs.
+router.get('/unread/count', protect, async (req, res) => {
+  try {
+    const count = await Message.countDocuments({ recipient: req.user._id, read: false });
+    res.json({ success: true, unreadCount: count });
+  } catch (error) {
+    console.error('Count unread error:', error);
+    res.status(500).json({ success: false, message: 'Failed to count unread messages' });
+  }
+});
 
 // Send message
 // POST /api/messages
@@ -10,7 +22,7 @@ router.post('/', protect, async (req, res) => {
   try {
     const { recipientId, content, mediaUrl, isVanishing = true } = req.body;
 
-    if (!recipientId || !content.trim()) {
+    if (!mongoose.isValidObjectId(recipientId) || typeof content !== 'string' || !content.trim()) {
       return res.status(400).json({
         success: false,
         message: 'Recipient and content are required'
@@ -29,7 +41,7 @@ router.post('/', protect, async (req, res) => {
     const message = new Message({
       sender: req.user._id,
       recipient: recipientId,
-      content,
+      content: content.trim(),
       mediaUrl,
       isVanishing,
       expiresAt: isVanishing ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null
@@ -147,28 +159,6 @@ router.post('/:id/screenshot-alert', protect, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to log screenshot alert'
-    });
-  }
-});
-
-// Get unread message count
-// GET /api/messages/unread/count
-router.get('/unread/count', protect, async (req, res) => {
-  try {
-    const count = await Message.countDocuments({
-      recipient: req.user._id,
-      read: false
-    });
-
-    res.json({
-      success: true,
-      unreadCount: count
-    });
-  } catch (error) {
-    console.error('Count unread error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to count unread messages'
     });
   }
 });

@@ -156,7 +156,6 @@ router.put('/profile', protect, async (req, res) => {
       website,
       socialLinks,
       theme,
-      isCreator,
       creatorSettings,
       profileLayout
     } = req.body;
@@ -177,7 +176,6 @@ router.put('/profile', protect, async (req, res) => {
         updateFields[`theme.${key}`] = theme[key];
       });
     }
-    if (isCreator !== undefined) updateFields.isCreator = isCreator;
     if (creatorSettings) updateFields.creatorSettings = creatorSettings;
     if (profileLayout) updateFields.profileLayout = profileLayout;
 

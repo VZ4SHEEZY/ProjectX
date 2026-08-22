@@ -5,18 +5,25 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
+const User = require('./models/User');
+const { protect } = require('./middleware/auth');
+const { requireAdmin } = require('./middleware/admin');
+const { validateEnv, allowedOrigins } = require('./config/env');
 require('dotenv').config();
+
+validateEnv();
+const corsOrigins = allowedOrigins();
+const corsOrigin = (origin, callback) => {
+  if (!origin || corsOrigins.includes(origin)) return callback(null, true);
+  callback(new Error('Origin not allowed by CORS'));
+};
 
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "https://project-x-sage-nine.vercel.app",
-      process.env.FRONTEND_URL
-    ].filter(Boolean),
+    origin: corsOrigin,
     methods: ["GET", "POST"]
   }
 });
@@ -29,24 +36,21 @@ app.use(helmet({
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false
 });
 app.use(limiter);
 
 // CORS
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "https://project-x-sage-nine.vercel.app",
-    process.env.FRONTEND_URL
-  ].filter(Boolean),
+  origin: corsOrigin,
   credentials: true
 }));
 
 // Body parsing
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Static files for uploads
 app.use('/uploads', express.static('uploads'));
@@ -54,12 +58,8 @@ app.use('/uploads', express.static('uploads'));
 // MongoDB Connection
 const connectDB = async () => {
   try {
-    if (!process.env.MONGODB_URI) {
-      throw new Error('MONGODB_URI environment variable is required');
-    }
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 10000
     });
     console.log(`MongoDB Connected: ${conn.connection.host}`);
     
@@ -76,7 +76,7 @@ const connectDB = async () => {
     return conn;
   } catch (error) {
     console.error(`Error: ${error.message}`);
-    process.exit(1);
+    throw error;
   }
 };
 
@@ -115,7 +115,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Seed endpoint - populate feed with test videos
-app.post('/api/seed-feed', async (req, res) => {
+app.post('/api/seed-feed', protect, requireAdmin, async (req, res) => {
   try {
     const Post = require('./models/Post');
     const User = require('./models/User');
@@ -176,17 +176,30 @@ app.post('/api/seed-feed', async (req, res) => {
   }
 });
 
-// Socket.io for real-time features
+// Socket.io for real-time features. Identity comes only from a verified JWT.
 const connectedUsers = new Map();
+
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('Authentication required'));
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId).select('_id isActive');
+    if (!user || user.isActive === false) return next(new Error('Authentication failed'));
+    socket.userId = user._id.toString();
+    next();
+  } catch (error) {
+    next(new Error('Authentication failed'));
+  }
+});
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
   
-  socket.on('join', (userId) => {
-    connectedUsers.set(userId, socket.id);
-    socket.userId = userId;
-    console.log(`User ${userId} joined with socket ${socket.id}`);
-  });
+  const userSockets = connectedUsers.get(socket.userId) || new Set();
+  userSockets.add(socket.id);
+  connectedUsers.set(socket.userId, userSockets);
+  socket.join(`user:${socket.userId}`);
 
   socket.on('join-room', (roomId) => {
     socket.join(roomId);
@@ -203,9 +216,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('new-message', (data) => {
-    const recipientSocketId = connectedUsers.get(data.recipientId);
-    if (recipientSocketId) {
-      io.to(recipientSocketId).emit('message', data);
+    if (typeof data?.recipientId === 'string') {
+      io.to(`user:${data.recipientId}`).emit('message', { ...data, senderId: socket.userId });
     }
   });
 
@@ -229,16 +241,17 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-notification', (data) => {
-    const recipientSocketId = connectedUsers.get(data.recipientId);
-    if (recipientSocketId) {
-      io.to(recipientSocketId).emit('notification', data);
+    if (typeof data?.recipientId === 'string') {
+      io.to(`user:${data.recipientId}`).emit('notification', data);
     }
   });
 
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     if (socket.userId) {
-      connectedUsers.delete(socket.userId);
+      const sockets = connectedUsers.get(socket.userId);
+      sockets?.delete(socket.id);
+      if (!sockets?.size) connectedUsers.delete(socket.userId);
     }
   });
 });
@@ -276,6 +289,20 @@ connectDB().then(() => {
 ╚════════════════════════════════════════════════════════════╝
     `);
   });
+}).catch((error) => {
+  console.error(`Startup failed: ${error.message}`);
+  process.exit(1);
 });
+
+const shutdown = async (signal) => {
+  console.log(`${signal} received, shutting down`);
+  io.close();
+  await new Promise((resolve) => httpServer.close(resolve));
+  await mongoose.connection.close();
+  process.exit(0);
+};
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
 
 module.exports = { io, app };
