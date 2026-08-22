@@ -184,9 +184,10 @@ io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error('Authentication required'));
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId).select('_id isActive');
+    const user = await User.findById(decoded.userId).select('_id isActive isCreator');
     if (!user || user.isActive === false) return next(new Error('Authentication failed'));
     socket.userId = user._id.toString();
+    socket.isCreator = user.isCreator === true;
     next();
   } catch (error) {
     next(new Error('Authentication failed'));
@@ -211,16 +212,6 @@ io.on('connection', (socket) => {
     console.log(`Socket ${socket.id} left room ${roomId}`);
   });
 
-  socket.on('new-comment', (data) => {
-    socket.to(data.postId).emit('comment', data);
-  });
-
-  socket.on('new-message', (data) => {
-    if (typeof data?.recipientId === 'string') {
-      io.to(`user:${data.recipientId}`).emit('message', { ...data, senderId: socket.userId });
-    }
-  });
-
   socket.on('typing', (data) => {
     socket.to(data.roomId).emit('user-typing', {
       userId: socket.userId,
@@ -229,7 +220,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('stream-start', (data) => {
-    socket.broadcast.emit('stream-started', data);
+    if (socket.isCreator && typeof data?.streamId === 'string') {
+      socket.broadcast.emit('stream-started', { streamId: data.streamId, title: data.title || 'Live Stream' });
+    }
   });
 
   socket.on('stream-end', (data) => {
@@ -237,12 +230,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('stream-message', (data) => {
-    socket.to(data.streamId).emit('stream-message', data);
-  });
-
-  socket.on('send-notification', (data) => {
-    if (typeof data?.recipientId === 'string') {
-      io.to(`user:${data.recipientId}`).emit('notification', data);
+    if (typeof data?.streamId === 'string' && typeof data?.message === 'string' && data.message.trim().length <= 500) {
+      socket.to(data.streamId).emit('stream-message', {
+        streamId: data.streamId,
+        message: data.message.trim(),
+        userId: socket.userId
+      });
     }
   });
 

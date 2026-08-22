@@ -51,14 +51,6 @@ class SocketService {
     this.socket?.emit('leave-room', roomId);
   }
 
-  sendComment(postId: string, comment: any) {
-    this.socket?.emit('new-comment', { postId, comment });
-  }
-
-  sendMessage(recipientId: string, message: any) {
-    this.socket?.emit('new-message', { recipientId, message });
-  }
-
   setTyping(roomId: string, isTyping: boolean) {
     this.socket?.emit('typing', { roomId, isTyping });
   }
@@ -73,10 +65,6 @@ class SocketService {
 
   sendStreamMessage(streamId: string, message: string) {
     this.socket?.emit('stream-message', { streamId, message, userId: this.userId });
-  }
-
-  sendNotification(recipientId: string, notification: any) {
-    this.socket?.emit('send-notification', { recipientId, ...notification });
   }
 
   // Event listeners
