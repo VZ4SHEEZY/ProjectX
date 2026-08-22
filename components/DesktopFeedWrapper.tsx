@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import VideoPlayer from './VideoPlayer';
 import { Video, User } from '../types';
+import { userAPI } from '../services/api';
 
 interface DesktopFeedWrapperProps {
   video: Video;
@@ -9,6 +10,7 @@ interface DesktopFeedWrapperProps {
   onTipClick: (creatorId: string) => void;
   onVideoSelect?: (video: Video) => void;
   onCreatorClick?: (username: string) => void;
+  onCommentClick: (postId: string) => void;
 }
 
 const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({ 
@@ -17,8 +19,20 @@ const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({
   allVideos,
   onTipClick, 
   onVideoSelect, 
-  onCreatorClick 
+  onCreatorClick,
+  onCommentClick,
 }) => {
+  const [isFollowing, setIsFollowing] = React.useState(false);
+
+  const handleFollow = async () => {
+    if (!video.user?.id) return;
+    try {
+      const response = await userAPI.followUser(video.user.id);
+      setIsFollowing(Boolean(response.data?.isFollowing));
+    } catch (error) {
+      console.error('Follow failed:', error);
+    }
+  };
   // Get creator's other videos from the feed
   const creatorVideos = useMemo(() => {
     return allVideos
@@ -35,6 +49,7 @@ const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({
             video={video}
             isActive={true}
             onTip={onTipClick}
+            onComment={onCommentClick}
             userAgeVerified={currentUser.isAgeVerified}
           />
         </div>
@@ -70,11 +85,11 @@ const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({
 
           {/* Action Buttons */}
           <div className="flex gap-2">
-            <button className="flex-1 py-2 bg-[#39FF14] text-black rounded text-xs font-bold hover:bg-[#39FF14]/80 transition-all">
-              Follow
+            <button onClick={handleFollow} className="flex-1 py-2 bg-[#39FF14] text-black rounded text-xs font-bold hover:bg-[#39FF14]/80 transition-all">
+              {isFollowing ? 'Following' : 'Follow'}
             </button>
-            <button className="flex-1 py-2 border border-[#FF00FF] text-[#FF00FF] rounded text-xs font-bold hover:bg-[#FF00FF]/10 transition-all">
-              Subscribe
+            <button onClick={() => onTipClick(video.user.id)} className="flex-1 py-2 border border-[#FF00FF] text-[#FF00FF] rounded text-xs font-bold hover:bg-[#FF00FF]/10 transition-all">
+              Tip Creator
             </button>
           </div>
         </div>
@@ -110,18 +125,6 @@ const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({
           </div>
         )}
 
-        {/* Social Links */}
-        <div className="border-t border-[#39FF14]/20 pt-3">
-          <p className="text-xs text-gray-400 mb-2">Follow Creator</p>
-          <div className="flex gap-2">
-            <button className="flex-1 py-2 bg-red-600/20 border border-red-600/50 text-red-400 rounded text-xs font-bold hover:bg-red-600/30 transition-all">
-              YouTube
-            </button>
-            <button className="flex-1 py-2 bg-pink-600/20 border border-pink-600/50 text-pink-400 rounded text-xs font-bold hover:bg-pink-600/30 transition-all">
-              Instagram
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

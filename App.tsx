@@ -557,6 +557,8 @@ const App: React.FC = () => {
                 currentUser={user}
                 activeTab={feedTab}
                 onTabChange={setFeedTab}
+                onCreate={() => setIsUploadModalOpen(true)}
+                onCreatorClick={handleViewUserProfile}
               />
             </div>
           </div>
@@ -569,13 +571,6 @@ const App: React.FC = () => {
               isAgeVerified={user.isAgeVerified || false}
               currentUser={user}
               onUsernameClick={handleViewUserProfile}
-              onContentClick={(content) => {
-                if (content.isNSFW && !user.isAgeVerified) {
-                  setIsAgeVerificationOpen(true);
-                } else {
-                  console.log('Opening content:', content);
-                }
-              }}
             />
           </div>
         )}
@@ -689,15 +684,6 @@ const App: React.FC = () => {
           label="PROFILE"
         />
 
-        {/* ADMIN (isAdmin only) */}
-        {user?.isAdmin === true && (
-          <MobileNavButton 
-            active={currentView === 'admin'}
-            onClick={() => navigateTo('admin')}
-            icon={UserIcon}
-            label="ADMIN"
-          />
-        )}
       </nav>
 
       {/* Desktop Bottom Status Bar */}
@@ -778,6 +764,7 @@ const App: React.FC = () => {
         }}
         onVerify={handleVerificationUpdate}
         onCreatorModeToggle={handleCreatorModeToggle}
+        onProfileUpdate={handleProfileUpdate}
       />
 
       {/* Theme Editor */}
@@ -824,13 +811,15 @@ const App: React.FC = () => {
         }}
       />
 
-      <NSFWPrompt 
-        onClose={() => setShowNSFWPrompt(false)}
-        onVerify={() => {
-          setShowNSFWPrompt(false);
-          setIsAgeVerificationOpen(true);
-        }}
-      />
+      {showNSFWPrompt && (
+        <NSFWPrompt
+          onClose={() => setShowNSFWPrompt(false)}
+          onVerify={() => {
+            setShowNSFWPrompt(false);
+            setIsAgeVerificationOpen(true);
+          }}
+        />
+      )}
 
       <PostComposer 
         isOpen={isPostComposerOpen}

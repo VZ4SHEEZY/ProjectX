@@ -7,6 +7,8 @@ import {
   Key, Fingerprint, Mail, Smartphone
 } from 'lucide-react';
 import GlitchButton from './GlitchButton';
+import { userAPI } from '../services/api';
+import { User as UserType } from '../types';
 
 interface SettingsPageProps {
   isOpen: boolean;
@@ -19,11 +21,12 @@ interface SettingsPageProps {
   };
   onVerify: (status: boolean) => void;
   onCreatorModeToggle?: (enabled: boolean) => void;
+  onProfileUpdate?: (updates: Partial<UserType>) => void;
 }
 
 type SettingsTab = 'profile' | 'notifications' | 'privacy' | 'wallet' | 'appearance' | 'advanced';
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUser, onVerify }) => {
+const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUser, onVerify, onProfileUpdate }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
@@ -49,19 +52,23 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
   const [darkMode, setDarkMode] = useState(true);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large'>('medium');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
-    // In real app, save to backend
-    console.log('Saving settings...');
-    onClose();
-  };
-
-  const handleDeleteAccount = () => {
-    console.log('Deleting account...');
-    setShowDeleteConfirm(false);
-    onClose();
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveError('');
+    try {
+      await userAPI.updateProfile({ displayName, bio });
+      onProfileUpdate?.({ displayName, bio });
+      onClose();
+    } catch {
+      setSaveError('Profile changes could not be saved.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const tabs = [
@@ -145,8 +152,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
                     {currentUser.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <button className="px-4 py-2 bg-[#39FF14] text-black text-sm font-bold rounded-lg hover:bg-white transition-colors">
-                      Change Avatar
+                    <button disabled title="Avatar uploads are not available here yet" className="px-4 py-2 bg-gray-800 text-gray-500 text-sm font-bold rounded-lg cursor-not-allowed">
+                      Avatar upload unavailable
                     </button>
                     <p className="text-gray-500 text-xs mt-2">JPG, PNG or GIF. Max 5MB.</p>
                   </div>
@@ -468,10 +475,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
                       <p className="text-gray-500 text-sm">This action cannot be undone</p>
                     </div>
                     <button 
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="px-4 py-2 bg-red-500 text-white text-sm font-bold rounded-lg hover:bg-red-600 transition-colors"
+                      disabled
+                      title="Account deletion is not supported by the API"
+                      className="px-4 py-2 bg-gray-800 text-gray-500 text-sm font-bold rounded-lg cursor-not-allowed"
                     >
-                      Delete
+                      Unavailable
                     </button>
                   </div>
                 </div>
@@ -488,8 +496,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
           >
             Cancel
           </button>
-          <GlitchButton onClick={handleSave}>
-            Save Changes
+          {saveError && <span className="text-xs text-red-400">{saveError}</span>}
+          <GlitchButton onClick={handleSave} disabled={isSaving}>
+            {isSaving ? 'Saving…' : 'Save Changes'}
           </GlitchButton>
         </div>
 
@@ -510,12 +519,6 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
                   className="flex-1 py-3 border border-gray-700 text-gray-400 rounded-lg hover:text-white transition-colors"
                 >
                   Cancel
-                </button>
-                <button 
-                  onClick={handleDeleteAccount}
-                  className="flex-1 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                >
-                  Delete Forever
                 </button>
               </div>
             </div>

@@ -21,7 +21,6 @@ const useFollowRefresh = () => {
 interface ExplorePageProps {
   isAgeVerified: boolean;
   currentUser: User;
-  onContentClick: (content: any) => void;
   onUsernameClick?: (username: string) => void;
 }
 
@@ -64,8 +63,7 @@ const CATEGORIES = [
   { id: 'nsfw', label: 'NSFW 🔞', icon: EyeOff },
 ];
 
-const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick, currentUser, onUsernameClick }) => {
-  console.log('ExplorePage rendered, onUsernameClick:', typeof onUsernameClick);
+const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, currentUser, onUsernameClick }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -336,7 +334,6 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
                 onClick={() => {
                   // Find the original post to get actual video URL
                   const originalPost = rawPosts.find((p: any) => p._id === item.id);
-                  console.log('Clicked video:', item.id, 'Found post:', originalPost);
                   if (originalPost) {
                     setSelectedVideo({
                       id: originalPost._id,
@@ -348,9 +345,6 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
                       likes: originalPost.likesCount || 0,
                       comments: originalPost.commentsCount || 0
                     });
-                    console.log('Set selectedVideo');
-                  } else {
-                    console.log('Post not found in rawPosts. rawPosts length:', rawPosts.length);
                   }
                 }}
                 className={`group cursor-pointer overflow-hidden bg-black border border-gray-800 hover:border-[#39FF14]/50 transition-all ${
@@ -464,15 +458,6 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
             </div>
           )}
 
-          {/* Load More */}
-          {filteredContent.length > 0 && (
-            <div className="max-w-7xl mx-auto mt-8 text-center">
-              <button className="px-8 py-3 border border-gray-700 text-gray-400 hover:text-white hover:border-[#39FF14] transition-all text-sm font-medium">
-                LOAD MORE
-              </button>
-            </div>
-          )}
-
           {/* Suggested Users */}
           {suggestedUsers.length > 0 && (
             <div className="max-w-7xl mx-auto mt-12">
@@ -493,7 +478,6 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, onContentClick
                     <div className="text-center">
                       <button
                         onClick={() => {
-                          console.log('Username clicked:', user.username);
                           onUsernameClick?.(user.username);
                         }}
                         className="text-white text-sm font-medium flex items-center justify-center gap-1 hover:text-[#39FF14] transition-colors"

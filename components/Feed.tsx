@@ -14,6 +14,8 @@ interface FeedProps {
   currentUser: User;
   activeTab: 'discover' | 'friends' | 'faction';
   onTabChange?: (tab: 'discover' | 'friends' | 'faction') => void;
+  onCreate?: () => void;
+  onCreatorClick?: (username: string) => void;
 }
 
 type FeedTab = 'discover' | 'friends' | 'faction';
@@ -119,7 +121,7 @@ const VideoCounter: React.FC<{ current: number; total: number }> = ({ current, t
   );
 };
 
-const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, activeTab, onTabChange }) => {
+const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, activeTab, onTabChange, onCreate, onCreatorClick }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [systemMsg, setSystemMsg] = useState("SYSTEM_ONLINE");
@@ -380,7 +382,7 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
                   <p className="text-gray-400 text-xs font-mono mb-6 leading-relaxed">
                       The feed is empty. Be the first to post and shape the network.
                   </p>
-                  <button className="px-6 py-2 border border-[#39FF14] text-[#39FF14] text-xs font-bold hover:bg-[#39FF14] hover:text-black transition-all">
+                  <button onClick={onCreate} className="px-6 py-2 border border-[#39FF14] text-[#39FF14] text-xs font-bold hover:bg-[#39FF14] hover:text-black transition-all">
                       CREATE POST
                   </button>
               </div>
@@ -408,6 +410,8 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
         currentUser={currentUser}
         allVideos={visibleVideos}
         onTipClick={onTipClick}
+        onCommentClick={onCommentClick}
+        onCreatorClick={onCreatorClick}
         onVideoSelect={(selectedVideo) => {
           const index = visibleVideos.findIndex(v => v.id === selectedVideo.id);
           if (index !== -1) {
@@ -415,9 +419,6 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
             setIsTransitioning(true);
             setTimeout(() => setIsTransitioning(false), 300);
           }
-        }}
-        onCreatorClick={(username) => {
-          console.log('Navigate to profile:', username);
         }}
       />
     );
