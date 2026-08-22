@@ -16,7 +16,6 @@
     "@wagmi/connectors": "^8.0.25",
     "@wagmi/core": "^3.6.4",
     "axios": "^1.6.0",
-    "lodash": "4.17.21",
     "lucide-react": "^0.555.0",
     "prop-types": "15.8.1",
     "react": "^19.2.0",
