@@ -80,7 +80,6 @@ const tipSchema = new mongoose.Schema({
 // Index for queries
 tipSchema.index({ creator: 1, createdAt: -1 });
 tipSchema.index({ sender: 1, createdAt: -1 });
-tipSchema.index({ txHash: 1 });
 
 // Calculate 80/20 split before saving
 tipSchema.pre('save', function(next) {
