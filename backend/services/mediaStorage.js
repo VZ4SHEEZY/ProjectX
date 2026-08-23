@@ -1,4 +1,5 @@
 const cloudinary = require('cloudinary').v2;
+const observability = require('./observability');
 
 const REQUIRED_CLOUDINARY_ENV = [
   'CLOUDINARY_CLOUD_NAME',
@@ -27,16 +28,23 @@ const uploadBuffer = (buffer, options) => new Promise((resolve, reject) => {
 });
 
 const storeVoiceAudio = async ({ buffer, mimeType, originalName, ownerId }) => {
-  const result = await uploadBuffer(buffer, {
-    folder: 'cyberdope/voice',
-    resource_type: 'video',
-    type: 'upload',
-    context: {
-      ownerId: ownerId.toString(),
-      originalName: originalName || 'voice-message',
-      mimeType
-    }
-  });
+  let result;
+  try {
+    result = await uploadBuffer(buffer, {
+      folder: 'cyberdope/voice',
+      resource_type: 'video',
+      type: 'upload',
+      context: {
+        ownerId: ownerId.toString(),
+        originalName: originalName || 'voice-message',
+        mimeType
+      }
+    });
+  } catch (error) {
+    observability.increment('storageFailures');
+    observability.recordError('storage_upload_failure', error, { provider: 'cloudinary', mediaType: 'voice' });
+    throw error;
+  }
 
   return {
     url: result.secure_url,
@@ -49,9 +57,19 @@ const storeVoiceAudio = async ({ buffer, mimeType, originalName, ownerId }) => {
 const deleteVoiceAudio = async (storageKey) => {
   if (!storageKey) return;
   if (!isConfigured()) throw new Error('Durable media storage is not configured');
-  const result = await cloudinary.uploader.destroy(storageKey, { resource_type: 'video', invalidate: true });
+  let result;
+  try {
+    result = await cloudinary.uploader.destroy(storageKey, { resource_type: 'video', invalidate: true });
+  } catch (error) {
+    observability.increment('storageFailures');
+    observability.recordError('storage_delete_failure', error, { provider: 'cloudinary', mediaType: 'voice' });
+    throw error;
+  }
   if (!['ok', 'not found'].includes(result.result)) {
-    throw new Error(`Durable media deletion failed: ${result.result}`);
+    const error = new Error('Durable media deletion failed');
+    observability.increment('storageFailures');
+    observability.recordError('storage_delete_failure', error, { provider: 'cloudinary', mediaType: 'voice' });
+    throw error;
   }
 };
 

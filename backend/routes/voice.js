@@ -4,6 +4,7 @@ const { protect: auth } = require('../middleware/auth');
 const VoiceMessage = require('../models/VoiceMessage');
 const multer = require('multer');
 const { storeVoiceAudio, deleteVoiceAudio } = require('../services/mediaStorage');
+const observability = require('../services/observability');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -56,10 +57,11 @@ router.post('/send', auth, upload.single('audio'), async (req, res) => {
       message: populatedMessage
     });
   } catch (error) {
-    console.error('Send Voice Error:', error);
+    observability.increment('uploadFailures');
+    observability.recordError('voice_upload_failure', error, { requestId: req.id });
     if (storedAudio?.storageKey) {
       try { await deleteVoiceAudio(storedAudio.storageKey); } catch (cleanupError) {
-        console.error('Voice upload cleanup error:', cleanupError.message);
+        observability.recordError('voice_upload_cleanup_failure', cleanupError, { requestId: req.id });
       }
     }
     res.status(500).json({ error: 'Failed to send voice message' });

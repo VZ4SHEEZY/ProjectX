@@ -11,12 +11,14 @@ const { protect } = require('./middleware/auth');
 const { requireAdmin } = require('./middleware/admin');
 const { validateEnv, createCorsOrigin } = require('./config/env');
 const { registerAuthorizedSocketHandlers } = require('./services/socketAuthorization');
+const observability = require('./services/observability');
 require('dotenv').config();
 
 validateEnv();
 const corsOrigin = createCorsOrigin();
 
 const app = express();
+app.use(observability.requestContext);
 // Render terminates TLS and forwards the original client IP through one proxy.
 // This must be set before express-rate-limit derives its per-client key.
 app.set('trust proxy', 1);
@@ -110,7 +112,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    ...observability.versionMetadata()
   });
 });
 
@@ -182,20 +184,34 @@ const connectedUsers = new Map();
 io.use(async (socket, next) => {
   try {
     const token = socket.handshake.auth?.token;
-    if (!token) return next(new Error('Authentication required'));
+    if (!token) {
+      observability.increment('authFailures');
+      observability.increment('socketErrors');
+      observability.write('warn', 'socket_auth_failure', { reason: 'missing_token' });
+      return next(new Error('Authentication required'));
+    }
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId).select('_id isActive isCreator');
-    if (!user || user.isActive === false) return next(new Error('Authentication failed'));
+    if (!user || user.isActive === false) {
+      observability.increment('authFailures');
+      observability.increment('socketErrors');
+      observability.write('warn', 'socket_auth_failure', { reason: 'user_unavailable' });
+      return next(new Error('Authentication failed'));
+    }
     socket.userId = user._id.toString();
     socket.isCreator = user.isCreator === true;
     next();
   } catch (error) {
+    observability.increment('authFailures');
+    observability.increment('socketErrors');
+    observability.write('warn', 'socket_auth_failure', { reason: 'invalid_credentials' });
     next(new Error('Authentication failed'));
   }
 });
 
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+  observability.increment('socketConnections');
+  observability.write('info', 'socket_connected', { socketId: socket.id });
   
   const userSockets = connectedUsers.get(socket.userId) || new Set();
   userSockets.add(socket.id);
@@ -204,8 +220,14 @@ io.on('connection', (socket) => {
 
   registerAuthorizedSocketHandlers(io, socket);
 
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+  socket.on('error', (error) => {
+    observability.increment('socketErrors');
+    observability.recordError('socket_error', error, { socketId: socket.id });
+  });
+
+  socket.on('disconnect', (reason) => {
+    observability.increment('socketDisconnects');
+    observability.write('info', 'socket_disconnected', { socketId: socket.id, reason });
     if (socket.userId) {
       const sockets = connectedUsers.get(socket.userId);
       sockets?.delete(socket.id);
@@ -215,13 +237,7 @@ io.on('connection', (socket) => {
 });
 
 // Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(err.status || 500).json({
-    error: 'Something went wrong!',
-    message: process.env.NODE_ENV === 'development' ? err.message : undefined
-  });
-});
+app.use(observability.errorHandler);
 
 // 404 handler
 app.use((req, res) => {

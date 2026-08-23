@@ -11,6 +11,7 @@ const Post = require('../models/Post');
 const AuditLog = require('../models/AuditLog');
 const creatorRouter = require('../routes/creator');
 const adminRouter = require('../routes/admin');
+const observability = require('../services/observability');
 
 const originalMethods = {
   userFindById: User.findById,
@@ -38,6 +39,8 @@ const restoreMocks = () => {
 };
 
 test.afterEach(restoreMocks);
+
+test.beforeEach(() => observability.resetForTests());
 
 const mockUserLookups = (authenticatedUser, routeUser) => {
   let calls = 0;
@@ -138,6 +141,30 @@ test('admin statistics reject authenticated non-admins', async () => {
 
   assert.equal(response.status, 403);
   assert.equal(response.body.message, 'Admin access required');
+});
+
+test('admin diagnostics reject unauthenticated and non-admin requests', async () => {
+  let response = await request(app).get('/api/admin/diagnostics');
+  assert.equal(response.status, 401);
+
+  User.findById = () => Promise.resolve({ _id: userId, isAdmin: false });
+  response = await request(app).get('/api/admin/diagnostics').set(auth);
+  assert.equal(response.status, 403);
+});
+
+test('admin diagnostics return aggregate health without secrets or PII', async () => {
+  User.findById = () => Promise.resolve({ _id: userId, isAdmin: true });
+  observability.increment('authFailures');
+  observability.recordError('test_failure', new Error('internal detail'), { requestId: 'safe-request-id' });
+
+  const response = await request(app).get('/api/admin/diagnostics').set(auth);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.metrics.authFailures, 1);
+  assert.equal(response.body.data.metrics.errors, 1);
+  assert.equal(response.body.data.recentErrors[0].event, 'test_failure');
+  assert.equal(response.body.data.recentErrors[0].error.message, undefined);
+  assert.equal(JSON.stringify(response.body).includes(process.env.JWT_SECRET), false);
 });
 
 test('admin statistics return platform totals and ranked factions', async () => {

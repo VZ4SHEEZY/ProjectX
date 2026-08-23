@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Stream = require('../models/Stream');
 const Group = require('../models/Group');
+const observability = require('./observability');
 
 const normalizeRoomRequest = (roomId) => {
   if (typeof roomId !== 'string' || roomId.length > 100) return null;
@@ -54,7 +55,8 @@ const registerAuthorizedSocketHandlers = (io, socket) => {
       joinedAliases.set(roomId, authorization);
       acknowledge({ success: true });
     } catch (error) {
-      console.error('Socket room authorization error:', error.message);
+      observability.increment('socketErrors');
+      observability.recordError('socket_room_error', error, { socketId: socket.id });
       acknowledge({ success: false, error: 'Room access denied' });
     }
   });

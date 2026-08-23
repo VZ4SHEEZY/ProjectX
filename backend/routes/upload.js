@@ -5,6 +5,12 @@ const cloudinary = require('cloudinary').v2;
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const Post = require('../models/Post');
+const observability = require('../services/observability');
+
+const failUpload = (req, error, mediaType) => {
+  observability.increment('uploadFailures');
+  observability.recordError('upload_failure', error, { requestId: req.id, mediaType, provider: 'cloudinary' });
+};
 
 // Configure Cloudinary
 cloudinary.config({
@@ -48,6 +54,7 @@ router.post('/image', protect, imageUpload.single('image'), async (req, res) => 
     });
     res.json({ success: true, data: { url: result.secure_url, publicId: result.public_id, width: result.width, height: result.height } });
   } catch (error) {
+    failUpload(req, error, 'image');
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -103,7 +110,7 @@ router.post('/video', protect, videoUpload.single('video'), async (req, res) => 
       message: 'Video uploaded and posted successfully'
     });
   } catch (error) {
-    console.error('Video upload error:', error);
+    failUpload(req, error, 'video');
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -118,7 +125,7 @@ router.post('/audio', protect, audioUpload.single('audio'), async (req, res) => 
     });
     res.json({ success: true, data: { url: result.secure_url, publicId: result.public_id, duration: result.duration } });
   } catch (error) {
-    console.error('Audio upload error:', error);
+    failUpload(req, error, 'audio');
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -136,6 +143,7 @@ router.post('/avatar', protect, imageUpload.single('avatar'), async (req, res) =
     await User.findByIdAndUpdate(req.user._id, { avatar: result.secure_url });
     res.json({ success: true, data: { url: result.secure_url, publicId: result.public_id } });
   } catch (error) {
+    failUpload(req, error, 'avatar');
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -152,6 +160,7 @@ router.post('/banner', protect, imageUpload.single('banner'), async (req, res) =
     await User.findByIdAndUpdate(req.user._id, { banner: result.secure_url });
     res.json({ success: true, data: { url: result.secure_url, publicId: result.public_id } });
   } catch (error) {
+    failUpload(req, error, 'banner');
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -173,12 +182,14 @@ router.post('/file', protect, imageUpload.single('file'), async (req, res) => {
       data: { url: result.secure_url, publicId: result.public_id, type: req.file.mimetype } 
     });
   } catch (error) {
-    console.error('File upload error:', error);
+    failUpload(req, error, 'verification');
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
 router.use((error, req, res, next) => {
+  observability.increment('uploadFailures');
+  observability.write('warn', 'upload_rejected', { requestId: req.id, reason: error.code || 'validation' });
   if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ success: false, message: 'File too large.' });
   }

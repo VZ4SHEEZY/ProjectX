@@ -3,8 +3,14 @@ const User = require('../models/User');
 const Post = require('../models/Post');
 const { protect } = require('../middleware/auth');
 const { requireAdmin, logAdminAction } = require('../middleware/admin');
+const observability = require('../services/observability');
 
 const router = express.Router();
+
+// GET /api/admin/diagnostics - bounded, aggregate operational health (admin only)
+router.get('/diagnostics', protect, requireAdmin, (req, res) => {
+  res.json({ success: true, data: observability.diagnostics() });
+});
 
 // GET /api/admin/stats - platform totals and faction leaderboard (admin only)
 router.get('/stats', protect, requireAdmin, logAdminAction('view_analytics'), async (req, res) => {

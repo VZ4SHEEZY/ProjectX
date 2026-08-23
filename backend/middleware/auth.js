@@ -1,5 +1,8 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const observability = require('../services/observability');
+
+const routeLabel = (req) => `${req.baseUrl}${req.route?.path || ''}`;
 
 const getBearerToken = (req) => {
   const match = req.headers.authorization?.match(/^Bearer\s+([^\s]+)$/i);
@@ -12,6 +15,8 @@ exports.protect = async (req, res, next) => {
     const token = getBearerToken(req);
 
     if (!token) {
+      observability.increment('authFailures');
+      observability.write('warn', 'auth_failure', { requestId: req.id, reason: 'missing_token', path: routeLabel(req) });
       return res.status(401).json({
         success: false,
         message: 'Not authorized to access this route'
@@ -29,6 +34,8 @@ exports.protect = async (req, res, next) => {
       req.user = await User.findById(decoded.userId);
       
       if (!req.user || req.user.isActive === false) {
+        observability.increment('authFailures');
+        observability.write('warn', 'auth_failure', { requestId: req.id, reason: 'user_unavailable', path: routeLabel(req) });
         return res.status(401).json({
           success: false,
           message: 'User not found'
@@ -37,12 +44,15 @@ exports.protect = async (req, res, next) => {
 
       next();
     } catch (err) {
+      observability.increment('authFailures');
+      observability.write('warn', 'auth_failure', { requestId: req.id, reason: 'invalid_token', path: routeLabel(req) });
       return res.status(401).json({
         success: false,
         message: 'Not authorized to access this route'
       });
     }
   } catch (error) {
+    observability.recordError('auth_error', error, { requestId: req.id, path: routeLabel(req) });
     res.status(500).json({
       success: false,
       message: 'Server error',
