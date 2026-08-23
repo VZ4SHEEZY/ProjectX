@@ -6,6 +6,7 @@ const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const cdpService = require('../services/cdp');
 const walletAuth = require('../services/walletAuth');
+const tipService = require('../services/tip');
 
 const fail = (res, error) => res.status(error.status || 500).json({ error: error.status ? error.message : 'Wallet authentication failed' });
 
@@ -77,5 +78,11 @@ router.get('/transactions', protect, async (req, res) => {
 
 router.post('/send-tip', protect, (_req, res) => res.status(503).json({ error: 'Wallet payment execution is disabled' }));
 router.get('/supported-tokens', (_req, res) => res.json({ chain: 'base-sepolia', chainId: walletAuth.CHAIN_ID, tokens: ['USDC'] }));
+router.get('/status', (_req, res) => res.json({
+  walletAuthenticationEnabled: true,
+  paymentExecutionEnabled: tipService.isExecutionEnabled(),
+  chain: 'base-sepolia',
+  chainId: walletAuth.CHAIN_ID
+}));
 
 module.exports = router;
