@@ -23,6 +23,7 @@ interface IERC20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
     function transfer(address to, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
 }
 
 contract TipRouter {
@@ -73,6 +74,7 @@ contract TipRouter {
         require(creator != address(0), "Invalid creator address");
         require(creator != treasury, "Creator cannot be treasury");
         require(amount >= 10000, "Tip below minimum (0.01 USDC)");
+        require(usdc.allowance(msg.sender, address(this)) == amount, "Approval must equal tip amount");
 
         uint256 creatorAmount = (amount * CREATOR_BPS) / BPS_DENOMINATOR;
         uint256 platformAmount = amount - creatorAmount; // exact, dust goes to platform

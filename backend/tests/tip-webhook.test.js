@@ -6,12 +6,12 @@ const request = require('supertest');
 process.env.TIP_WEBHOOK_SECRET = 'webhook-test-secret';
 const Tip = require('../models/Tip');
 const tipsRouter = require('../routes/tips');
-const originalUpdate = Tip.findByIdAndUpdate;
+const originalFind = Tip.findById;
 const app = express();
 app.use(express.json());
 app.use('/api/tips', tipsRouter);
 
-test.afterEach(() => { Tip.findByIdAndUpdate = originalUpdate; });
+test.afterEach(() => { Tip.findById = originalFind; });
 
 test('tip confirmation webhook rejects missing and invalid secrets', async () => {
   for (const secret of [undefined, 'wrong-secret']) {
@@ -22,12 +22,12 @@ test('tip confirmation webhook rejects missing and invalid secrets', async () =>
   }
 });
 
-test('tip confirmation webhook accepts its configured secret', async () => {
-  Tip.findByIdAndUpdate = async () => ({ _id: 'tip', txStatus: 'confirmed', txHash: 'hash' });
+test('tip confirmation webhook never trusts caller-supplied success status', async () => {
+  Tip.findById = async () => ({ _id: 'tip', txStatus: 'pending', toObject: () => ({}), save: async () => {} });
   const response = await request(app)
     .post('/api/tips/webhook/confirm')
     .set('x-webhook-secret', process.env.TIP_WEBHOOK_SECRET)
     .send({ tipId: '507f191e810c19729de860ea', txHash: 'hash', status: 'success' });
-  assert.equal(response.status, 200);
-  assert.equal(response.body.tip.status, 'confirmed');
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /Malformed transaction hash/);
 });

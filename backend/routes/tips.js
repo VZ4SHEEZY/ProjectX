@@ -1,358 +1,107 @@
-/**
- * Tips Routes (Tipping System)
- * 
- * Handles:
- * - Sending tips via TipRouter contract on Base Sepolia
- * - Recording tips in MongoDB
- * - Earnings tracking
- * 
- * Contract Integration:
- * - Uses TipRouter service for real USDC transfers
- * - Checks USDC allowance before sending tip
- * - Returns needApproval flag if approval required
- * 
- * SAFETY:
- * - Contract deployment on Base Sepolia ONLY
- * - Never attempts mainnet interaction
- * - All keys stored in env vars, never in code
- */
-
 const express = require('express');
-const { ethers } = require('ethers');
-const router = express.Router();
-const { protect, requireAgeVerified } = require('../middleware/auth');
 const crypto = require('crypto');
-
-const requireWebhookSecret = (req, res, next) => {
-  const expected = process.env.TIP_WEBHOOK_SECRET;
-  const provided = req.get('x-webhook-secret');
-  if (!expected || !provided) {
-    return res.status(401).json({ error: 'Webhook authentication required' });
-  }
-  const expectedBuffer = Buffer.from(expected);
-  const providedBuffer = Buffer.from(provided);
-  if (expectedBuffer.length !== providedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, providedBuffer)) {
-    return res.status(401).json({ error: 'Webhook authentication required' });
-  }
-  next();
-};
+const { ethers } = require('ethers');
+const { protect, requireAgeVerified } = require('../middleware/auth');
 const User = require('../models/User');
 const Tip = require('../models/Tip');
 const tipService = require('../services/tip');
 
+const router = express.Router();
+const INTENT_TTL_MS = 15 * 60 * 1000;
 
-// @route   POST /api/tips/approve
-// @desc    Approve TipRouter to spend the tipper's USDC (Base Sepolia)
-// @access  Private (age verified only)
-router.post('/approve', protect, requireAgeVerified, async (req, res) => {
+const requireWebhookSecret = (req, res, next) => {
+  const expected = process.env.TIP_WEBHOOK_SECRET || '';
+  const provided = req.get('x-webhook-secret') || '';
+  const a = Buffer.from(expected); const b = Buffer.from(provided);
+  if (!expected || !provided || a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(401).json({ error: 'Webhook authentication required' });
+  next();
+};
+const walletFor = user => user.externalWalletAddress || user.embeddedWalletAddress || user.walletAddress;
+const publicTip = tip => ({ id: tip._id, amount: tip.amount, status: tip.txStatus, txHash: tip.txHash, chainId: tip.chainId, createdAt: tip.createdAt });
+
+async function confirmTip(tip, txHash) {
+  if (tip.txHash && tip.txHash.toLowerCase() !== txHash.toLowerCase()) throw new Error('Intent is already bound to a different transaction');
+  const result = await tipService.verifyTipTransaction(tip.toObject ? tip.toObject() : tip, txHash);
+  tip.txHash = txHash.toLowerCase();
+  if (result.pending) {
+    tip.txStatus = 'pending'; tip.confirmationCount = result.confirmations || 0;
+  } else {
+    tip.txStatus = 'confirmed'; tip.blockNumber = result.blockNumber; tip.confirmationCount = result.confirmations; tip.confirmedAt = new Date(); tip.failureReason = undefined;
+  }
+  await tip.save();
+  return { result, tip };
+}
+
+router.post('/intents', protect, requireAgeVerified, async (req, res) => {
   try {
-    if (!tipService.isExecutionEnabled()) return res.status(503).json({ error: 'Wallet payment execution is disabled until all Base Sepolia configuration is valid' });
-    const requestedAmount = req.body && req.body.amount;
-    const amount = requestedAmount === undefined ? 1000 : Number(requestedAmount);
+    await tipService.assertExecutionEnabled();
+    const key = req.get('idempotency-key');
+    if (!key || !/^[A-Za-z0-9_-]{16,128}$/.test(key)) return res.status(400).json({ error: 'A valid Idempotency-Key header is required' });
+    const existing = await Tip.findOne({ sender: req.user._id, idempotencyKey: key });
+    if (existing) return res.json({ success: true, reused: true, intent: existing, allowance: (await tipService.getAllowance(existing.senderWallet)).toString() });
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({ error: 'Amount must be a positive USDC value' });
-    }
-
-    const owner = req.user.embeddedWalletAddress || req.user.externalWalletAddress;
-    if (!owner || !ethers.isAddress(owner)) {
-      return res.status(400).json({ error: 'Tipper has no valid connected wallet' });
-    }
-
-    const privateKey = process.env.TIP_ROUTER_PRIVATE_KEY;
-    if (!privateKey) {
-      return res.status(500).json({ error: 'TipRouter private key is not configured' });
-    }
-
-    // ERC-20 approve always applies to the transaction signer (the owner).
-    let signerAddress;
-    try {
-      signerAddress = new ethers.Wallet(privateKey).address;
-    } catch (error) {
-      return res.status(500).json({ error: 'TipRouter private key is invalid' });
-    }
-
-    if (signerAddress.toLowerCase() !== owner.toLowerCase()) {
-      return res.status(403).json({
-        error: 'Configured signing wallet does not match the tipper wallet'
-      });
-    }
-
-    const approval = await tipService.approveTipRouter(privateKey, amount);
-
-    return res.json({ success: true, txHash: approval.txHash });
-  } catch (error) {
-    console.error('Approve tip transaction error:', error.message);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to approve USDC for TipRouter'
+    const [tipper, creator] = await Promise.all([User.findById(req.user._id), User.findById(req.body.creatorId)]);
+    if (!tipper || !creator) return res.status(404).json({ error: 'Tipper or creator not found' });
+    const sender = walletFor(tipper); const recipient = walletFor(creator);
+    const intent = tipService.createIntent({ sender, creator: recipient, amount: req.body.amount });
+    const creatorUnits = (BigInt(intent.amountUnits) * 8000n) / 10000n;
+    const tip = await Tip.create({
+      sender: tipper._id, creator: creator._id, post: req.body.postId || null,
+      message: String(req.body.message || '').slice(0, 500), idempotencyKey: key,
+      amount: intent.amount, amountUnits: intent.amountUnits, creatorAmount: ethers.formatUnits(creatorUnits, 6),
+      platformAmount: ethers.formatUnits(BigInt(intent.amountUnits) - creatorUnits, 6), token: 'USDC', chain: 'base-sepolia',
+      chainId: intent.chainId, tokenAddress: intent.token, routerAddress: intent.router, treasuryAddress: intent.treasury,
+      senderWallet: intent.sender, creatorWallet: intent.creator, expiresAt: new Date(Date.now() + INTENT_TTL_MS), txStatus: 'pending'
     });
-  }
-});
-
-
-// @route   POST /api/tips/send
-// @desc    Send a tip via contract (Base Sepolia)
-// @access  Private (age verified only)
-router.post('/send', protect, async (req, res) => {
-  try {
-    if (!tipService.isExecutionEnabled()) return res.status(503).json({ error: 'Wallet payment execution is disabled until all Base Sepolia configuration is valid' });
-    const { creatorId, amount, message, postId } = req.body;
-
-    if (!creatorId || !amount || parseFloat(amount) <= 0) {
-      return res.status(400).json({ error: 'Invalid creator or amount' });
-    }
-
-    const tipper = await User.findById(req.user._id);
-    const creator = await User.findById(creatorId);
-
-    if (!tipper) return res.status(404).json({ error: 'Tipper not found' });
-    if (!creator) return res.status(404).json({ error: 'Creator not found' });
-
-    // Age verification check
-    if (!tipper.isAgeVerified) {
-      return res.status(403).json({ error: 'Age verification required to send tips' });
-    }
-
-    const amountNum = parseFloat(amount);
-    
-    // Validate tip parameters (minimum $0.01)
-    const validation = tipService.validateTip(req.user._id, creatorId, amountNum);
-    if (!validation.valid) {
-      return res.status(400).json({ error: validation.errors.join(', ') });
-    }
-
-    // Get wallet addresses
-    const tipperWallet = tipper.embeddedWalletAddress || tipper.externalWalletAddress;
-    if (!tipperWallet) {
-      return res.status(400).json({ 
-        error: 'Tipper has no connected wallet',
-        needWallet: true 
-      });
-    }
-
-    const creatorWallet = creator.embeddedWalletAddress || creator.externalWalletAddress;
-    if (!creatorWallet) {
-      return res.status(400).json({
-        error: 'Creator has no wallet set up',
-        needCreatorWallet: true
-      });
-    }
-
-    // Check USDC allowance for TipRouter contract
-    let allowance;
-    try {
-      allowance = await tipService.getAllowance(tipperWallet);
-    } catch (error) {
-      console.warn('Failed to get allowance:', error.message);
-      return res.status(500).json({ error: 'Failed to check wallet balance' });
-    }
-
-    // If allowance insufficient, require approval first
-    if (parseFloat(allowance) < amountNum) {
-      return res.status(402).json({
-        success: false,
-        needApproval: true,
-        currentAllowance: parseFloat(allowance),
-        requiredAmount: amountNum,
-        message: `Approve TipRouter for ${amountNum} USDC first`
-      });
-    }
-
-    // Get private key from environment (for signing)
-    const privateKey = process.env.TIP_ROUTER_PRIVATE_KEY;
-    
-    if (!privateKey) {
-      return res.status(500).json({
-        error: 'TipRouter private key not configured',
-        needConfig: true
-      });
-    }
-
-    // Attempt to send tip via TipRouter contract
-    let txReceipt;
-    try {
-      txReceipt = await tipService.sendTip(privateKey, creatorWallet, amountNum);
-      
-      // Record successful tip in MongoDB
-      const tip = await Tip.create({
-        sender: tipper._id,
-        creator: creator._id,
-        amount: amount.toString(),
-        creatorAmount: (amountNum * 0.8).toFixed(6),
-        platformAmount: (amountNum * 0.2).toFixed(6),
-        token: 'USDC',
-        chain: 'base-sepolia',
-        post: postId || null,
-        message: message || '',
-        txStatus: 'confirmed',
-        txHash: txReceipt.txHash
-      });
-
-      res.status(201).json({
-        success: true,
-        message: 'Tip sent successfully',
-        tip: {
-          id: tip._id,
-          amount: tip.amount,
-          creatorAmount: tip.creatorAmount,
-          platformAmount: tip.platformAmount,
-          status: tip.txStatus,
-          txHash: tip.txHash,
-          createdAt: tip.createdAt
-        }
-      });
-    } catch (error) {
-      console.error('Send tip transaction error:', error);
-      
-      // Record failed attempt for debugging
-      const failedTip = await Tip.create({
-        sender: tipper._id,
-        creator: creator._id,
-        amount: amount.toString(),
-        creatorAmount: (amountNum * 0.8).toFixed(6),
-        platformAmount: (amountNum * 0.2).toFixed(6),
-        token: 'USDC',
-        chain: 'base-sepolia',
-        post: postId || null,
-        message: message || '',
-        txStatus: 'failed',
-        failureReason: error.message
-      });
-
-      res.status(500).json({
-        success: false,
-        error: 'Transaction failed on chain',
-        tipId: failedTip._id,
-        failureReason: error.message
-      });
-    }
+    const allowance = await tipService.getAllowance(intent.sender);
+    return res.status(201).json({ success: true, intent: tip, allowance: allowance.toString(), approvalRequired: allowance !== BigInt(intent.amountUnits) });
   } catch (error) {
-    console.error('Send tip error:', error);
-    res.status(500).json({ error: 'Failed to send tip' });
+    const status = error.name === 'PaymentConfigurationError' ? 503 : error.code === 11000 ? 409 : 400;
+    return res.status(status).json({ error: error.message || 'Unable to prepare tip' });
   }
 });
 
-// @route   GET /api/tips/creator/:creatorId
-// @desc    Get all tips to a creator
-// @access  Public
-router.get('/creator/:creatorId', async (req, res) => {
+router.post('/intents/:id/confirm', protect, requireAgeVerified, async (req, res) => {
   try {
-    const { creatorId } = req.params;
-
-    const tips = await Tip.find({
-      creator: creatorId,
-      txStatus: 'confirmed'
-    })
-      .populate('sender', 'username avatar')
-      .sort({ createdAt: -1 });
-
-    const totalEarnings = tips.reduce((sum, tip) => {
-      return sum + parseFloat(tip.creatorAmount || 0);
-    }, 0);
-
-    res.json({
-      success: true,
-      creatorId,
-      totalEarnings: totalEarnings.toFixed(2),
-      totalTips: tips.length,
-      tips: tips.map(tip => ({
-        id: tip._id,
-        from: tip.sender.username,
-        amount: tip.amount,
-        creatorAmount: tip.creatorAmount,
-        message: tip.message,
-        date: tip.createdAt,
-        txHash: tip.txHash
-      }))
-    });
+    const tip = await Tip.findOne({ _id: req.params.id, sender: req.user._id });
+    if (!tip) return res.status(404).json({ error: 'Tip intent not found' });
+    if (tip.txStatus === 'confirmed') return res.json({ success: true, duplicate: true, tip: publicTip(tip) });
+    if (tip.expiresAt < new Date() && !tip.txHash) return res.status(410).json({ error: 'Tip intent expired' });
+    const { result } = await confirmTip(tip, req.body.txHash);
+    return res.status(result.pending ? 202 : 200).json({ success: !result.pending, pending: result.pending, tip: publicTip(tip) });
   } catch (error) {
-    console.error('Get tips error:', error);
-    res.status(500).json({ error: 'Failed to fetch tips' });
+    if (error.code === 11000) return res.status(409).json({ error: 'Transaction was already used for another payment' });
+    return res.status(error.name === 'PaymentConfigurationError' ? 503 : 400).json({ error: error.message || 'Unable to verify transaction' });
   }
 });
 
-// @route   GET /api/tips/user
-// @desc    Get all tips sent by current user
-// @access  Private
-router.get('/user', protect, async (req, res) => {
-  try {
-    const tips = await Tip.find({
-      sender: req.user._id
-    })
-      .populate('creator', 'username avatar')
-      .sort({ createdAt: -1 });
-
-    res.json({
-      success: true,
-      totalSent: tips.length,
-      totalAmount: tips.reduce((sum, tip) => sum + parseFloat(tip.amount || 0), 0).toFixed(2),
-      tips: tips.map(tip => ({
-        id: tip._id,
-        to: tip.creator.username,
-        amount: tip.amount,
-        status: tip.txStatus,
-        date: tip.createdAt
-      }))
-    });
-  } catch (error) {
-    console.error('Get user tips error:', error);
-    res.status(500).json({ error: 'Failed to fetch tips' });
-  }
-});
-
-// @route   POST /api/tips/webhook/confirm
-// @desc    Webhook: confirm tip when contract tx is included in block
-// @access  Private (should be called from backend job/listener)
 router.post('/webhook/confirm', requireWebhookSecret, async (req, res) => {
   try {
-    const { tipId, txHash, blockNumber, status } = req.body;
-
-    if (!tipId || !txHash) {
-      return res.status(400).json({ error: 'Tip ID and tx hash required' });
-    }
-
-    const tip = await Tip.findByIdAndUpdate(tipId, {
-      txHash,
-      txStatus: status === 'success' ? 'confirmed' : 'failed',
-      confirmedAt: new Date(),
-      failureReason: status === 'success' ? null : 'Transaction failed on chain'
-    }, { new: true });
-
-    if (!tip) {
-      return res.status(404).json({ error: 'Tip not found' });
-    }
-
-    res.json({
-      success: true,
-      tip: {
-        id: tip._id,
-        status: tip.txStatus,
-        txHash: tip.txHash
-      }
-    });
-  } catch (error) {
-    console.error('Confirm tip error:', error);
-    res.status(500).json({ error: 'Failed to confirm tip' });
-  }
+    const tip = await Tip.findById(req.body.tipId);
+    if (!tip) return res.status(404).json({ error: 'Tip not found' });
+    const { result } = await confirmTip(tip, req.body.txHash);
+    return res.status(result.pending ? 202 : 200).json({ success: !result.pending, pending: result.pending, tip: publicTip(tip) });
+  } catch (error) { return res.status(400).json({ error: error.message || 'Unable to verify transaction' }); }
 });
 
-// @route   GET /api/tips/contract/status
-// @desc    Check if TipRouter service is configured
-// @access  Public
-router.get('/contract/status', async (req, res) => {
+router.get('/creator/:creatorId', async (req, res) => {
   try {
-    const status = tipService.getStatus();
-    
-    res.json({
-      success: true,
-      contract: status,
-      note: status.configured ? 'TipRouter is ready for use' : 'Configure env vars to enable tipping'
-    });
-  } catch (error) {
-    console.error('Contract status error:', error);
-    res.status(500).json({ error: 'Failed to check contract status' });
-  }
+    const tips = await Tip.find({ creator: req.params.creatorId, txStatus: 'confirmed' }).populate('sender', 'username avatar').sort({ createdAt: -1 });
+    const totalUnits = tips.reduce((sum, tip) => sum + BigInt(tip.amountUnits || '0'), 0n);
+    return res.json({ success: true, creatorId: req.params.creatorId, totalEarnings: ethers.formatUnits(totalUnits, 6), totalTips: tips.length, tips });
+  } catch { return res.status(500).json({ error: 'Failed to fetch tips' }); }
+});
+
+router.get('/user', protect, async (req, res) => {
+  try { const tips = await Tip.find({ sender: req.user._id }).populate('creator', 'username avatar').sort({ createdAt: -1 }); return res.json({ success: true, tips }); }
+  catch { return res.status(500).json({ error: 'Failed to fetch tips' }); }
+});
+
+router.get('/contract/status', async (_req, res) => {
+  try {
+    if (tipService.executionRequested) await tipService.verifyConfiguration();
+    return res.json({ success: true, contract: tipService.getStatus() });
+  } catch (error) { return res.status(503).json({ success: false, contract: tipService.getStatus(), error: error.message }); }
 });
 
 module.exports = router;

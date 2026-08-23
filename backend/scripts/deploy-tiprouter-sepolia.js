@@ -1,63 +1,26 @@
-/**
- * Deploy TipRouter to Base Sepolia (testnet)
- * 
- * SAFETY RULES:
- * - NEVER deploy to mainnet with this script
- * - Use dev wallet from env vars only
- * - Fund wallet from Sepolia faucet before deployment
- * - All addresses from env vars, never hardcoded
- * 
- * Environment Variables Required:
- * - TIP_ROUTER_PRIVATE_KEY: Dev wallet private key (never commit)
- * - USDC_SEPOLIA_ADDRESS: Circle's USDC on Base Sepolia
- * - TIP_ROUTER_TREASURY_ADDRESS: Platform treasury wallet
- * - BASE_SEPOLIA_RPC_URL: Base Sepolia RPC endpoint
- */
-
+/** Base Sepolia-only TipRouter deployment. Use a disposable testnet deployer. */
 require('dotenv').config();
+const { ethers: ethersLib } = require('ethers');
 
-const privateKey = process.env.TIP_ROUTER_PRIVATE_KEY;
-const usdcAddress = process.env.USDC_SEPOLIA_ADDRESS;
-const treasuryAddress = process.env.TIP_ROUTER_TREASURY_ADDRESS;
-const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL;
-
-if (!privateKey || !usdcAddress || !treasuryAddress || !rpcUrl) {
-  console.error('❌ ERROR: Missing required environment variables');
-  console.error('   TIP_ROUTER_PRIVATE_KEY: Dev wallet private key');
-  console.error('   USDC_SEPOLIA_ADDRESS: Circle USDC on Base Sepolia');
-  console.error('   TIP_ROUTER_TREASURY_ADDRESS: Platform treasury wallet');
-  console.error('   BASE_SEPOLIA_RPC_URL: Base Sepolia RPC endpoint');
-  console.error('\nSet these in your .env file, never commit them.');
-  process.exit(1);
+async function main() {
+  const required = ['TIP_ROUTER_PRIVATE_KEY', 'USDC_SEPOLIA_ADDRESS', 'TIP_ROUTER_TREASURY_ADDRESS', 'BASE_SEPOLIA_RPC_URL'];
+  const missing = required.filter(name => !process.env[name]);
+  if (missing.length) throw new Error(`Missing: ${missing.join(', ')}`);
+  if (process.env.USDC_SEPOLIA_ADDRESS.toLowerCase() !== '0x036cbd53842c5426634e7929541ec2318f3dcf7e') throw new Error('Refusing non-official Base Sepolia USDC');
+  if (!ethersLib.isAddress(process.env.TIP_ROUTER_TREASURY_ADDRESS) || process.env.TIP_ROUTER_TREASURY_ADDRESS === ethersLib.ZeroAddress) throw new Error('Invalid treasury');
+  const hre = await import('hardhat');
+  const network = await hre.default.ethers.provider.getNetwork();
+  if (network.chainId !== 84532n) throw new Error(`Refusing chain ${network.chainId}; expected Base Sepolia 84532`);
+  const usdcCode = await hre.default.ethers.provider.getCode(process.env.USDC_SEPOLIA_ADDRESS);
+  if (usdcCode === '0x') throw new Error('USDC has no bytecode');
+  const factory = await hre.default.ethers.getContractFactory('TipRouter');
+  const contract = await factory.deploy(process.env.USDC_SEPOLIA_ADDRESS, process.env.TIP_ROUTER_TREASURY_ADDRESS);
+  await contract.waitForDeployment();
+  const receipt = await contract.deploymentTransaction().wait(3);
+  const address = await contract.getAddress();
+  if ((await contract.usdc()).toLowerCase() !== process.env.USDC_SEPOLIA_ADDRESS.toLowerCase()) throw new Error('Deployed USDC mismatch');
+  if ((await contract.treasury()).toLowerCase() !== process.env.TIP_ROUTER_TREASURY_ADDRESS.toLowerCase()) throw new Error('Deployed treasury mismatch');
+  console.log(JSON.stringify({ chainId: Number(network.chainId), contractAddress: address, transactionHash: receipt.hash, blockNumber: receipt.blockNumber }, null, 2));
 }
 
-if (process.env.NODE_ENV === 'production') {
-  console.error('❌ SAFETY BLOCK: This script can only run in development/test!');
-  console.error('   Mainnet deployments must be manual and verified.');
-  process.exit(1);
-}
-
-console.log('🚀 Deploying TipRouter to Base Sepolia...');
-console.log(`   RPC: ${rpcUrl}`);
-console.log(`   USDC: ${usdcAddress}`);
-console.log(`   Treasury: ${treasuryAddress}`);
-console.log(`   Network: Base Sepolia (testnet only)`);
-console.log('');
-
-// Hardhat deployment:
-// const { ethers } = require('hardhat');
-// 
-// const TipRouter = await ethers.getContractFactory("TipRouter");
-// const contract = await TipRouter.deploy(usdcAddress, treasuryAddress);
-// await contract.waitForDeployment();
-// 
-// console.log(`✅ TipRouter deployed to: ${await contract.getAddress()}`);
-
-console.log('✅ Deployment script ready for Hardhat/Foundry');
-console.log('');
-console.log('To deploy with Hardhat:');
-console.log('   npx hardhat run scripts/deploy-tiprouter-sepolia.js --network baseSepolia');
-console.log('');
-console.log('Constructor arguments (in order):');
-console.log(`   1. USDC Address:    ${usdcAddress}`);
-console.log(`   2. Treasury Address: ${treasuryAddress}`);
+main().catch(error => { console.error(error.message); process.exitCode = 1; });

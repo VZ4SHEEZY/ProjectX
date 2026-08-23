@@ -18,6 +18,7 @@ const tipSchema = new mongoose.Schema({
     type: String,
     required: true  // Store as string to avoid floating point issues
   },
+  amountUnits: { type: String, required: true },
   token: {
     type: String,
     default: 'USDC'
@@ -43,6 +44,16 @@ const tipSchema = new mongoose.Schema({
     unique: true,
     sparse: true  // Allow null for failed transactions
   },
+  idempotencyKey: { type: String, required: true },
+  senderWallet: { type: String, required: true },
+  creatorWallet: { type: String, required: true },
+  tokenAddress: { type: String, required: true },
+  routerAddress: { type: String, required: true },
+  treasuryAddress: { type: String, required: true },
+  chainId: { type: Number, required: true, default: 84532 },
+  expiresAt: { type: Date, required: true },
+  blockNumber: Number,
+  confirmationCount: Number,
   txStatus: {
     type: String,
     enum: ['pending', 'confirmed', 'failed'],
@@ -80,6 +91,10 @@ const tipSchema = new mongoose.Schema({
 // Index for queries
 tipSchema.index({ creator: 1, createdAt: -1 });
 tipSchema.index({ sender: 1, createdAt: -1 });
+tipSchema.index(
+  { sender: 1, idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
+);
 
 // Calculate 80/20 split before saving
 tipSchema.pre('save', function(next) {

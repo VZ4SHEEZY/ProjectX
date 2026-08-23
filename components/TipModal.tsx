@@ -3,6 +3,7 @@ import axios from 'axios';
 import { AlertTriangle, CheckCircle, Cpu, Loader, X } from 'lucide-react';
 import GlitchButton from './GlitchButton';
 import api from '../services/api';
+import { BrowserProvider, Contract } from 'ethers';
 
 interface TipModalProps {
   isOpen: boolean;
@@ -19,7 +20,25 @@ interface TipResponse {
   error?: string;
   failureReason?: string;
   tip?: { txHash?: string };
+  intent?: PaymentIntent;
+  allowance?: string;
+  approvalRequired?: boolean;
 }
+
+interface PaymentIntent {
+  _id: string;
+  chainId: number;
+  tokenAddress: string;
+  routerAddress: string;
+  treasuryAddress: string;
+  senderWallet: string;
+  creatorWallet: string;
+  amount: string;
+  amountUnits: string;
+}
+
+const USDC_ABI = ['function approve(address spender,uint256 amount) returns (bool)'];
+const ROUTER_ABI = ['function sendTip(address creator,uint256 amount)'];
 
 const getErrorMessage = (error: unknown): string => {
   if (axios.isAxiosError(error)) {
@@ -36,6 +55,7 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
   const [successMessage, setSuccessMessage] = useState('');
   const [txHash, setTxHash] = useState('');
   const [needApproval, setNeedApproval] = useState(false);
+  const [intent, setIntent] = useState<PaymentIntent | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -45,20 +65,42 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
       setSuccessMessage('');
       setTxHash('');
       setNeedApproval(false);
+      setIntent(null);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const sendTip = async () => {
-    const numericAmount = Number(amount);
+  const getWallet = async (payment: PaymentIntent) => {
+    if (!window.ethereum) throw new Error('A browser wallet is required.');
+    const provider = new BrowserProvider(window.ethereum);
+    const network = await provider.getNetwork();
+    if (Number(network.chainId) !== payment.chainId) {
+      try {
+        await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x14a34' }] });
+      } catch (error) {
+        const code = (error as { code?: number }).code;
+        if (code !== 4902) throw error;
+        await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [{
+          chainId: '0x14a34', chainName: 'Base Sepolia', nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+          rpcUrls: ['https://sepolia.base.org'], blockExplorerUrls: ['https://sepolia-explorer.base.org']
+        }] });
+      }
+    }
+    const signer = await provider.getSigner();
+    const address = await signer.getAddress();
+    if (address.toLowerCase() !== payment.senderWallet.toLowerCase()) throw new Error('Connected wallet does not match your verified CyberDope wallet.');
+    return signer;
+  };
+
+  const prepareTip = async () => {
 
     if (!creatorId) {
       setStatus('error');
       setErrorMessage('No creator selected. Close this window and try again.');
       return;
     }
-    if (!Number.isFinite(numericAmount) || numericAmount < 0.01) {
+    if (!/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/.test(amount) || Number(amount) < 0.01) {
       setStatus('error');
       setErrorMessage('Enter an amount of at least 0.01 USDC.');
       return;
@@ -69,31 +111,17 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
     setNeedApproval(false);
 
     try {
-      const response = await api.post('/tips/send', { creatorId, amount });
+      const idempotencyKey = crypto.randomUUID();
+      const response = await api.post('/tips/intents', { creatorId, amount }, { headers: { 'Idempotency-Key': idempotencyKey } });
       const data = response.data as TipResponse;
-
-      if (data.needApproval) {
-        setNeedApproval(true);
-        setErrorMessage(data.error || data.message || 'USDC approval is required to send this tip.');
-        setStatus('error');
-        return;
-      }
-      if (!data.success) {
-        throw new Error(data.error || data.message || 'The tip was not completed.');
-      }
-
-      setTxHash(data.tip?.txHash || '');
-      setSuccessMessage(data.message || 'Tip sent successfully.');
-      setStatus('success');
+      if (!data.success || !data.intent) throw new Error(data.error || 'The payment intent could not be prepared.');
+      setIntent(data.intent);
+      setNeedApproval(Boolean(data.approvalRequired));
+      setStatus('idle');
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const data = error.response?.data as TipResponse | undefined;
-        if (data?.needApproval) {
-          setNeedApproval(true);
-          setErrorMessage(data.error || data.message || 'USDC approval is required to send this tip.');
-          setStatus('error');
-          return;
-        }
+        if (data?.needApproval) setNeedApproval(true);
       }
       setStatus('error');
       setErrorMessage(getErrorMessage(error));
@@ -101,12 +129,14 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
   };
 
   const approveExactAmount = async () => {
-    const numericAmount = Number(amount);
-    if (!Number.isFinite(numericAmount) || numericAmount < 0.01) return;
+    if (!intent) return;
+    if (!window.confirm(`Approve exactly ${intent.amount} USDC for CyberDope TipRouter on Base Sepolia? This is a separate wallet transaction.`)) return;
     setStatus('sending');
     setErrorMessage('');
     try {
-      await api.post('/tips/approve', { amount: numericAmount });
+      const signer = await getWallet(intent);
+      const tx = await new Contract(intent.tokenAddress, USDC_ABI, signer).approve(intent.routerAddress, BigInt(intent.amountUnits));
+      await tx.wait(1);
       setStatus('idle');
       setNeedApproval(false);
     } catch (error) {
@@ -115,9 +145,28 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
     }
   };
 
+  const executeTip = async () => {
+    if (!intent) return;
+    if (!window.confirm(`Send exactly ${intent.amount} USDC to the selected creator through CyberDope TipRouter on Base Sepolia?`)) return;
+    setStatus('sending'); setErrorMessage('');
+    try {
+      const signer = await getWallet(intent);
+      const tx = await new Contract(intent.routerAddress, ROUTER_ABI, signer).sendTip(intent.creatorWallet, BigInt(intent.amountUnits));
+      setTxHash(tx.hash);
+      await tx.wait(1);
+      let response = await api.post(`/tips/intents/${intent._id}/confirm`, { txHash: tx.hash });
+      for (let attempt = 0; response.status === 202 && attempt < 8; attempt += 1) {
+        await new Promise(resolve => window.setTimeout(resolve, 4000));
+        response = await api.post(`/tips/intents/${intent._id}/confirm`, { txHash: tx.hash });
+      }
+      if (response.status === 202) throw new Error('Transaction is mined but still awaiting 3 confirmations. It is safe to check again shortly.');
+      setSuccessMessage('Tip verified on Base Sepolia.'); setStatus('success');
+    } catch (error) { setStatus('error'); setErrorMessage(getErrorMessage(error)); }
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    await sendTip();
+    if (intent) await executeTip(); else await prepareTip();
   };
 
   const busy = status === 'sending';
@@ -153,7 +202,7 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
                 <h3 className="text-xl font-bold tracking-widest">TIP FAILED</h3>
                 <p className="mt-2 text-xs text-white">{errorMessage}</p>
               </div>
-              {needApproval ? (
+              {needApproval && intent ? (
                 <GlitchButton onClick={approveExactAmount}>APPROVE EXACT TIP AMOUNT</GlitchButton>
               ) : (
                 <GlitchButton variant="danger" onClick={() => { setStatus('idle'); setErrorMessage(''); }}>TRY AGAIN</GlitchButton>
@@ -179,7 +228,12 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
                 <label htmlFor="tip-amount" className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-gray-500">Amount (USDC)</label>
                 <input id="tip-amount" type="number" min="0.01" step="0.01" inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)} className="w-full border-none bg-transparent py-2 text-center font-mono text-5xl text-[#39FF14] outline-none placeholder:text-gray-800" placeholder="1.00" />
               </div>
-              <GlitchButton type="submit" fullWidth className="h-12 text-md">SEND USDC TIP</GlitchButton>
+              {intent && <div className="rounded border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs text-yellow-200">Verified intent: {intent.amount} USDC · Base Sepolia · separate wallet confirmation required.</div>}
+              {intent && needApproval ? (
+                <GlitchButton type="button" onClick={approveExactAmount} fullWidth className="h-12 text-md">APPROVE EXACT TIP AMOUNT</GlitchButton>
+              ) : (
+                <GlitchButton type="submit" fullWidth className="h-12 text-md">{intent ? 'CONFIRM IN WALLET' : 'VERIFY PAYMENT DETAILS'}</GlitchButton>
+              )}
             </form>
           )}
         </div>

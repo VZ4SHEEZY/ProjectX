@@ -3,7 +3,6 @@ const router = express.Router();
 const { protect: auth } = require('../middleware/auth');
 const Stream = require('../models/Stream');
 const User = require('../models/User');
-const Tip = require('../models/Tip');
 
 // Get all active streams
 router.get('/', async (req, res) => {
@@ -218,45 +217,7 @@ router.post('/:id/chat', auth, async (req, res) => {
 
 // Send tip during stream
 router.post('/:id/tip', auth, async (req, res) => {
-  try {
-    const { amount, message } = req.body;
-    const stream = await Stream.findById(req.params.id);
-    
-    if (!stream) {
-      return res.status(404).json({ error: 'Stream not found' });
-    }
-    
-    // Create tip
-    const tip = new Tip({
-      sender: req.user._id,
-      recipient: stream.streamer,
-      amount,
-      message,
-      type: 'stream',
-      streamId: stream._id
-    });
-    
-    await tip.save();
-    
-    // Add to stream tips
-    stream.tips.push(tip._id);
-    stream.totalTips = (stream.totalTips || 0) + amount;
-    await stream.save();
-    
-    // Update recipient's earnings
-    await User.findByIdAndUpdate(stream.streamer, {
-      $inc: { totalEarnings: amount }
-    });
-    
-    res.json({
-      success: true,
-      tip,
-      message: 'Tip sent successfully'
-    });
-  } catch (error) {
-    console.error('Stream Tip Error:', error);
-    res.status(500).json({ error: 'Failed to send tip' });
-  }
+  return res.status(410).json({ error: 'Legacy stream tips are disabled; use the verified Base Sepolia payment intent flow' });
 });
 
 // Get stream chat history
