@@ -25,6 +25,7 @@ class TipService {
     this.rpcUrl = process.env.BASE_SEPOLIA_RPC_URL;
     this.contractAddress = process.env.TIP_ROUTER_CONTRACT_ADDRESS;
     this.usdcAddress = process.env.USDC_SEPOLIA_ADDRESS;
+    this.recipientAddress = process.env.TIP_ROUTER_TREASURY_ADDRESS;
 
     // Contract ABIs
     this.tipRouterABI = [
@@ -51,11 +52,7 @@ class TipService {
     }
 
     // Check config status
-    const isConfigured = !!(
-      this.rpcUrl &&
-      this.contractAddress &&
-      this.usdcAddress
-    );
+    const isConfigured = this.isExecutionEnabled();
 
     if (!isConfigured) {
       console.warn('TipService not fully configured. USDC tipping will fail.');
@@ -65,6 +62,21 @@ class TipService {
         usdcAddress: !this.usdcAddress
       });
     }
+  }
+
+  isExecutionEnabled() {
+    try {
+      const rpc = new URL(this.rpcUrl || '');
+      return rpc.protocol === 'https:' &&
+        ethers.isAddress(this.contractAddress || '') && this.contractAddress !== ethers.ZeroAddress &&
+        ethers.isAddress(this.usdcAddress || '') && this.usdcAddress !== ethers.ZeroAddress &&
+        ethers.isAddress(this.recipientAddress || '') && this.recipientAddress !== ethers.ZeroAddress &&
+        /^0x[0-9a-fA-F]{64}$/.test(process.env.TIP_ROUTER_PRIVATE_KEY || '');
+    } catch { return false; }
+  }
+
+  assertExecutionEnabled() {
+    if (!this.isExecutionEnabled()) throw new Error('Wallet payment execution is disabled until all Base Sepolia configuration is valid');
   }
 
   /**
@@ -124,6 +136,7 @@ class TipService {
    * @param {number} amountUsdc - Amount in USDC (e.g., 5 for $5.00)
    */
   async sendTip(walletPrivateKey, creatorAddress, amountUsdc) {
+    this.assertExecutionEnabled();
     if (!this.provider || !this.contractAddress) {
       throw new Error('TipService not configured');
     }
@@ -161,6 +174,7 @@ class TipService {
    * @param {number} amountUsdc - Amount to approve (e.g., 100 for $100.00)
    */
   async approveTipRouter(walletPrivateKey, amountUsdc) {
+    this.assertExecutionEnabled();
     if (!this.provider || !this.usdcAddress || !this.contractAddress) {
       throw new Error('TipService not configured');
     }
@@ -218,14 +232,11 @@ class TipService {
    */
   getStatus() {
     return {
-      configured: !!(
-        this.rpcUrl &&
-        this.contractAddress &&
-        this.usdcAddress
-      ),
+      configured: this.isExecutionEnabled(),
       rpcUrl: this.rpcUrl || null,
       contractAddress: this.contractAddress || null,
       usdcAddress: this.usdcAddress || null,
+      recipientAddress: this.recipientAddress || null,
       network: 'base-sepolia'
     };
   }

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Code, Eye, AlertTriangle } from 'lucide-react';
+import { Code } from 'lucide-react';
 
 interface CustomCodeWidgetProps {
   initialCode?: string;
@@ -47,11 +47,7 @@ const CustomCodeWidget: React.FC<CustomCodeWidgetProps> = ({ initialCode }) => {
         </div>
       ) : (
         <>
-           {/* Rendered Content */}
-           <div 
-             className="w-full h-full overflow-hidden"
-             dangerouslySetInnerHTML={{ __html: code }}
-           />
+           <pre className="h-full w-full overflow-auto whitespace-pre-wrap p-4 font-mono text-xs text-[#39FF14]">{code}</pre>
            
            {/* Edit Trigger */}
            <button 
@@ -64,7 +60,7 @@ const CustomCodeWidget: React.FC<CustomCodeWidgetProps> = ({ initialCode }) => {
            
            {/* Warning Label */}
            <div className="absolute bottom-1 right-1 text-[8px] text-gray-800 font-mono pointer-events-none group-hover:opacity-0 transition-opacity">
-              CUSTOM_SCRIPT
+              SAFE_TEXT_PREVIEW
            </div>
         </>
       )}

@@ -46,6 +46,7 @@ const tipService = require('../services/tip');
 // @access  Private (age verified only)
 router.post('/approve', protect, requireAgeVerified, async (req, res) => {
   try {
+    if (!tipService.isExecutionEnabled()) return res.status(503).json({ error: 'Wallet payment execution is disabled until all Base Sepolia configuration is valid' });
     const requestedAmount = req.body && req.body.amount;
     const amount = requestedAmount === undefined ? 1000 : Number(requestedAmount);
 
@@ -95,6 +96,7 @@ router.post('/approve', protect, requireAgeVerified, async (req, res) => {
 // @access  Private (age verified only)
 router.post('/send', protect, async (req, res) => {
   try {
+    if (!tipService.isExecutionEnabled()) return res.status(503).json({ error: 'Wallet payment execution is disabled until all Base Sepolia configuration is valid' });
     const { creatorId, amount, message, postId } = req.body;
 
     if (!creatorId || !amount || parseFloat(amount) <= 0) {

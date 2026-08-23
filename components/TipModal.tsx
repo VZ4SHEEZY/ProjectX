@@ -100,6 +100,21 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
     }
   };
 
+  const approveExactAmount = async () => {
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount < 0.01) return;
+    setStatus('sending');
+    setErrorMessage('');
+    try {
+      await api.post('/tips/approve', { amount: numericAmount });
+      setStatus('idle');
+      setNeedApproval(false);
+    } catch (error) {
+      setStatus('error');
+      setErrorMessage(getErrorMessage(error));
+    }
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     await sendTip();
@@ -139,7 +154,7 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
                 <p className="mt-2 text-xs text-white">{errorMessage}</p>
               </div>
               {needApproval ? (
-                <GlitchButton onClick={sendTip}>APPROVE USDC FOR TIPPING</GlitchButton>
+                <GlitchButton onClick={approveExactAmount}>APPROVE EXACT TIP AMOUNT</GlitchButton>
               ) : (
                 <GlitchButton variant="danger" onClick={() => { setStatus('idle'); setErrorMessage(''); }}>TRY AGAIN</GlitchButton>
               )}

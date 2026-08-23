@@ -1,5 +1,10 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&display=swap');
+@import 'react-grid-layout/css/styles.css';
+@import 'react-resizable/css/styles.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* 
    CYBERDOPE GLOBAL STYLES 
