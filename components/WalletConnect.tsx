@@ -60,6 +60,19 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({ onConnect, onDisco
         return;
       }
 
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+      if (chainId !== '0x14a34') {
+        try {
+          await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x14a34' }] });
+        } catch (switchError: any) {
+          if (switchError?.code !== 4902) throw switchError;
+          await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [{
+            chainId: '0x14a34', chainName: 'Base Sepolia', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+            rpcUrls: ['https://sepolia.base.org'], blockExplorerUrls: ['https://sepolia.basescan.org']
+          }] });
+        }
+      }
+
       // Get nonce from backend
       const nonceResponse = await walletAPI.getNonce(address);
       
@@ -71,7 +84,7 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({ onConnect, onDisco
       });
 
       // Verify with backend - check response before using
-      const verifyResponse = await walletAPI.verify(address, signature, message);
+      const verifyResponse = await walletAPI.verify(address, signature, nonceResponse.challengeId);
       if (!verifyResponse?.token) {
         throw new Error('Backend failed to verify wallet signature');
       }

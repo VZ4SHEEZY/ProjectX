@@ -231,22 +231,7 @@ router.get('/me', protect, async (req, res) => {
 // @desc    Connect wallet
 // @access  Private
 router.post('/wallet', protect, async (req, res) => {
-  try {
-    const { walletAddress } = req.body;
-    if (typeof walletAddress !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
-      return res.status(400).json({ error: 'Invalid wallet address' });
-    }
-    req.user.walletAddress = walletAddress;
-    await req.user.save();
-
-    res.json({
-      success: true,
-      message: 'Wallet connected successfully',
-      walletAddress
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Server error' });
-  }
+  res.status(410).json({ error: 'Use the signed /api/wallet/nonce and /api/wallet/connect flow' });
 });
 
 // @route   POST /api/auth/verify-age

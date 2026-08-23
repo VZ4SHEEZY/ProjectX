@@ -8,14 +8,14 @@ export const walletAPI = {
   },
 
   // Verify wallet signature
-  verify: async (walletAddress: string, signature: string, message: string) => {
-    const response = await api.post('/wallet/verify', { walletAddress, signature, message });
+  verify: async (walletAddress: string, signature: string, challengeId: string) => {
+    const response = await api.post('/wallet/verify', { walletAddress, signature, challengeId });
     return response.data;
   },
 
   // Connect wallet to existing account
-  connect: async (walletAddress: string, signature: string) => {
-    const response = await api.post('/wallet/connect', { walletAddress, signature });
+  connect: async (walletAddress: string, signature: string, challengeId: string) => {
+    const response = await api.post('/wallet/connect', { walletAddress, signature, challengeId });
     return response.data;
   },
 
