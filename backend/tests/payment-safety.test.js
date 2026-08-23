@@ -6,9 +6,10 @@ const { TipService, parseUsdcAmount } = require('../services/tip');
 const Tip = require('../models/Tip');
 
 const validEnv = {
-  PAYMENT_EXECUTION_ENABLED: 'true', BASE_SEPOLIA_RPC_URL: 'https://sepolia.base.org',
+  PAYMENT_EXECUTION_ENABLED: 'true', BASE_SEPOLIA_RPC_URL: 'https://base-sepolia.example.test/v1/test',
   USDC_SEPOLIA_ADDRESS: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
   TIP_ROUTER_CONTRACT_ADDRESS: '0x1111111111111111111111111111111111111111',
+  TIP_ROUTER_CODE_HASH: `0x${'a'.repeat(64)}`,
   TIP_ROUTER_TREASURY_ADDRESS: '0x2222222222222222222222222222222222222222'
 };
 

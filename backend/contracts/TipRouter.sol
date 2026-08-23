@@ -32,6 +32,8 @@ contract TipRouter {
     IERC20 public immutable usdc;
     address public treasury;
     address public owner;
+    address public pendingOwner;
+    uint256 private unlocked = 1;
 
     uint256 public constant CREATOR_BPS = 8000; // 80.00%
     uint256 public constant BPS_DENOMINATOR = 10000;
@@ -48,6 +50,7 @@ contract TipRouter {
     );
 
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
+    event OwnershipTransferStarted(address indexed currentOwner, address indexed pendingOwner);
     event OwnershipTransferred(address indexed oldOwner, address indexed newOwner);
     event StuckFundsRescued(address indexed token, address indexed to, uint256 amount);
 
@@ -56,6 +59,8 @@ contract TipRouter {
     constructor(address _usdc, address _treasury) {
         require(_usdc != address(0), "Invalid USDC address");
         require(_treasury != address(0), "Invalid treasury address");
+        require(_usdc.code.length > 0, "USDC has no bytecode");
+        require(_treasury != _usdc, "Treasury cannot be USDC");
         usdc = IERC20(_usdc);
         treasury = _treasury;
         owner = msg.sender;
@@ -71,24 +76,23 @@ contract TipRouter {
      * never has custody of funds at any point.
      */
     function sendTip(address creator, uint256 amount) external {
+        require(unlocked == 1, "Reentrant call");
+        unlocked = 0;
         require(creator != address(0), "Invalid creator address");
         require(creator != treasury, "Creator cannot be treasury");
+        require(creator != address(this), "Creator cannot be router");
+        require(creator != address(usdc), "Creator cannot be USDC");
         require(amount >= 10000, "Tip below minimum (0.01 USDC)");
         require(usdc.allowance(msg.sender, address(this)) == amount, "Approval must equal tip amount");
 
         uint256 creatorAmount = (amount * CREATOR_BPS) / BPS_DENOMINATOR;
         uint256 platformAmount = amount - creatorAmount; // exact, dust goes to platform
 
-        require(
-            usdc.transferFrom(msg.sender, creator, creatorAmount),
-            "Transfer to creator failed"
-        );
-        require(
-            usdc.transferFrom(msg.sender, treasury, platformAmount),
-            "Transfer to treasury failed"
-        );
+        _safeTransferFrom(msg.sender, creator, creatorAmount);
+        _safeTransferFrom(msg.sender, treasury, platformAmount);
 
         emit TipSent(msg.sender, creator, amount, creatorAmount, platformAmount, block.timestamp);
+        unlocked = 1;
     }
 
     // ============ Admin ============
@@ -100,14 +104,26 @@ contract TipRouter {
 
     function setTreasury(address newTreasury) external onlyOwner {
         require(newTreasury != address(0), "Invalid treasury address");
+        require(newTreasury != address(this), "Treasury cannot be router");
+        require(newTreasury != address(usdc), "Treasury cannot be USDC");
+        require(newTreasury != treasury, "Treasury unchanged");
         emit TreasuryUpdated(treasury, newTreasury);
         treasury = newTreasury;
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "Invalid owner address");
-        emit OwnershipTransferred(owner, newOwner);
-        owner = newOwner;
+        require(newOwner != owner, "Owner unchanged");
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner, "Caller is not pending owner");
+        address oldOwner = owner;
+        owner = msg.sender;
+        pendingOwner = address(0);
+        emit OwnershipTransferred(oldOwner, msg.sender);
     }
 
     /**
@@ -116,12 +132,27 @@ contract TipRouter {
      * user mistakes. Uses transfer(), not transferFrom().
      */
     function rescueTokens(address token, address to) external onlyOwner {
+        require(token != address(0) && token.code.length > 0, "Invalid token");
         require(to != address(0), "Invalid recipient");
         IERC20 t = IERC20(token);
         uint256 balance = t.balanceOf(address(this));
         require(balance > 0, "No funds to rescue");
-        require(t.transfer(to, balance), "Rescue transfer failed");
+        _safeTransfer(token, to, balance);
         emit StuckFundsRescued(token, to, balance);
+    }
+
+    function _safeTransferFrom(address from, address to, uint256 amount) private {
+        (bool success, bytes memory data) = address(usdc).call(
+            abi.encodeWithSelector(IERC20.transferFrom.selector, from, to, amount)
+        );
+        require(success && (data.length == 0 || abi.decode(data, (bool))), "USDC transferFrom failed");
+    }
+
+    function _safeTransfer(address token, address to, uint256 amount) private {
+        (bool success, bytes memory data) = token.call(
+            abi.encodeWithSelector(IERC20.transfer.selector, to, amount)
+        );
+        require(success && (data.length == 0 || abi.decode(data, (bool))), "Token transfer failed");
     }
 
     // ============ View ============

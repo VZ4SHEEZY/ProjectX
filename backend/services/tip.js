@@ -33,6 +33,7 @@ class TipService {
     this.env = env;
     this.rpcUrl = env.BASE_SEPOLIA_RPC_URL;
     this.contractAddress = env.TIP_ROUTER_CONTRACT_ADDRESS;
+    this.contractCodeHash = env.TIP_ROUTER_CODE_HASH;
     this.usdcAddress = env.USDC_SEPOLIA_ADDRESS;
     this.treasuryAddress = env.TIP_ROUTER_TREASURY_ADDRESS;
     this.executionRequested = env.PAYMENT_EXECUTION_ENABLED === 'true';
@@ -42,13 +43,19 @@ class TipService {
   }
   validateStaticConfiguration() {
     const errors = [];
-    try { const rpc = new URL(this.rpcUrl || ''); if (rpc.protocol !== 'https:') errors.push('BASE_SEPOLIA_RPC_URL must use HTTPS'); }
+    try {
+      const rpc = new URL(this.rpcUrl || '');
+      if (rpc.protocol !== 'https:') errors.push('BASE_SEPOLIA_RPC_URL must use HTTPS');
+      if (rpc.hostname === 'sepolia.base.org') errors.push('BASE_SEPOLIA_RPC_URL must be a dedicated RPC');
+    }
     catch { errors.push('BASE_SEPOLIA_RPC_URL is missing or malformed'); }
     for (const [name, value] of [['TIP_ROUTER_CONTRACT_ADDRESS', this.contractAddress], ['USDC_SEPOLIA_ADDRESS', this.usdcAddress], ['TIP_ROUTER_TREASURY_ADDRESS', this.treasuryAddress]]) {
       if (!ethers.isAddress(value || '') || value === ethers.ZeroAddress) errors.push(`${name} is missing or malformed`);
     }
     if (ethers.isAddress(this.usdcAddress || '') && !sameAddress(this.usdcAddress, OFFICIAL_BASE_SEPOLIA_USDC)) errors.push('USDC_SEPOLIA_ADDRESS is not Circle Base Sepolia USDC');
+    if (!/^0x[0-9a-fA-F]{64}$/.test(this.contractCodeHash || '')) errors.push('TIP_ROUTER_CODE_HASH is missing or malformed');
     if (ethers.isAddress(this.contractAddress || '') && ethers.isAddress(this.treasuryAddress || '') && sameAddress(this.contractAddress, this.treasuryAddress)) errors.push('TipRouter and treasury must be different addresses');
+    if (ethers.isAddress(this.usdcAddress || '') && ethers.isAddress(this.treasuryAddress || '') && sameAddress(this.usdcAddress, this.treasuryAddress)) errors.push('USDC and treasury must be different addresses');
     return { valid: errors.length === 0, errors };
   }
   getProvider() {
@@ -66,6 +73,7 @@ class TipService {
     const [routerCode, usdcCode] = await Promise.all([provider.getCode(this.contractAddress), provider.getCode(this.usdcAddress)]);
     if (routerCode === '0x') throw new PaymentConfigurationError('TipRouter has no bytecode on Base Sepolia');
     if (usdcCode === '0x') throw new PaymentConfigurationError('USDC has no bytecode on Base Sepolia');
+    if (ethers.keccak256(routerCode).toLowerCase() !== this.contractCodeHash.toLowerCase()) throw new PaymentConfigurationError('TipRouter runtime bytecode hash does not match verified deployment');
     const router = new ethers.Contract(this.contractAddress, TIP_ROUTER_ABI, provider);
     const usdc = new ethers.Contract(this.usdcAddress, USDC_ABI, provider);
     const [onchainUsdc, onchainTreasury, creatorBps, decimals, symbol] = await Promise.all([router.usdc(), router.treasury(), router.CREATOR_BPS(), usdc.decimals(), usdc.symbol()]);
@@ -108,9 +116,12 @@ class TipService {
     if (!tx || tx.chainId !== BASE_SEPOLIA_CHAIN_ID) throw new PaymentVerificationError('Transaction is on the wrong chain');
     const decoded = this.tipInterface.parseTransaction({ data: tx.data, value: tx.value });
     if (!decoded || decoded.name !== 'sendTip' || !sameAddress(decoded.args[0], intent.creator) || decoded.args[1].toString() !== intent.amountUnits) throw new PaymentVerificationError('Transaction calldata does not match intent');
-    const event = receipt.logs.filter(log => sameAddress(log.address, intent.router)).map(log => { try { return this.tipInterface.parseLog(log); } catch { return null; } }).filter(Boolean).find(e => e.name === 'TipSent' && sameAddress(e.args.tipper, intent.sender) && sameAddress(e.args.creator, intent.creator) && e.args.amount.toString() === intent.amountUnits);
+    if (tx.value !== 0n) throw new PaymentVerificationError('Tip transaction unexpectedly transferred native currency');
+    const expectedCreator = (BigInt(intent.amountUnits) * 8000n) / 10000n;
+    const expectedPlatform = BigInt(intent.amountUnits) - expectedCreator;
+    const event = receipt.logs.filter(log => sameAddress(log.address, intent.router)).map(log => { try { return this.tipInterface.parseLog(log); } catch { return null; } }).filter(Boolean).find(e => e.name === 'TipSent' && sameAddress(e.args.tipper, intent.sender) && sameAddress(e.args.creator, intent.creator) && e.args.amount.toString() === intent.amountUnits && e.args.creatorAmount === expectedCreator && e.args.platformAmount === expectedPlatform);
     if (!event) throw new PaymentVerificationError('Matching TipSent event not found');
-    return { pending: false, txHash: receipt.hash, blockNumber: receipt.blockNumber, confirmations: count };
+    return { pending: false, txHash: receipt.hash, blockNumber: receipt.blockNumber, confirmations: count, creatorAmountUnits: expectedCreator.toString(), platformAmountUnits: expectedPlatform.toString() };
   }
   getStatus() {
     const config = this.validateStaticConfiguration();

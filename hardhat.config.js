@@ -1,13 +1,8 @@
-import '@nomicfoundation/hardhat-toolbox';
+import { defineConfig } from 'hardhat/config';
+import hardhatEthers from '@nomicfoundation/hardhat-ethers';
 
-/** @type import('hardhat/config').HardhatUserConfig */
-export default {
+export default defineConfig({
+  plugins: [hardhatEthers],
   solidity: "0.8.20",
   paths: { sources: './backend/contracts', tests: './test' },
-  networks: {
-    baseSepolia: {
-      url: process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org",
-      accounts: process.env.TIP_ROUTER_PRIVATE_KEY ? [process.env.TIP_ROUTER_PRIVATE_KEY] : [],
-    },
-  },
-};
+});

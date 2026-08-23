@@ -65,7 +65,10 @@ router.post('/intents/:id/confirm', protect, requireAgeVerified, async (req, res
   try {
     const tip = await Tip.findOne({ _id: req.params.id, sender: req.user._id });
     if (!tip) return res.status(404).json({ error: 'Tip intent not found' });
-    if (tip.txStatus === 'confirmed') return res.json({ success: true, duplicate: true, tip: publicTip(tip) });
+    if (tip.txStatus === 'confirmed') {
+      if (!req.body.txHash || tip.txHash.toLowerCase() !== req.body.txHash.toLowerCase()) return res.status(409).json({ error: 'Confirmed intent cannot be replayed with another transaction' });
+      return res.json({ success: true, duplicate: true, tip: publicTip(tip) });
+    }
     if (tip.expiresAt < new Date() && !tip.txHash) return res.status(410).json({ error: 'Tip intent expired' });
     const { result } = await confirmTip(tip, req.body.txHash);
     return res.status(result.pending ? 202 : 200).json({ success: !result.pending, pending: result.pending, tip: publicTip(tip) });

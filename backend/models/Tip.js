@@ -96,14 +96,4 @@ tipSchema.index(
   { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
 );
 
-// Calculate 80/20 split before saving
-tipSchema.pre('save', function(next) {
-  if (this.amount && !this.creatorAmount) {
-    const amountNum = parseFloat(this.amount);
-    this.creatorAmount = (amountNum * 0.8).toFixed(6);
-    this.platformAmount = (amountNum * 0.2).toFixed(6);
-  }
-  next();
-});
-
 module.exports = mongoose.model('Tip', tipSchema);
