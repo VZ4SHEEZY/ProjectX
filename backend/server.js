@@ -20,6 +20,9 @@ const corsOrigin = (origin, callback) => {
 };
 
 const app = express();
+// Render terminates TLS and forwards the original client IP through one proxy.
+// This must be set before express-rate-limit derives its per-client key.
+app.set('trust proxy', 1);
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {

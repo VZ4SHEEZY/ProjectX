@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const Group = require('../models/Group');
 const request = require('supertest');
 
 process.env.JWT_SECRET = 'production-boundary-test-secret';
@@ -55,6 +56,13 @@ test('comma-separated frontend origins are normalized', () => {
   const origins = allowedOrigins({ FRONTEND_URL: 'https://one.example, https://two.example ' });
   assert.ok(origins.includes('https://one.example'));
   assert.ok(origins.includes('https://two.example'));
+});
+
+test('group name declares only one unique index', () => {
+  const nameIndexes = Group.schema.indexes().filter(([fields]) => fields.name === 1);
+
+  assert.equal(nameIndexes.length, 1);
+  assert.equal(nameIndexes[0][1].unique, true);
 });
 
 test('profile updates cannot self-promote a user to creator', async () => {

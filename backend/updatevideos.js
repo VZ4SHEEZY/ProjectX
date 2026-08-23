@@ -1,6 +1,10 @@
 const mongoose = require('mongoose');
 
-const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://cyberdope:CyberDope2026!@cyberdope.mongodb.net/cyberdope?retryWrites=true&w=majority';
+const mongoUri = process.env.MONGODB_URI;
+
+if (!mongoUri) {
+  throw new Error('MONGODB_URI environment variable is required');
+}
 
 const updates = [
   ['69e9212ed0842c584c1c112d', 'https://mixkit.co/free-stock-video/download/mixkit-city-traffic-in-a-high-building-perspective-541.mp4'],

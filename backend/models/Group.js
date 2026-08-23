@@ -110,7 +110,6 @@ const groupSchema = new mongoose.Schema({
   timestamps: true
 });
 
-groupSchema.index({ name: 1 });
 groupSchema.index({ category: 1 });
 groupSchema.index({ memberCount: -1 });
 
