@@ -10,6 +10,7 @@ const User = require('./models/User');
 const { protect } = require('./middleware/auth');
 const { requireAdmin } = require('./middleware/admin');
 const { validateEnv, createCorsOrigin } = require('./config/env');
+const { registerAuthorizedSocketHandlers } = require('./services/socketAuthorization');
 require('dotenv').config();
 
 validateEnv();
@@ -201,44 +202,7 @@ io.on('connection', (socket) => {
   connectedUsers.set(socket.userId, userSockets);
   socket.join(`user:${socket.userId}`);
 
-  socket.on('join-room', (roomId) => {
-    socket.join(roomId);
-    console.log(`Socket ${socket.id} joined room ${roomId}`);
-  });
-
-  socket.on('leave-room', (roomId) => {
-    socket.leave(roomId);
-    console.log(`Socket ${socket.id} left room ${roomId}`);
-  });
-
-  socket.on('typing', (data) => {
-    socket.to(data.roomId).emit('user-typing', {
-      userId: socket.userId,
-      isTyping: data.isTyping
-    });
-  });
-
-  socket.on('stream-start', (data) => {
-    if (socket.isCreator && typeof data?.streamId === 'string') {
-      socket.broadcast.emit('stream-started', { streamId: data.streamId, title: data.title || 'Live Stream' });
-    }
-  });
-
-  socket.on('stream-end', (data) => {
-    if (socket.isCreator && typeof data?.streamId === 'string') {
-      socket.broadcast.emit('stream-ended', { streamId: data.streamId });
-    }
-  });
-
-  socket.on('stream-message', (data) => {
-    if (typeof data?.streamId === 'string' && typeof data?.message === 'string' && data.message.trim().length <= 500) {
-      socket.to(data.streamId).emit('stream-message', {
-        streamId: data.streamId,
-        message: data.message.trim(),
-        userId: socket.userId
-      });
-    }
-  });
+  registerAuthorizedSocketHandlers(io, socket);
 
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
