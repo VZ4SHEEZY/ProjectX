@@ -225,7 +225,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('stream-end', (data) => {
-    socket.broadcast.emit('stream-ended', data);
+    if (socket.isCreator && typeof data?.streamId === 'string') {
+      socket.broadcast.emit('stream-ended', { streamId: data.streamId });
+    }
   });
 
   socket.on('stream-message', (data) => {
