@@ -18,7 +18,7 @@ services:
         value: 30d
       - key: FRONTEND_URL
         value: https://project-x-sage-nine.vercel.app
-      - key: OPENAI_API_KEY
+      - key: ANTHROPIC_API_KEY
         sync: false
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
