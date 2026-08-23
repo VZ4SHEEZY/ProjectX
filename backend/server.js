@@ -9,15 +9,11 @@ const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 const { protect } = require('./middleware/auth');
 const { requireAdmin } = require('./middleware/admin');
-const { validateEnv, allowedOrigins } = require('./config/env');
+const { validateEnv, createCorsOrigin } = require('./config/env');
 require('dotenv').config();
 
 validateEnv();
-const corsOrigins = allowedOrigins();
-const corsOrigin = (origin, callback) => {
-  if (!origin || corsOrigins.includes(origin)) return callback(null, true);
-  callback(new Error('Origin not allowed by CORS'));
-};
+const corsOrigin = createCorsOrigin();
 
 const app = express();
 // Render terminates TLS and forwards the original client IP through one proxy.
@@ -255,7 +251,7 @@ io.on('connection', (socket) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
+  res.status(err.status || 500).json({
     error: 'Something went wrong!',
     message: process.env.NODE_ENV === 'development' ? err.message : undefined
   });

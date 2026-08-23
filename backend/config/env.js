@@ -18,4 +18,15 @@ const allowedOrigins = (env = process.env) => [
   ...(env.FRONTEND_URL || '').split(',').map((origin) => origin.trim())
 ].filter(Boolean);
 
-module.exports = { validateEnv, allowedOrigins };
+const createCorsOrigin = (env = process.env) => {
+  const origins = allowedOrigins(env);
+
+  return (origin, callback) => {
+    if (!origin || origins.includes(origin)) return callback(null, true);
+    const error = new Error('Origin not allowed by CORS');
+    error.status = 403;
+    callback(error);
+  };
+};
+
+module.exports = { validateEnv, allowedOrigins, createCorsOrigin };

@@ -13,7 +13,7 @@ const Message = require('../models/Message');
 const usersRouter = require('../routes/users');
 const storiesRouter = require('../routes/stories');
 const messagesRouter = require('../routes/messages');
-const { validateEnv, allowedOrigins } = require('../config/env');
+const { validateEnv, allowedOrigins, createCorsOrigin } = require('../config/env');
 
 const userId = '507f1f77bcf86cd799439011';
 const token = jwt.sign({ userId }, process.env.JWT_SECRET);
@@ -56,6 +56,14 @@ test('comma-separated frontend origins are normalized', () => {
   const origins = allowedOrigins({ FRONTEND_URL: 'https://one.example, https://two.example ' });
   assert.ok(origins.includes('https://one.example'));
   assert.ok(origins.includes('https://two.example'));
+});
+
+test('CORS rejects untrusted origins with a forbidden status', async () => {
+  const error = await new Promise(resolve => {
+    createCorsOrigin({ FRONTEND_URL: 'https://trusted.example' })('https://untrusted.example', resolve);
+  });
+
+  assert.equal(error.status, 403);
 });
 
 test('group name declares only one unique index', () => {
