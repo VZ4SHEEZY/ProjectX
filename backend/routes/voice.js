@@ -3,21 +3,10 @@ const router = express.Router();
 const { protect: auth } = require('../middleware/auth');
 const VoiceMessage = require('../models/VoiceMessage');
 const multer = require('multer');
-const path = require('path');
-
-// Configure multer for audio uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/audio/');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'voice-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+const { storeVoiceAudio, deleteVoiceAudio } = require('../services/mediaStorage');
 
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4'];
@@ -31,6 +20,7 @@ const upload = multer({
 
 // Send voice message
 router.post('/send', auth, upload.single('audio'), async (req, res) => {
+  let storedAudio;
   try {
     const { recipientId, duration, waveform } = req.body;
     
@@ -38,10 +28,18 @@ router.post('/send', auth, upload.single('audio'), async (req, res) => {
       return res.status(400).json({ error: 'Audio file required' });
     }
     
+    storedAudio = await storeVoiceAudio({
+      buffer: req.file.buffer,
+      mimeType: req.file.mimetype,
+      originalName: req.file.originalname,
+      ownerId: req.user._id
+    });
+
     const voiceMessage = new VoiceMessage({
       sender: req.user._id,
       recipient: recipientId,
-      audioUrl: `/uploads/audio/${req.file.filename}`,
+      audioUrl: storedAudio.url,
+      storageKey: storedAudio.storageKey,
       duration: parseInt(duration) || 0,
       waveform: waveform ? JSON.parse(waveform) : [],
       isListened: false
@@ -59,6 +57,11 @@ router.post('/send', auth, upload.single('audio'), async (req, res) => {
     });
   } catch (error) {
     console.error('Send Voice Error:', error);
+    if (storedAudio?.storageKey) {
+      try { await deleteVoiceAudio(storedAudio.storageKey); } catch (cleanupError) {
+        console.error('Voice upload cleanup error:', cleanupError.message);
+      }
+    }
     res.status(500).json({ error: 'Failed to send voice message' });
   }
 });
@@ -140,12 +143,13 @@ router.delete('/:id', auth, async (req, res) => {
         { sender: req.user._id },
         { recipient: req.user._id }
       ]
-    });
+    }).select('+storageKey');
     
     if (!message) {
       return res.status(404).json({ error: 'Message not found' });
     }
     
+    if (message.storageKey) await deleteVoiceAudio(message.storageKey);
     await VoiceMessage.findByIdAndDelete(req.params.id);
     
     res.json({
@@ -201,11 +205,16 @@ router.post('/comment/:postId', auth, upload.single('audio'), async (req, res) =
       return res.status(400).json({ error: 'Audio file required' });
     }
     
-    // In production, save to Post model's voiceComments array
-    // For demo, return the URL
+    const storedAudio = await storeVoiceAudio({
+      buffer: req.file.buffer,
+      mimeType: req.file.mimetype,
+      originalName: req.file.originalname,
+      ownerId: req.user._id
+    });
+
     res.json({
       success: true,
-      audioUrl: `/uploads/audio/${req.file.filename}`,
+      audioUrl: storedAudio.url,
       duration: parseInt(duration) || 0,
       message: 'Voice comment added'
     });
@@ -213,6 +222,14 @@ router.post('/comment/:postId', auth, upload.single('audio'), async (req, res) =
     console.error('Voice Comment Error:', error);
     res.status(500).json({ error: 'Failed to add voice comment' });
   }
+});
+
+router.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: 'Audio file too large' });
+  }
+  if (error) return res.status(400).json({ error: error.message });
+  next();
 });
 
 module.exports = router;

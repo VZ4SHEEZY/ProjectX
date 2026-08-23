@@ -15,6 +15,10 @@ const voiceMessageSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  storageKey: {
+    type: String,
+    select: false
+  },
   duration: {
     type: Number,
     required: true

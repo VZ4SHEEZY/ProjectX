@@ -48,8 +48,16 @@ test('production env validation fails clearly for missing and weak secrets', () 
   assert.doesNotThrow(() => validateEnv({
     NODE_ENV: 'production',
     MONGODB_URI: 'mongodb://db',
-    JWT_SECRET: 'a'.repeat(32)
+    JWT_SECRET: 'a'.repeat(32),
+    CLOUDINARY_CLOUD_NAME: 'cloud',
+    CLOUDINARY_API_KEY: 'key',
+    CLOUDINARY_API_SECRET: 'secret'
   }));
+  assert.throws(() => validateEnv({
+    NODE_ENV: 'production',
+    MONGODB_URI: 'mongodb://db',
+    JWT_SECRET: 'a'.repeat(32)
+  }), /Missing durable storage environment variables/);
 });
 
 test('comma-separated frontend origins are normalized', () => {

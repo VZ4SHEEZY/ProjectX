@@ -1,4 +1,5 @@
 const REQUIRED_ENV = ['MONGODB_URI', 'JWT_SECRET'];
+const PRODUCTION_STORAGE_ENV = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'];
 
 const validateEnv = (env = process.env) => {
   const missing = REQUIRED_ENV.filter((name) => !env[name]?.trim());
@@ -8,6 +9,13 @@ const validateEnv = (env = process.env) => {
 
   if (env.NODE_ENV === 'production' && env.JWT_SECRET.length < 32) {
     throw new Error('JWT_SECRET must be at least 32 characters in production');
+  }
+
+  if (env.NODE_ENV === 'production') {
+    const missingStorage = PRODUCTION_STORAGE_ENV.filter((name) => !env[name]?.trim());
+    if (missingStorage.length) {
+      throw new Error(`Missing durable storage environment variables: ${missingStorage.join(', ')}`);
+    }
   }
 };
 
