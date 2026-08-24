@@ -29,11 +29,12 @@ async function main() {
   if (await router.getCreatorBPS() !== 8000n || await router.BPS_DENOMINATOR() !== 10000n) throw new Error('Split getter mismatch');
 
   const creation = await provider.getTransaction(required('TIP_ROUTER_DEPLOYMENT_TX_HASH'));
-  if (!creation || ethers.getAddress(creation.creates) !== routerAddress) throw new Error('Deployment transaction does not create configured router');
+  if (!creation || creation.to !== null) throw new Error('Configured transaction is not a contract deployment');
   const expectedInput = ethers.concat([artifact.bytecode, ethers.AbiCoder.defaultAbiCoder().encode(['address', 'address'], [usdc, treasury])]);
   if (creation.data.toLowerCase() !== expectedInput.toLowerCase()) throw new Error('On-chain creation input differs from audited compiled source');
   const receipt = await provider.getTransactionReceipt(creation.hash);
   if (!receipt || receipt.status !== 1) throw new Error('Deployment transaction was not successful');
+  if (!receipt.contractAddress || ethers.getAddress(receipt.contractAddress) !== routerAddress) throw new Error('Deployment receipt does not create configured router');
 
   console.log(JSON.stringify({ chainId: Number(CHAIN_ID), contractAddress: routerAddress, runtimeCodeHash: ethers.keccak256(code), creationInputVerified: true, gettersVerified: true }, null, 2));
 }
