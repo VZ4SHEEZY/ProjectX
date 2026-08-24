@@ -14,7 +14,7 @@ import EditProfileModal from './EditProfileModal';
 import { renderWidget, ProfileWidgetColumn } from './ProfileWidgetRenderer';
 import { Copy, Wallet, Edit, Save, PaintBucket, Layers, Crown, Eye, EyeOff, Sparkles, MessageSquare, UserPlus, Heart, Eye as EyeIcon, Zap, Music } from 'lucide-react';
 import { generateBio } from '../services/aiService';
-import { userAPI, postAPI } from '../services/api';
+import { authAPI, userAPI, postAPI } from '../services/api';
 import VideoModal from './VideoModal';
 
 interface ProfileGridProps {
@@ -301,18 +301,11 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const token = localStorage.getItem('cdToken');
-        if (!token) return;
-        const res = await fetch(
-          'https://cyberdope-api.onrender.com/api/auth/me',
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (data.user) {
-            setBio(data.user.bio || user.bio);
-            if (data.user.theme) setLocalTheme(data.user.theme);
-          }
+        if (!localStorage.getItem('cdToken')) return;
+        const { data } = await authAPI.getMe();
+        if (data.user) {
+          setBio(data.user.bio || user.bio);
+          if (data.user.theme) setLocalTheme(data.user.theme);
         }
       } catch (err) {
         // silently fail, use props

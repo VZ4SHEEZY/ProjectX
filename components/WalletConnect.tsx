@@ -83,15 +83,14 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({ onConnect, onDisco
         params: [message, address]
       });
 
-      // Verify with backend - check response before using
-      const verifyResponse = await walletAPI.verify(address, signature, nonceResponse.challengeId);
-      if (!verifyResponse?.token) {
-        throw new Error('Backend failed to verify wallet signature');
-      }
+      // The wallet control is rendered inside an authenticated session. Bind
+      // the signed address to that account; never replace the user's JWT or
+      // silently switch them to a wallet-created identity.
+      const connectResponse = await walletAPI.connect(address, signature, nonceResponse.challengeId);
+      if (!connectResponse?.walletAddress) throw new Error('Backend failed to connect the signed wallet');
 
       // Save token and wallet with error handling for localStorage
       try {
-        localStorage?.setItem?.('token', verifyResponse.token);
         localStorage?.setItem?.('walletAddress', address);
       } catch (err) {
         console.warn('Could not save wallet to localStorage:', err);

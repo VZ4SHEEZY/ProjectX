@@ -11,7 +11,8 @@ interface TipModalProps {
   creatorId: string;
 }
 
-type TransactionStatus = 'idle' | 'sending' | 'success' | 'error';
+type TransactionStatus = 'idle' | 'sending' | 'pending' | 'success' | 'error';
+type TransactionPhase = 'preparing' | 'approving' | 'wallet' | 'confirming';
 
 interface TipResponse {
   success?: boolean;
@@ -41,11 +42,24 @@ const USDC_ABI = ['function approve(address spender,uint256 amount) returns (boo
 const ROUTER_ABI = ['function sendTip(address creator,uint256 amount)'];
 
 const getErrorMessage = (error: unknown): string => {
+  let raw = '';
   if (axios.isAxiosError(error)) {
     const data = error.response?.data as TipResponse | undefined;
-    return data?.error || data?.failureReason || data?.message || error.message;
+    raw = data?.error || data?.failureReason || data?.message || error.message;
   }
-  return error instanceof Error ? error.message : 'Unable to send tip. Please try again.';
+  const walletError = error as { code?: number | string; shortMessage?: string; reason?: string; message?: string };
+  raw ||= walletError?.shortMessage || walletError?.reason || walletError?.message || (error instanceof Error ? error.message : '');
+  if (walletError?.code === 4001 || walletError?.code === 'ACTION_REJECTED' || /user rejected|user denied/i.test(raw)) {
+    return 'Wallet request rejected. No funds were moved.';
+  }
+  if (/insufficient funds.*gas|insufficient.*eth|intrinsic transaction cost/i.test(raw)) {
+    return 'Insufficient Base Sepolia ETH for network fees. No funds were moved.';
+  }
+  if (/transfer amount exceeds balance|insufficient.*usdc|exceeds balance/i.test(raw)) {
+    return 'Insufficient Base Sepolia USDC for this tip. No funds were moved.';
+  }
+  if (/revert|call_exception/i.test(raw)) return 'The TipRouter transaction reverted. No tip was recorded.';
+  return raw || 'Unable to send tip. Please try again.';
 };
 
 const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
@@ -56,6 +70,7 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
   const [txHash, setTxHash] = useState('');
   const [needApproval, setNeedApproval] = useState(false);
   const [intent, setIntent] = useState<PaymentIntent | null>(null);
+  const [phase, setPhase] = useState<TransactionPhase>('preparing');
 
   useEffect(() => {
     if (isOpen) {
@@ -66,6 +81,7 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
       setTxHash('');
       setNeedApproval(false);
       setIntent(null);
+      setPhase('preparing');
     }
   }, [isOpen]);
 
@@ -107,6 +123,7 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
     }
 
     setStatus('sending');
+    setPhase('preparing');
     setErrorMessage('');
     setNeedApproval(false);
 
@@ -132,9 +149,11 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
     if (!intent) return;
     if (!window.confirm(`Approve exactly ${intent.amount} USDC for CyberDope TipRouter on Base Sepolia? This is a separate wallet transaction.`)) return;
     setStatus('sending');
+    setPhase('approving');
     setErrorMessage('');
     try {
       const signer = await getWallet(intent);
+      setPhase('wallet');
       const tx = await new Contract(intent.tokenAddress, USDC_ABI, signer).approve(intent.routerAddress, BigInt(intent.amountUnits));
       await tx.wait(1);
       setStatus('idle');
@@ -148,19 +167,29 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
   const executeTip = async () => {
     if (!intent) return;
     if (!window.confirm(`Send exactly ${intent.amount} USDC to the selected creator through CyberDope TipRouter on Base Sepolia?`)) return;
-    setStatus('sending'); setErrorMessage('');
+    setStatus('sending'); setPhase('wallet'); setErrorMessage('');
     try {
       const signer = await getWallet(intent);
       const tx = await new Contract(intent.routerAddress, ROUTER_ABI, signer).sendTip(intent.creatorWallet, BigInt(intent.amountUnits));
       setTxHash(tx.hash);
+      setPhase('confirming');
       await tx.wait(1);
-      let response = await api.post(`/tips/intents/${intent._id}/confirm`, { txHash: tx.hash });
-      for (let attempt = 0; response.status === 202 && attempt < 8; attempt += 1) {
-        await new Promise(resolve => window.setTimeout(resolve, 4000));
-        response = await api.post(`/tips/intents/${intent._id}/confirm`, { txHash: tx.hash });
+      await confirmTip(tx.hash);
+    } catch (error) { setStatus('error'); setErrorMessage(getErrorMessage(error)); }
+  };
+
+  const confirmTip = async (hash = txHash) => {
+    if (!intent || !hash) return;
+    setStatus('sending'); setPhase('confirming'); setErrorMessage('');
+    try {
+      const response = await api.post(`/tips/intents/${intent._id}/confirm`, { txHash: hash });
+      if (response.status === 202) {
+        setStatus('pending');
+        return;
       }
-      if (response.status === 202) throw new Error('Transaction is mined but still awaiting 3 confirmations. It is safe to check again shortly.');
-      setSuccessMessage('Tip verified on Base Sepolia.'); setStatus('success');
+      const data = response.data as TipResponse & { duplicate?: boolean };
+      setSuccessMessage(data.duplicate ? 'This tip was already verified; no duplicate payment was recorded.' : 'Tip verified on Base Sepolia.');
+      setStatus('success');
     } catch (error) { setStatus('error'); setErrorMessage(getErrorMessage(error)); }
   };
 
@@ -173,8 +202,8 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
 
   return (
     <>
-      <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md" onClick={busy ? undefined : onClose} />
-      <div className="fixed bottom-0 left-0 z-[101] w-full rounded-t-xl border-t-2 border-[#39FF14] bg-[#0a0a0a] shadow-[0_-10px_40px_rgba(57,255,20,0.2)] md:bottom-auto md:left-1/2 md:top-1/2 md:w-[480px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg md:border-2">
+      <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-md" onClick={busy ? undefined : onClose} />
+      <div className="fixed bottom-0 left-0 z-[10001] w-full rounded-t-xl border-t-2 border-[#39FF14] bg-[#0a0a0a] shadow-[0_-10px_40px_rgba(57,255,20,0.2)] md:bottom-auto md:left-1/2 md:top-1/2 md:w-[480px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg md:border-2">
         <div className="flex w-full justify-center pt-2 md:hidden"><div className="h-1 w-12 rounded-full bg-gray-700" /></div>
         <div className="p-6">
           <div className="mb-6 flex items-start justify-between">
@@ -195,6 +224,16 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
               </div>
               <GlitchButton onClick={onClose}>DONE</GlitchButton>
             </div>
+          ) : status === 'pending' ? (
+            <div className="flex flex-col items-center justify-center gap-6 py-8 text-yellow-300">
+              <Loader className="h-14 w-14 animate-spin" />
+              <div className="text-center font-mono">
+                <h3 className="text-xl font-bold tracking-widest">TIP PENDING</h3>
+                <p className="mt-2 text-xs text-white">Transaction mined; waiting for 3 Base Sepolia confirmations.</p>
+                {txHash && <p className="mt-3 break-all text-[10px] text-yellow-300">TX: {txHash}</p>}
+              </div>
+              <GlitchButton onClick={() => confirmTip()}>CHECK CONFIRMATIONS</GlitchButton>
+            </div>
           ) : status === 'error' ? (
             <div className="flex flex-col items-center justify-center gap-6 py-8 text-[#FF00FF]">
               <AlertTriangle className="h-16 w-16" />
@@ -212,8 +251,8 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
             <div className="flex flex-col items-center justify-center gap-6 py-12">
               <Loader className="h-12 w-12 animate-spin text-[#39FF14]" />
               <div className="text-center font-mono">
-                <h3 className="animate-pulse text-lg text-white">SENDING USDC...</h3>
-                <p className="mt-2 text-xs text-gray-500">Base Sepolia</p>
+                <h3 className="animate-pulse text-lg text-white">{phase === 'preparing' ? 'VERIFYING DETAILS...' : phase === 'approving' ? 'APPROVING EXACT AMOUNT...' : phase === 'wallet' ? 'WAITING FOR WALLET...' : 'VERIFYING ON-CHAIN...'}</h3>
+                <p className="mt-2 text-xs text-gray-500">Base Sepolia · do not close this window</p>
               </div>
             </div>
           ) : (
