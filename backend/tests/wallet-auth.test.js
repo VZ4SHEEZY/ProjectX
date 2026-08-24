@@ -9,6 +9,7 @@ process.env.JWT_SECRET = 'wallet-auth-test-secret-that-is-long-enough';
 
 const WalletChallenge = require('../models/WalletChallenge');
 const walletAuth = require('../services/walletAuth');
+const tipService = require('../services/tip');
 const walletRouter = require('../routes/wallet');
 
 let record;
@@ -88,4 +89,26 @@ test('wallet binding rejects unauthenticated requests', async () => {
   const app = express(); app.use(express.json()); app.use('/api/wallet', walletRouter);
   const response = await request(app).post('/api/wallet/connect').send({});
   assert.equal(response.status, 401);
+});
+
+test('wallet status exposes verified payment configuration', async (t) => {
+  const originalExecutionRequested = tipService.executionRequested;
+  const originalVerifyConfiguration = tipService.verifyConfiguration;
+  const originalGetStatus = tipService.getStatus;
+  t.after(() => {
+    tipService.executionRequested = originalExecutionRequested;
+    tipService.verifyConfiguration = originalVerifyConfiguration;
+    tipService.getStatus = originalGetStatus;
+  });
+  tipService.executionRequested = true;
+  tipService.verifyConfiguration = async () => ({ chainId: 84532 });
+  tipService.getStatus = () => ({ configured: true, paymentExecutionEnabled: true, chainId: 84532, network: 'base-sepolia' });
+
+  const app = express(); app.use('/api/wallet', walletRouter);
+  const response = await request(app).get('/api/wallet/status');
+  assert.equal(response.status, 200);
+  assert.equal(response.body.configured, true);
+  assert.equal(response.body.paymentExecutionEnabled, true);
+  assert.equal(response.body.chain, 'base-sepolia');
+  assert.equal(response.body.chainId, 84532);
 });

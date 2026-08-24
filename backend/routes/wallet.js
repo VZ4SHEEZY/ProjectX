@@ -78,11 +78,15 @@ router.get('/transactions', protect, async (req, res) => {
 
 router.post('/send-tip', protect, (_req, res) => res.status(503).json({ error: 'Wallet payment execution is disabled' }));
 router.get('/supported-tokens', (_req, res) => res.json({ chain: 'base-sepolia', chainId: walletAuth.CHAIN_ID, tokens: ['USDC'] }));
-router.get('/status', (_req, res) => res.json({
-  walletAuthenticationEnabled: true,
-  paymentExecutionEnabled: tipService.isExecutionEnabled(),
-  chain: 'base-sepolia',
-  chainId: walletAuth.CHAIN_ID
-}));
+router.get('/status', async (_req, res) => {
+  try {
+    if (tipService.executionRequested) await tipService.verifyConfiguration();
+    const status = tipService.getStatus();
+    return res.json({ walletAuthenticationEnabled: true, ...status, chain: status.network });
+  } catch (error) {
+    const status = tipService.getStatus();
+    return res.status(503).json({ walletAuthenticationEnabled: true, ...status, chain: status.network, error: error.message });
+  }
+});
 
 module.exports = router;
