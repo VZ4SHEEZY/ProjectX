@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Wallet, ExternalLink, Copy, Check, LogOut, Coins, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { Wallet, ExternalLink, Copy, Check, LogOut, Coins } from 'lucide-react';
 import { walletAPI } from '../services/wallet';
 
 interface WalletConnectProps {
@@ -304,36 +304,7 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({ onConnect, onDisco
               </button>
             </div>
             <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
-              {/* Mock Transactions */}
-              {[
-                { type: 'receive', token: 'ETH', amount: '0.5', from: '0x1234...5678', time: '1 day ago' },
-                { type: 'send', token: 'USDC', amount: '100', to: '0xabcd...efgh', time: '2 days ago' },
-                { type: 'tip', token: 'ETH', amount: '0.01', to: '0x9876...5432', time: '3 days ago' }
-              ].map((tx, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      tx.type === 'receive' ? 'bg-green-500/20' : 'bg-red-500/20'
-                    }`}>
-                      {tx.type === 'receive' ? (
-                        <ArrowDownLeft className={`w-5 h-5 ${tx.type === 'receive' ? 'text-green-400' : 'text-red-400'}`} />
-                      ) : (
-                        <ArrowUpRight className="w-5 h-5 text-red-400" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium text-white capitalize">{tx.type}</p>
-                      <p className="text-xs text-gray-400">{tx.time}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className={`font-medium ${tx.type === 'receive' ? 'text-green-400' : 'text-red-400'}`}>
-                      {tx.type === 'receive' ? '+' : '-'}{tx.amount} {tx.token}
-                    </p>
-                    <p className="text-xs text-gray-400">{tx.from || tx.to}</p>
-                  </div>
-                </div>
-              ))}
+              <div className="py-8 text-center text-sm text-gray-400">Transaction history is not available in CyberDope. Use your wallet or a Base Sepolia explorer to review activity.</div>
             </div>
           </div>
         </div>

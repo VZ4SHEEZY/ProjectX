@@ -202,10 +202,9 @@ const SubscriptionTiers: React.FC<SubscriptionTiersProps> = ({ isOpen, onClose, 
             <div className="flex items-start gap-3">
               <DollarSign className="text-[#39FF14] flex-shrink-0 mt-0.5" size={20} />
               <div>
-                <h3 className="text-[#39FF14] font-bold text-sm mb-1">How Subscriptions Work</h3>
+                <h3 className="text-[#39FF14] font-bold text-sm mb-1">Tier catalog</h3>
                 <p className="text-gray-400 text-xs leading-relaxed">
-                  Fans subscribe monthly to access your exclusive content. You keep 85% of all subscription revenue. 
-                  Subscribers are billed automatically and can cancel anytime.
+                  These controls publish tier names, prices, and benefits to your profile. Subscription checkout and recurring billing are not currently available.
                 </p>
               </div>
             </div>
@@ -288,46 +287,12 @@ const SubscriptionTiers: React.FC<SubscriptionTiersProps> = ({ isOpen, onClose, 
             </button>
           </div>
 
-          {/* Revenue Estimate */}
-          <div className="bg-black/50 border border-gray-800 rounded-lg p-4">
-            <h3 className="text-white font-bold text-sm mb-4 flex items-center gap-2">
-              <DollarSign size={16} className="text-[#39FF14]" />
-              POTENTIAL MONTHLY REVENUE
-            </h3>
-            <div className="grid grid-cols-4 gap-4 text-center">
-              <div>
-                <p className="text-2xl font-bold text-[#39FF14]">100</p>
-                <p className="text-[10px] text-gray-500">Subscribers</p>
-                <p className="text-sm text-gray-400">$850/mo</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[#39FF14]">500</p>
-                <p className="text-[10px] text-gray-500">Subscribers</p>
-                <p className="text-sm text-gray-400">$4,250/mo</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[#39FF14]">1,000</p>
-                <p className="text-[10px] text-gray-500">Subscribers</p>
-                <p className="text-sm text-gray-400">$8,500/mo</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[#39FF14]">10,000</p>
-                <p className="text-[10px] text-gray-500">Subscribers</p>
-                <p className="text-sm text-gray-400">$85,000/mo</p>
-              </div>
-            </div>
-            <p className="text-[10px] text-gray-600 text-center mt-4">
-              * Estimates based on average $10/subscriber. Actual earnings vary.
-            </p>
-          </div>
           </>}
         </div>
 
         {/* Footer */}
         <div className="p-4 border-t border-gray-800 bg-black/50 flex items-center justify-between">
-          <p className="text-[10px] text-gray-600 font-mono">
-            PLATFORM FEE: 15% | YOU KEEP: 85%
-          </p>
+          <p className="text-[10px] text-amber-500/80 font-mono">CATALOG ONLY — BILLING UNAVAILABLE</p>
           <div className="flex gap-3">
             <button 
               onClick={onClose}

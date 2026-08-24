@@ -11,7 +11,7 @@ async function openTip(page: import('@playwright/test').Page) {
   const data = await runtime();
   await login(page);
   await page.goto('/profile');
-  await page.getByRole('button', { name: 'SUBSCRIBE' }).click();
+  await page.getByRole('button', { name: 'TIP CREATOR' }).click();
   await expect(page.getByText('BASE_SEPOLIA_TIP')).toBeVisible();
   return { data, creator: userFor(data, 'creator') };
 }
@@ -76,7 +76,7 @@ test('tip UI distinguishes rejected, insufficient, and reverted states', async (
     await page.getByRole('button', { name: 'VERIFY PAYMENT DETAILS' }).click();
     await expect(page.getByText(expected, { exact: true })).toBeVisible();
     await page.getByLabel('Close tip modal').click();
-    if (index < cases.length - 1) await page.getByRole('button', { name: 'SUBSCRIBE' }).click();
+    if (index < cases.length - 1) await page.getByRole('button', { name: 'TIP CREATOR' }).click();
   }
 });
 

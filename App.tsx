@@ -13,7 +13,7 @@ import { User } from './types';
 import { 
   Wallet, Zap, User as UserIcon, Settings, 
   Mail, Bell, Search, LogOut, LayoutGrid, Crown, Plus,
-  BarChart3, Home, Compass, Radio, Image, Users, Menu, X
+  BarChart3, Home, Compass, Image, Users, Menu, X
 } from 'lucide-react';
 
 const VideoFeed = lazy(() => import('./components/Feed'));
@@ -66,6 +66,7 @@ const mapApiUser = (apiUser: any): User => ({
   faction: apiUser.faction || 'Unaffiliated',
   isVerified: apiUser.isVerified || false,
   isAgeVerified: apiUser.isAgeVerified || false,
+  isCreator: apiUser.isCreator || false,
   isAdmin: apiUser.isAdmin || false,
   followersCount: apiUser.followersCount || 0,
   followingCount: apiUser.followingCount || 0,
@@ -530,6 +531,7 @@ const App: React.FC = () => {
           {/* Settings */}
           <button 
             onClick={() => setIsSettingsOpen(true)}
+            title="Settings"
             className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
           >
              <Settings size={18} />
@@ -669,6 +671,7 @@ const App: React.FC = () => {
                creatorModeEnabled={creatorModeEnabled}
                onUsernameClick={handleViewUserProfile}
                onOpenAdmin={() => setIsAdminOpen(true)}
+               onEditSubscriptionTiers={() => setIsSubscriptionTiersOpen(true)}
              />
           </div>
         )}
@@ -780,14 +783,6 @@ const App: React.FC = () => {
               <span className="lg:hidden hidden sm:inline">VERIFY AGE</span>
             </button>
           )}
-          <button
-            disabled
-            title="Live streaming is not available yet"
-            className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 bg-gray-800/60 text-gray-500 text-xs font-bold rounded-lg cursor-not-allowed"
-          >
-            <Radio size={12} />
-            <span className="hidden sm:inline">LIVE (SOON)</span>
-          </button>
         </div>
       </div>
 
@@ -819,7 +814,8 @@ const App: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         currentUser={{ 
           name: user.username, 
-          email: '', 
+          email: '',
+          avatar: user.avatar,
           bio: user.bio, 
           isAgeVerified: user.isAgeVerified 
         }}

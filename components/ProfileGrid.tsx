@@ -1,19 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, ProfileTheme } from '../types';
 import GlitchButton from './GlitchButton';
-import SocialHubWidget from './SocialHubWidget';
-import LockedWidget from './LockedWidget';
 import TopFriendsWidget from './TopFriendsWidget';
-import MusicPlayerWidget from './MusicPlayerWidget';
-import AssetGalleryWidget from './AssetGalleryWidget';
-import DataLogWidget from './DataLogWidget';
-import GeoNodeWidget from './GeoNodeWidget';
-import CustomCodeWidget from './CustomCodeWidget';
 import ProfileDesignModal from './ProfileDesignModal';
 import EditProfileModal from './EditProfileModal';
 import { renderWidget, ProfileWidgetColumn } from './ProfileWidgetRenderer';
 import { Copy, Wallet, Edit, Save, PaintBucket, Layers, Crown, Eye, EyeOff, Sparkles, MessageSquare, UserPlus, Heart, Eye as EyeIcon, Zap, Music } from 'lucide-react';
-import { generateBio } from '../services/aiService';
 import { authAPI, userAPI, postAPI } from '../services/api';
 import VideoModal from './VideoModal';
 
@@ -25,6 +17,7 @@ interface ProfileGridProps {
   onProfileUpdate?: (updates: Partial<User>) => void;
   creatorModeEnabled?: boolean;
   onUsernameClick?: (userId: string) => void;
+  onEditSubscriptionTiers?: () => void;
 }
 
 interface Post {
@@ -207,7 +200,7 @@ const ContactButtons: React.FC<{ onMessage?: () => void; onAddFriend?: () => voi
   </div>
 );
 
-const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate, onUsernameClick, onOpenAdmin }) => {
+const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate, onUsernameClick, onOpenAdmin, onEditSubscriptionTiers }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -215,7 +208,6 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
   const [isDesignOpen, setIsDesignOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [localUser, setLocalUser] = useState(user);
-  const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
   const [isHudVisible, setIsHudVisible] = useState(true);
   const [isFollowing, setIsFollowing] = useState(user.isFollowing || false);
   const [userPosts, setUserPosts] = useState<Post[]>([]);
@@ -230,24 +222,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
     accentColor: '#39FF14'
   });
   const [bio, setBio] = useState(user.bio);
-  const [isGeneratingBio, setIsGeneratingBio] = useState(false);
   const [showSparkles, setShowSparkles] = useState(true);
-
-  const handleGenerateBio = async () => {
-    setIsGeneratingBio(true);
-    const newBio = await generateBio(user.username);
-    setBio(newBio);
-    setIsGeneratingBio(false);
-  };
-
-  const handlePurchaseKey = () => {
-    if (onTip) {
-      onTip(user.id);
-      setTimeout(() => setIsVaultUnlocked(true), 5000);
-    } else {
-      alert('Wallet not connected');
-    }
-  };
 
   const handleFollow = async () => {
     try {
@@ -433,11 +408,11 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
           <button onClick={() => setIsHudVisible(false)} className="px-3 py-2 border border-gray-700 text-gray-400 hover:text-white bg-black/50" title="Hide Interface">
             <EyeOff size={14} />
           </button>
-          <button onClick={() => onTip && onTip(user.id)} className="flex items-center gap-2 px-4 py-2 bg-[#FF00FF]/10 border border-[#FF00FF] text-[#FF00FF] text-xs font-bold hover:bg-[#FF00FF] hover:text-black transition-all">
-            <Crown size={14} /> SUBSCRIBE
-          </button>
           <button onClick={() => setIsDesignOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-gray-700 text-gray-400 text-xs font-bold hover:border-[#39FF14] hover:text-[#39FF14] transition-all bg-black/50">
             <PaintBucket size={14} /> DESIGN
+          </button>
+          <button onClick={() => onTip?.(user.id)} className="flex items-center gap-2 px-4 py-2 bg-[#FF00FF]/10 border border-[#FF00FF] text-[#FF00FF] text-xs font-bold hover:bg-[#FF00FF] hover:text-black transition-all">
+            <Crown size={14} /> TIP CREATOR
           </button>
           <GlitchButton onClick={handleSave} variant={isEditing ? 'danger' : 'primary'} className="h-9 px-4" disabled={isSaving}>
             {isSaving ? <><Save size={14} /> SAVING...</> : isEditing ? <><Save size={14} /> {saveSuccess ? 'SAVED ✓' : 'SAVE'}</> : <><PaintBucket size={14} /> DESIGN</>}
@@ -448,6 +423,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
           >
             <Edit size={14} /> EDIT PROFILE
           </button>
+          {user.isCreator && onEditSubscriptionTiers && <button onClick={onEditSubscriptionTiers} className="h-9 px-4 bg-[#FF00FF]/10 border border-[#FF00FF] text-[#FF00FF] rounded font-bold text-xs hover:bg-[#FF00FF]/20 transition-all flex items-center gap-1"><Crown size={14} /> EDIT TIERS</button>}
           {user.isAdmin === true && (
             <button 
               onClick={onOpenAdmin}
@@ -564,10 +540,7 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
 
             <ProfileWidgetColumn
               widgets={user.profileLayout?.leftZone}
-              defaultWidgets={[
-                <div key="music" className="h-48"><MusicPlayerWidget /></div>,
-                <div key="geo" className="h-48"><GeoNodeWidget /></div>
-              ]}
+              defaultWidgets={[]}
             />
           </div>
 
@@ -575,29 +548,12 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
           <div className="space-y-4">
             <AboutMeSection user={user} bio={bio} />
 
-            <div className="flex justify-end">
-              <button
-                onClick={handleGenerateBio}
-                disabled={isGeneratingBio}
-                className="flex items-center gap-2 text-[10px] text-[#39FF14] hover:text-white transition-colors border border-[#39FF14]/30 px-3 py-2 rounded hover:bg-[#39FF14]/10"
-              >
-                <Sparkles size={12} className={isGeneratingBio ? 'animate-spin' : ''} />
-                {isGeneratingBio ? 'GENERATING...' : 'GENERATE AI BIO'}
-              </button>
-            </div>
-
             <ProfileWidgetColumn
               widgets={user.profileLayout?.rightZone}
               defaultWidgets={[
-                <div key="topfriends" className="h-72"><TopFriendsWidget userId={user.id} /></div>,
-                <div key="assetgrid" className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="h-64"><AssetGalleryWidget /></div>
-                  <div className="h-64"><DataLogWidget /></div>
-                </div>
+                <div key="topfriends" className="h-72"><TopFriendsWidget userId={user.id} /></div>
               ]}
             />
-
-            <div className="h-48"><CustomCodeWidget /></div>
 
             <div className="h-48 group">
               <div className="w-full h-full bg-black/80 backdrop-blur-md border-2 border-[#39FF14] p-4 flex flex-col justify-center relative overflow-hidden">
@@ -623,19 +579,6 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="h-64">
-                <LockedWidget price="0.05 ETH" contentType="BLUEPRINTS" isUnlocked={isVaultUnlocked} onPurchase={handlePurchaseKey}>
-                  <div className="w-full h-full bg-black relative">
-                    <img src="https://picsum.photos/seed/secret/800/800" className="w-full h-full object-cover opacity-80" alt="Secret" />
-                    <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black to-transparent p-4">
-                      <h3 className="text-[#39FF14] font-bold">UNLOCKED: PROTOTYPE_BLUEPRINTS</h3>
-                    </div>
-                  </div>
-                </LockedWidget>
-              </div>
-              <div className="h-64"><SocialHubWidget /></div>
-            </div>
           </div>
         </div>
       </div>

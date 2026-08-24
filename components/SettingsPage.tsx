@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { 
   X, User, Bell, Shield, Wallet, Palette, Globe, 
   Lock, Eye, EyeOff, Moon, Sun, ChevronRight, 
@@ -7,7 +7,7 @@ import {
   Key, Fingerprint, Mail, Smartphone
 } from 'lucide-react';
 import GlitchButton from './GlitchButton';
-import { userAPI } from '../services/api';
+import { uploadAPI, userAPI } from '../services/api';
 import { User as UserType } from '../types';
 
 interface SettingsPageProps {
@@ -17,6 +17,7 @@ interface SettingsPageProps {
     name: string;
     email?: string;
     bio?: string;
+    avatar?: string;
     isAgeVerified?: boolean;
   };
   onVerify: (status: boolean) => void;
@@ -32,9 +33,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
   
   // Profile settings
   const [displayName, setDisplayName] = useState(currentUser.name);
-  const [email, setEmail] = useState(currentUser.email || '');
   const [bio, setBio] = useState(currentUser.bio || '');
-  const [isPrivate, setIsPrivate] = useState(false);
   
   // Notification settings
   const [emailNotifs, setEmailNotifs] = useState(true);
@@ -54,6 +53,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
   const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [avatar, setAvatar] = useState(currentUser.avatar || '');
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
@@ -73,12 +75,32 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'privacy', label: 'Privacy & Security', icon: Shield },
-    { id: 'wallet', label: 'Wallet', icon: Wallet },
-    { id: 'appearance', label: 'Appearance', icon: Palette },
-    { id: 'advanced', label: 'Advanced', icon: Key },
   ];
+
+  const handleAvatarUpload = async (file?: File) => {
+    if (!file) return;
+    setSaveError('');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setSaveError('Avatar must be a JPG, PNG, or WebP image.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setSaveError('Avatar must be 5MB or smaller.');
+      return;
+    }
+    setIsUploadingAvatar(true);
+    try {
+      const response = await uploadAPI.uploadAvatar(file);
+      const nextAvatar = response.data.data.url as string;
+      setAvatar(nextAvatar);
+      onProfileUpdate?.({ avatar: nextAvatar });
+    } catch (error: any) {
+      setSaveError(error.response?.data?.message || 'Avatar could not be uploaded.');
+    } finally {
+      setIsUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-xl">
@@ -145,17 +167,17 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
             {activeTab === 'profile' && (
               <div className="space-y-6 animate-in fade-in">
                 <h3 className="text-white font-bold text-lg mb-4">Profile Information</h3>
+                <div className="flex gap-3 border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-gray-300"><AlertTriangle className="shrink-0 text-amber-400" size={18} /><div><p className="font-bold text-amber-300">Identity verification unavailable</p><p className="mt-1 text-xs text-gray-400">No verification provider is configured. CyberDope will not collect your ID or selfie.</p></div></div>
                 
                 {/* Avatar */}
                 <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#39FF14] to-[#FF00FF] flex items-center justify-center text-3xl">
-                    {currentUser.name.charAt(0).toUpperCase()}
-                  </div>
+                  {avatar ? <img src={avatar} alt="Current avatar" className="h-20 w-20 rounded-full border border-gray-700 object-cover" /> : <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#39FF14] to-[#FF00FF] flex items-center justify-center text-3xl">{currentUser.name.charAt(0).toUpperCase()}</div>}
                   <div>
-                    <button disabled title="Avatar uploads are not available here yet" className="px-4 py-2 bg-gray-800 text-gray-500 text-sm font-bold rounded-lg cursor-not-allowed">
-                      Avatar upload unavailable
+                    <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" aria-label="Choose avatar image" onChange={(event) => handleAvatarUpload(event.target.files?.[0])} />
+                    <button type="button" disabled={isUploadingAvatar} onClick={() => avatarInputRef.current?.click()} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg">
+                      {isUploadingAvatar ? 'Uploading…' : avatar ? 'Replace avatar' : 'Upload avatar'}
                     </button>
-                    <p className="text-gray-500 text-xs mt-2">JPG, PNG or GIF. Max 5MB.</p>
+                    <p className="text-gray-500 text-xs mt-2">JPG, PNG or WebP. Max 5MB.</p>
                   </div>
                 </div>
 
@@ -168,19 +190,6 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
                     onChange={(e) => setDisplayName(e.target.value)}
                     className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#39FF14]"
                   />
-                </div>
-
-                {/* Email */}
-                <div className="space-y-2">
-                  <label className="text-gray-400 text-sm">Email Address</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#39FF14]"
-                  />
-                  <p className="text-gray-500 text-xs">Used for notifications and account recovery</p>
                 </div>
 
                 {/* Bio */}
@@ -196,23 +205,6 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
                   <p className="text-gray-500 text-xs text-right">{bio.length}/500</p>
                 </div>
 
-                {/* Private Account */}
-                <div className="flex items-center justify-between p-4 bg-black/50 border border-gray-800 rounded-lg">
-                  <div>
-                    <p className="text-white font-medium">Private Account</p>
-                    <p className="text-gray-500 text-sm">Only approved followers can see your content</p>
-                  </div>
-                  <button
-                    onClick={() => setIsPrivate(!isPrivate)}
-                    className={`w-12 h-6 rounded-full transition-colors relative ${
-                      isPrivate ? 'bg-[#39FF14]' : 'bg-gray-700'
-                    }`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-                      isPrivate ? 'left-7' : 'left-1'
-                    }`} />
-                  </button>
-                </div>
               </div>
             )}
 
