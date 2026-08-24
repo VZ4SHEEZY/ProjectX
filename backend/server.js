@@ -39,7 +39,7 @@ app.use(helmet({
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: Number.parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -107,6 +107,9 @@ app.use('/api/voice', require('./routes/voice'));
 app.use('/api/groups', require('./routes/groups'));
 app.use('/api/creator', require('./routes/creator'));
 app.use('/api/admin', require('./routes/admin'));
+if (process.env.QA_E2E_ENABLED === 'true' && process.env.NODE_ENV !== 'production') {
+  app.use('/api/qa', require('./routes/qa'));
+}
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

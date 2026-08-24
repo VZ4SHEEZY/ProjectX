@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Terminal, Lock, Cpu } from 'lucide-react';
 import GlitchButton from './GlitchButton';
+import { API_BASE_URL } from '../config';
 
 interface AuthPageProps {
   onLoginSuccess: (isNewUser: boolean) => void;
@@ -127,7 +128,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 30000);
 
-      const res = await fetch(`https://cyberdope-api.onrender.com${endpoint}`, {
+      const res = await fetch(`${API_BASE_URL}${endpoint.replace('/api', '')}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -314,5 +315,4 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
 };
 
 export default AuthPage;
-
 

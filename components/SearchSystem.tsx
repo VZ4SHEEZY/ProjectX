@@ -294,9 +294,12 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
                 {results.length} RESULTS FOR "{query}"
               </p>
               {results.map((result) => (
-                <button
+                <div
                   key={result.id}
                   onClick={() => handleResultClick(result)}
+                  onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') handleResultClick(result); }}
+                  role="button"
+                  tabIndex={0}
                   className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors group text-left"
                 >
                   {/* Image/Icon */}
@@ -362,7 +365,7 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
                   ) : (
                     <ArrowRight size={16} className="text-gray-600 group-hover:text-[#39FF14] transition-colors" />
                   )}
-                </button>
+                </div>
               ))}
             </div>
           )}
@@ -431,9 +434,12 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     {suggestedUsers.slice(0, 4).map((user) => (
-                      <button
+                      <div
                         key={user.id}
                         onClick={() => handleResultClick(user)}
+                        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') handleResultClick(user); }}
+                        role="button"
+                        tabIndex={0}
                         className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors text-left"
                       >
                         {user.image ? (
@@ -460,7 +466,7 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
                         >
                           <UserPlus size={12} />
                         </button>
-                      </button>
+                      </div>
                     ))}
                   </div>
                 </div>

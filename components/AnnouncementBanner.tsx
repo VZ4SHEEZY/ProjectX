@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, Bell } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
-const API_URL = 'https://cyberdope-api.onrender.com';
+const API_URL = API_BASE_URL.replace(/\/api$/, '');
 
 interface Announcement {
   _id: string;
@@ -29,7 +30,7 @@ const AnnouncementBanner: React.FC = () => {
       }
 
       const response = await axios.get(
-        'https://cyberdope-api.onrender.com/api/announcements/latest',
+        `${API_BASE_URL}/announcements/latest`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -52,7 +53,7 @@ const AnnouncementBanner: React.FC = () => {
     try {
       const token = localStorage.getItem('cdToken');
       await axios.post(
-        `https://cyberdope-api.onrender.com/api/announcements/${announcement._id}/dismiss`,
+        `${API_BASE_URL}/announcements/${announcement._id}/dismiss`,
         {},
         {
           headers: { Authorization: `Bearer ${token}` },

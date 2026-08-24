@@ -81,7 +81,7 @@ router.post('/posts/:postId/comments', protect, async (req, res) => {
     const comment = await Comment.create({
       author: req.user._id,
       post: req.params.postId,
-      content: content.trim(),
+      text: content.trim(),
       parentComment: parentCommentId || null
     });
 
@@ -161,7 +161,7 @@ router.put('/comments/:id', protect, async (req, res) => {
       });
     }
 
-    comment.content = content.trim();
+    comment.text = content.trim();
     comment.isEdited = true;
     await comment.save();
 
@@ -204,7 +204,7 @@ router.delete('/comments/:id', protect, async (req, res) => {
 
     // Soft delete
     comment.isDeleted = true;
-    comment.content = '[deleted]';
+    comment.text = '[deleted]';
     await comment.save();
 
     // Update post comment count
@@ -232,6 +232,9 @@ router.delete('/comments/:id', protect, async (req, res) => {
 // @access  Private
 router.post('/comments/:id/like', protect, async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Invalid comment ID' });
+    }
     const comment = await Comment.findById(req.params.id);
 
     if (!comment) {

@@ -206,11 +206,17 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
                     })}
                     className="relative group cursor-pointer overflow-hidden border border-[#39FF14]/30 rounded aspect-square"
                   >
-                    <img
-                      src={post.thumbnailUrl || post.mediaUrl}
-                      alt={post.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                    />
+                    {post.thumbnailUrl || post.mediaUrl ? (
+                      <img
+                        src={post.thumbnailUrl || post.mediaUrl}
+                        alt={post.title || post.description || 'Post'}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                      />
+                    ) : (
+                      <div className="w-full h-full p-4 bg-gray-950 text-sm text-gray-300 overflow-hidden">
+                        {post.description || post.content || 'Text post'}
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <div className="text-[#39FF14] text-3xl">▶</div>
                     </div>

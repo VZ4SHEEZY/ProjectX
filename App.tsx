@@ -288,14 +288,19 @@ const App: React.FC = () => {
   };
 
   // Logout function - clears all local state and auth
-  const handleLogout = () => {
-    void authAPI.logout().catch(() => undefined);
-    localStorage.removeItem('cdToken');
-    localStorage.removeItem('cdUser');
-    setUser(null);
-    setOnboardingStep('auth');
-    setCurrentView('feed');
-    window.history.replaceState({}, '', '/');
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+    } catch {
+      // Local logout must still complete if the server is unavailable.
+    } finally {
+      localStorage.removeItem('cdToken');
+      localStorage.removeItem('cdUser');
+      setUser(null);
+      setOnboardingStep('auth');
+      setCurrentView('feed');
+      window.history.replaceState({}, '', '/');
+    }
   };
 
   // Navigation handler - switches between main views

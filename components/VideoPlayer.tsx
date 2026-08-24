@@ -248,7 +248,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       )}
 
       {/* Video Element with Lazy-Load High-Quality on Play */}
-      <video
+      {videoSrc || video.url ? <video
         ref={videoRef}
         src={videoSrc || video.url}
         poster={video.thumbnailUrl}
@@ -258,7 +258,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         muted={isMuted}
         controls={false}
         className={`w-full h-full object-cover transition-all duration-500 ${(!decrypted || !unlocked) ? 'blur-2xl opacity-50 scale-110' : 'opacity-100 scale-100'}`}
-      />
+      /> : <div className="w-full h-full flex items-center justify-center p-8 bg-gray-950 text-center text-lg text-gray-200">
+        {video.description || 'Text post'}
+      </div>}
 
       {/* 1. Sensitive Content Overlay */}
       {!decrypted && (

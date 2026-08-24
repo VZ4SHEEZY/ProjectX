@@ -550,11 +550,13 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
                       })}
                       className="relative group cursor-pointer overflow-hidden border-2 border-[#39FF14]/50 hover:border-[#39FF14] transition-all duration-300 aspect-square"
                     >
-                      <img
+                      {post.thumbnailUrl || post.mediaUrl ? <img
                         src={post.thumbnailUrl || post.mediaUrl}
-                        alt={post.title}
+                        alt={post.title || post.description || 'Post'}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                      />
+                      /> : <div className="w-full h-full p-4 bg-gray-950 text-sm text-gray-300 overflow-hidden">
+                        {post.description || 'Text post'}
+                      </div>}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center">
                         <div className="text-[#39FF14] text-3xl">▶</div>
                         <div className="text-[10px] text-white font-mono mt-2 text-center px-2 truncate">{post.title}</div>

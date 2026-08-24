@@ -168,6 +168,8 @@ const userSchema = new mongoose.Schema({
     telegram: { type: String, default: '' },
   },
   isActive: { type: Boolean, default: true },
+  // Set only by the isolated E2E control plane. Cleanup is restricted to this marker.
+  isQaAccount: { type: Boolean, default: false, select: false, index: true },
 
   // Session
   lastActive: { type: Date, default: Date.now },
