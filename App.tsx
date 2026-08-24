@@ -685,8 +685,7 @@ const App: React.FC = () => {
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
         onUserClick={(username) => {
-          setSelectedUserId(username);
-          setCurrentView('userprofile');
+          handleViewUserProfile(username);
           setIsNotificationsOpen(false);
         }}
       />}
