@@ -89,6 +89,7 @@ const App: React.FC = () => {
   
   // New modals
   const [isAgeVerificationOpen, setIsAgeVerificationOpen] = useState(false);
+  const [agePromptDismissed, setAgePromptDismissed] = useState(false);
   const [isPostComposerOpen, setIsPostComposerOpen] = useState(false);
   const [isSubscriptionTiersOpen, setIsSubscriptionTiersOpen] = useState(false);
   
@@ -174,10 +175,10 @@ const App: React.FC = () => {
 
   // Show age verification modal if user is not verified (and not on auth page)
   useEffect(() => {
-    if (user && !user.isAgeVerified && currentView === 'feed') {
+    if (user && !user.isAgeVerified && currentView === 'feed' && !agePromptDismissed) {
       setIsAgeVerificationOpen(true);
     }
-  }, [user, currentView]);
+  }, [user, currentView, agePromptDismissed]);
 
   // Fetch unread notifications count periodically
   useEffect(() => {
@@ -763,7 +764,10 @@ const App: React.FC = () => {
         <div className="flex items-center gap-2 lg:gap-4">
           {!user.isAgeVerified && (
             <button 
-              onClick={() => setIsAgeVerificationOpen(true)}
+              onClick={() => {
+                setAgePromptDismissed(false);
+                setIsAgeVerificationOpen(true);
+              }}
               className="flex items-center gap-2 text-pink-500 hover:text-pink-400 text-xs transition-colors"
             >
               <span className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" />
@@ -842,8 +846,12 @@ const App: React.FC = () => {
 
       {isAgeVerificationOpen && <AgeVerificationModal
         isOpen={isAgeVerificationOpen}
-        onClose={() => setIsAgeVerificationOpen(false)}
+        onClose={() => {
+          setAgePromptDismissed(true);
+          setIsAgeVerificationOpen(false);
+        }}
         onVerifySuccess={() => {
+          setAgePromptDismissed(true);
           setIsAgeVerificationOpen(false);
           // Refresh user data
           const storedUser = localStorage.getItem('cdUser');
@@ -861,6 +869,7 @@ const App: React.FC = () => {
           onClose={() => setShowNSFWPrompt(false)}
           onVerify={() => {
             setShowNSFWPrompt(false);
+            setAgePromptDismissed(false);
             setIsAgeVerificationOpen(true);
           }}
         />
