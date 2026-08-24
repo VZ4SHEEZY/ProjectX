@@ -164,7 +164,7 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
-// Transcribe voice message (mock for demo)
+// Transcription is deliberately unavailable until a real provider is configured.
 router.post('/:id/transcribe', auth, async (req, res) => {
   try {
     const message = await VoiceMessage.findById(req.params.id);
@@ -173,25 +173,9 @@ router.post('/:id/transcribe', auth, async (req, res) => {
       return res.status(404).json({ error: 'Message not found' });
     }
     
-    // In production, use Whisper API or similar
-    // For demo, return mock transcription
-    const mockTranscriptions = [
-      "Hey, just wanted to check in and see how you're doing!",
-      "Can you send me that file when you get a chance?",
-      "Thanks for the tip, really appreciate it!",
-      "Let's meet up later and discuss the project.",
-      "That stream was amazing, keep it up!"
-    ];
-    
-    const transcription = mockTranscriptions[Math.floor(Math.random() * mockTranscriptions.length)];
-    
-    message.transcription = transcription;
-    await message.save();
-    
-    res.json({
-      success: true,
-      transcription
-    });
+    const canAccess = String(message.sender) === String(req.user._id) || String(message.recipient) === String(req.user._id);
+    if (!canAccess) return res.status(404).json({ error: 'Message not found' });
+    res.status(501).json({ success: false, code: 'TRANSCRIPTION_UNAVAILABLE', error: 'Voice transcription is not currently available' });
   } catch (error) {
     console.error('Transcribe Voice Error:', error);
     res.status(500).json({ error: 'Failed to transcribe' });

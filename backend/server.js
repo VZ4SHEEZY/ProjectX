@@ -100,7 +100,7 @@ app.use('/api/verify/yoti', require('./routes/verify-yoti'));
 
 // NEW FEATURES - AI, Live Streams, Wallet, Stories, Voice, Groups, Creator
 app.use('/api/ai', require('./routes/ai'));
-app.use('/api/streams', require('./routes/streams'));
+app.use('/api/streams', (req, res) => res.status(410).json({ success: false, code: 'LIVE_STREAMING_UNAVAILABLE', message: 'Live streaming is not supported.' }));
 app.use('/api/wallet', require('./routes/wallet'));
 app.use('/api/stories', require('./routes/stories'));
 app.use('/api/voice', require('./routes/voice'));

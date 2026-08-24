@@ -29,6 +29,7 @@ const uploader = (allowedTypes, maxBytes) => multer({
   )
 });
 const imageUpload = uploader(['image/jpeg', 'image/png', 'image/gif', 'image/webp'], 25 * 1024 * 1024);
+const avatarUpload = uploader(['image/jpeg', 'image/png', 'image/webp'], 5 * 1024 * 1024);
 const videoUpload = uploader(['video/mp4', 'video/webm', 'video/quicktime'], 100 * 1024 * 1024);
 const audioUpload = uploader(['audio/mpeg', 'audio/wav', 'audio/ogg'], 25 * 1024 * 1024);
 
@@ -131,18 +132,31 @@ router.post('/audio', protect, audioUpload.single('audio'), async (req, res) => 
 });
 
 // @route   POST /api/upload/avatar
-router.post('/avatar', protect, imageUpload.single('avatar'), async (req, res) => {
+router.post('/avatar', protect, avatarUpload.single('avatar'), async (req, res) => {
+  let result;
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
-    const result = await uploadToCloudinary(req.file.buffer, {
+    const user = await User.findById(req.user._id).select('+avatarPublicId');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    result = await uploadToCloudinary(req.file.buffer, {
       folder: 'cyberdope/avatars',
       resource_type: 'image',
       transformation: [{ width: 400, height: 400, crop: 'fill', gravity: 'face', quality: 'auto' }]
     });
     // Save to user profile
-    await User.findByIdAndUpdate(req.user._id, { avatar: result.secure_url });
+    const previousPublicId = user.avatarPublicId;
+    user.avatar = result.secure_url;
+    user.avatarPublicId = result.public_id;
+    await user.save();
+    if (previousPublicId?.startsWith('cyberdope/avatars/')) {
+      try { await cloudinary.uploader.destroy(previousPublicId, { resource_type: 'image', invalidate: true }); }
+      catch (cleanupError) { observability.recordError('avatar_replacement_cleanup_failure', cleanupError, { requestId: req.id }); }
+    }
     res.json({ success: true, data: { url: result.secure_url, publicId: result.public_id } });
   } catch (error) {
+    if (result?.public_id) {
+      try { await cloudinary.uploader.destroy(result.public_id, { resource_type: 'image', invalidate: true }); } catch {}
+    }
     failUpload(req, error, 'avatar');
     res.status(500).json({ success: false, message: error.message });
   }
@@ -167,24 +181,7 @@ router.post('/banner', protect, imageUpload.single('banner'), async (req, res) =
 
 // @route   POST /api/upload/file (generic file upload for age verification)
 router.post('/file', protect, imageUpload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
-    
-    // Upload to Cloudinary (images only for now - age verification files)
-    const result = await uploadToCloudinary(req.file.buffer, {
-      folder: 'cyberdope/verification',  // Separate folder for ID/selfie files
-      resource_type: 'image',
-      transformation: [{ quality: 'auto', fetch_format: 'auto' }]
-    });
-    
-    res.json({ 
-      success: true, 
-      data: { url: result.secure_url, publicId: result.public_id, type: req.file.mimetype } 
-    });
-  } catch (error) {
-    failUpload(req, error, 'verification');
-    res.status(500).json({ success: false, message: error.message });
-  }
+  res.status(410).json({ success: false, code: 'IDENTITY_UPLOAD_UNAVAILABLE', message: 'Identity document uploads are not accepted.' });
 });
 
 router.use((error, req, res, next) => {
