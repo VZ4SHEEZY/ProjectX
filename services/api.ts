@@ -59,6 +59,9 @@ export const authAPI = {
   getMe: () =>
     api.get('/auth/me'),
 
+  logout: () =>
+    api.post('/auth/logout'),
+
   verifyAge: () =>
     api.post('/auth/verify-age'),
 };
@@ -195,6 +198,9 @@ export const notificationAPI = {
 
 // ==================== MESSAGE API ====================
 export const messageAPI = {
+  getConversations: () =>
+    api.get('/messages'),
+
   sendMessage: (recipientId: string, content: string, mediaUrl?: string, isVanishing?: boolean) =>
     api.post('/messages', { recipientId, content, mediaUrl, isVanishing }),
 

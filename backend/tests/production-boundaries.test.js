@@ -4,12 +4,15 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const Group = require('../models/Group');
 const request = require('supertest');
+const fs = require('node:fs');
+const path = require('node:path');
 
 process.env.JWT_SECRET = 'production-boundary-test-secret';
 
 const User = require('../models/User');
 const Story = require('../models/Story');
 const Message = require('../models/Message');
+const Post = require('../models/Post');
 const usersRouter = require('../routes/users');
 const storiesRouter = require('../routes/stories');
 const messagesRouter = require('../routes/messages');
@@ -23,6 +26,8 @@ const original = {
   userFindByIdAndUpdate: User.findByIdAndUpdate,
   storyDeleteMany: Story.deleteMany,
   messageCount: Message.countDocuments
+  ,userFindOne: User.findOne
+  ,postFind: Post.find
 };
 
 test.afterEach(() => {
@@ -30,6 +35,8 @@ test.afterEach(() => {
   User.findByIdAndUpdate = original.userFindByIdAndUpdate;
   Story.deleteMany = original.storyDeleteMany;
   Message.countDocuments = original.messageCount;
+  User.findOne = original.userFindOne;
+  Post.find = original.postFind;
 });
 
 const appFor = (path, router) => {
@@ -104,6 +111,62 @@ test('profile updates cannot self-promote a user to creator', async () => {
   assert.equal(update.isCreator, undefined);
 });
 
+test('public profiles resolve by ID and exclude private account fields', async () => {
+  let selectedFields = '';
+  const publicUser = {
+    _id: '507f191e810c19729de860ea',
+    username: 'creator',
+    toObject: () => ({ _id: '507f191e810c19729de860ea', username: 'creator' })
+  };
+  User.findOne = query => ({
+    select: fields => {
+      selectedFields = fields;
+      return Promise.resolve(publicUser);
+    }
+  });
+  Post.find = () => ({
+    sort: () => ({
+      limit: () => ({ populate: () => Promise.resolve([]) })
+    })
+  });
+
+  const response = await request(appFor('/api/users', usersRouter))
+    .get('/api/users/507f191e810c19729de860ea');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.username, 'creator');
+  assert.deepEqual(response.body.posts, []);
+  assert.equal(selectedFields.includes('dateOfBirth'), false);
+  assert.equal(selectedFields.includes('embeddedWalletAddress'), false);
+  assert.equal(selectedFields.includes('email'), false);
+});
+
+test('follow toggles keep denormalized follower counts consistent', async () => {
+  const targetId = '507f191e810c19729de860ea';
+  const currentUser = {
+    _id: userId,
+    isActive: true,
+    username: 'viewer',
+    following: [targetId],
+    save: async () => {}
+  };
+  const targetUser = {
+    _id: targetId,
+    followers: [userId],
+    save: async () => {}
+  };
+  User.findById = id => Promise.resolve(String(id) === targetId ? targetUser : currentUser);
+
+  const response = await request(appFor('/api/users', usersRouter))
+    .post(`/api/users/${targetId}/follow`)
+    .set(auth);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.isFollowing, false);
+  assert.equal(response.body.followersCount, 0);
+  assert.equal(response.body.followingCount, 0);
+});
+
 test('story cleanup rejects non-admins and works for admins', async () => {
   const app = appFor('/api/stories', storiesRouter);
   User.findById = () => Promise.resolve({ _id: userId, isAdmin: false });
@@ -136,5 +199,13 @@ test('message creation rejects malformed content without crashing', async () => 
       .set(auth)
       .send({ recipientId: '507f191e810c19729de860ea', content });
     assert.equal(response.status, 400);
+  }
+});
+
+test('social actions use the Notification actor field', () => {
+  for (const file of ['comments.js', 'posts.js']) {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'routes', file), 'utf8');
+    assert.equal(/Notification\.create\([\s\S]*?sender\s*:/.test(source), false);
+    assert.match(source, /createNotification/);
   }
 });

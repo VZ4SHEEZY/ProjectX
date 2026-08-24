@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 
-// MongoDB connection string - using environment variable or hardcoded for this script
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://cyberdope:CyberDope2026!@cyberdope.mongodb.net/cyberdope?retryWrites=true&w=majority';
+const MONGODB_URI = process.env.MONGODB_URI;
 
 // Post IDs and new video URLs
 const updates = [
@@ -40,6 +39,10 @@ const updates = [
 ];
 
 async function updateVideos() {
+  if (!MONGODB_URI) {
+    console.error('MONGODB_URI is required');
+    process.exit(1);
+  }
   try {
     await mongoose.connect(MONGODB_URI);
     console.log('✅ Connected to MongoDB');

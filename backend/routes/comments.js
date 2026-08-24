@@ -2,14 +2,18 @@ const express = require('express');
 const router = express.Router();
 const Comment = require('../models/Comment');
 const Post = require('../models/Post');
-const Notification = require('../models/Notification');
 const { protect } = require('../middleware/auth');
+const { createNotification } = require('./notifications');
+const mongoose = require('mongoose');
 
 // @route   GET /api/posts/:postId/comments
 // @desc    Get all comments for a post
 // @access  Public
 router.get('/posts/:postId/comments', async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.postId)) {
+      return res.status(400).json({ success: false, message: 'Invalid post ID' });
+    }
     const { page = 1, limit = 20, sort = '-createdAt' } = req.query;
 
     const comments = await Comment.find({
@@ -57,7 +61,7 @@ router.post('/posts/:postId/comments', protect, async (req, res) => {
   try {
     const { content, parentCommentId } = req.body;
 
-    if (!content || content.trim().length === 0) {
+    if (typeof content !== 'string' || content.trim().length === 0 || content.trim().length > 2000) {
       return res.status(400).json({
         success: false,
         message: 'Comment content is required'
@@ -90,31 +94,28 @@ router.post('/posts/:postId/comments', protect, async (req, res) => {
     // If it's a reply, add to parent comment
     if (parentCommentId) {
       const parentComment = await Comment.findById(parentCommentId);
-      if (parentComment) {
+      if (parentComment && parentComment.post.toString() === post._id.toString() && !parentComment.isDeleted) {
         parentComment.replies.push(comment._id);
         await parentComment.save();
 
         // Notify parent comment author
         if (parentComment.author.toString() !== req.user._id.toString()) {
-          await Notification.create({
-            recipient: parentComment.author,
-            sender: req.user._id,
-            type: 'reply',
-            post: post._id,
-            comment: comment._id,
+          await createNotification(parentComment.author, req.user._id, 'reply', {
+            post: post._id, comment: comment._id,
             message: `${req.user.displayName || req.user.username} replied to your comment`
           });
         }
+      } else {
+        await Comment.deleteOne({ _id: comment._id });
+        post.stats.comments = Math.max(0, post.stats.comments - 1);
+        await post.save();
+        return res.status(400).json({ success: false, message: 'Invalid parent comment' });
       }
     } else {
       // Notify post author of new comment
       if (post.author.toString() !== req.user._id.toString()) {
-        await Notification.create({
-          recipient: post.author,
-          sender: req.user._id,
-          type: 'comment',
-          post: post._id,
-          comment: comment._id,
+        await createNotification(post.author, req.user._id, 'comment', {
+          post: post._id, comment: comment._id,
           message: `${req.user.displayName || req.user.username} commented on your post`
         });
       }
@@ -139,6 +140,9 @@ router.post('/posts/:postId/comments', protect, async (req, res) => {
 router.put('/comments/:id', protect, async (req, res) => {
   try {
     const { content } = req.body;
+    if (typeof content !== 'string' || !content.trim() || content.trim().length > 2000) {
+      return res.status(400).json({ success: false, message: 'Valid comment content is required' });
+    }
 
     let comment = await Comment.findById(req.params.id);
 

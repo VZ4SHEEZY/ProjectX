@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const Post = require('../models/Post');
 const { optionalAuth } = require('../middleware/auth');
+const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // @route   GET /api/search
 // @desc    Search users and posts
@@ -17,7 +18,7 @@ router.get('/', optionalAuth, async (req, res) => {
       limit = 20
     } = req.query;
 
-    if (!q || q.trim().length === 0) {
+    if (typeof q !== 'string' || q.trim().length === 0 || q.trim().length > 100) {
       return res.status(400).json({
         success: false,
         message: 'Search query is required'
@@ -25,6 +26,7 @@ router.get('/', optionalAuth, async (req, res) => {
     }
 
     const searchQuery = q.trim();
+    const safeSearch = escapeRegex(searchQuery);
     const results = {
       users: [],
       posts: []
@@ -35,14 +37,14 @@ router.get('/', optionalAuth, async (req, res) => {
       const userQuery = {
         isActive: true,
         $or: [
-          { username: { $regex: searchQuery, $options: 'i' } },
-          { displayName: { $regex: searchQuery, $options: 'i' } },
-          { bio: { $regex: searchQuery, $options: 'i' } }
+          { username: { $regex: safeSearch, $options: 'i' } },
+          { displayName: { $regex: safeSearch, $options: 'i' } },
+          { bio: { $regex: safeSearch, $options: 'i' } }
         ]
       };
 
       const users = await User.find(userQuery)
-        .select('-email -password -walletPrivateKey -subscriptions -purchasedContent')
+        .select('username displayName avatar bio isVerified isCreator followersCount faction')
         .sort('-followersCount')
         .limit(type === 'all' ? 5 : limit * 1)
         .skip((page - 1) * limit);
@@ -55,8 +57,8 @@ router.get('/', optionalAuth, async (req, res) => {
       const postQuery = {
         status: 'published',
         $or: [
-          { content: { $regex: searchQuery, $options: 'i' } },
-          { tags: { $in: [new RegExp(searchQuery, 'i')] } }
+          { content: { $regex: safeSearch, $options: 'i' } },
+          { tags: { $in: [new RegExp(safeSearch, 'i')] } }
         ]
       };
 
@@ -138,21 +140,22 @@ router.get('/suggestions', async (req, res) => {
   try {
     const { q, limit = 5 } = req.query;
 
-    if (!q || q.trim().length === 0) {
+    if (typeof q !== 'string' || q.trim().length === 0) {
       return res.json({
         success: true,
         data: []
       });
     }
 
-    const searchQuery = q.trim();
+    const searchQuery = q.trim().slice(0, 100);
+    const safeSearch = escapeRegex(searchQuery);
 
     // Search users
     const users = await User.find({
       isActive: true,
       $or: [
-        { username: { $regex: `^${searchQuery}`, $options: 'i' } },
-        { displayName: { $regex: searchQuery, $options: 'i' } }
+      { username: { $regex: `^${safeSearch}`, $options: 'i' } },
+      { displayName: { $regex: safeSearch, $options: 'i' } }
       ]
     })
     .select('username displayName avatar isVerified')
@@ -160,7 +163,7 @@ router.get('/suggestions', async (req, res) => {
 
     // Search hashtags
     const hashtags = await Post.distinct('tags', {
-      tags: { $regex: searchQuery, $options: 'i' }
+      tags: { $regex: safeSearch, $options: 'i' }
     }).limit(parseInt(limit));
 
     res.json({

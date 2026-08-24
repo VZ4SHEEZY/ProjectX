@@ -205,10 +205,8 @@ Available Widgets:
 TEST ACCOUNTS
 ================================================================================
 
-TEST USER:
-  Email: test@cyberdope.com
-  Password: CyberDope2026
-  Faction: Iron Veil
+QA accounts must be created through the signup flow. Do not store their
+credentials in repository documentation.
 
 CREATOR ACCOUNT:
   Username: vz4sheezy

@@ -189,10 +189,8 @@ git push origin master
 
 ## Test Accounts
 
-**Test User:**
-- Email: `test@cyberdope.com`
-- Password: `CyberDope2026`
-- Faction: Iron Veil
+Use a dedicated QA account created through the production signup flow. Never
+store its password in repository documentation.
 
 **Creator Account:**
 - Username: `vz4sheezy`

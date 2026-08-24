@@ -11,6 +11,7 @@ interface DMSystemProps {
     name: string;
     avatar: string;
   };
+  initialRecipientId?: string | null;
 }
 
 interface Conversation {
@@ -24,7 +25,7 @@ interface Conversation {
   isOnline?: boolean;
 }
 
-const DMSystem: React.FC<DMSystemProps> = ({ isOpen, onClose, currentUser }) => {
+const DMSystem: React.FC<DMSystemProps> = ({ isOpen, onClose, currentUser, initialRecipientId }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
@@ -34,28 +35,16 @@ const DMSystem: React.FC<DMSystemProps> = ({ isOpen, onClose, currentUser }) => 
 
   useEffect(() => {
     if (isOpen) {
+      setSelectedConversation(initialRecipientId || null);
       loadConversations();
     }
-  }, [isOpen]);
+  }, [isOpen, initialRecipientId]);
 
   const loadConversations = async () => {
     setIsLoading(true);
     try {
-      // Get all users first
-      const usersRes = await userAPI.getSuggestedUsers();
-      const allUsers = usersRes.data?.data || [];
-
-      // For each user, try to get last message
-      const convsData: Conversation[] = allUsers.slice(0, 20).map((user: any) => ({
-        userId: user._id,
-        username: user.username,
-        avatar: user.avatar,
-        displayName: user.displayName,
-        unreadCount: 0,
-        isOnline: user.isOnline
-      }));
-
-      setConversations(convsData);
+      const response = await messageAPI.getConversations();
+      setConversations(response.data?.data || []);
     } catch (error) {
       console.error('Failed to load conversations:', error);
     } finally {

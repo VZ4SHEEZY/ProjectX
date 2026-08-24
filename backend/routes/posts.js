@@ -2,8 +2,8 @@ const express = require('express');
 const router = express.Router();
 const Post = require('../models/Post');
 const User = require('../models/User');
-const Notification = require('../models/Notification');
 const { protect, optionalAuth, requireAgeVerified } = require('../middleware/auth');
+const { createNotification } = require('./notifications');
 
 // @route   GET /api/posts
 // @desc    Get all posts (feed)
@@ -575,10 +575,7 @@ router.post('/:id/like', protect, async (req, res) => {
 
       // Create notification
       if (post.author.toString() !== req.user._id.toString()) {
-        await Notification.create({
-          recipient: post.author,
-          sender: req.user._id,
-          type: 'like',
+        await createNotification(post.author, req.user._id, 'like', {
           post: post._id,
           message: `${req.user.displayName || req.user.username} liked your post`
         });

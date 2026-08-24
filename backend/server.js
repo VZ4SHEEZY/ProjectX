@@ -29,6 +29,7 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"]
   }
 });
+app.set('io', io);
 
 // Security middleware
 app.use(helmet({

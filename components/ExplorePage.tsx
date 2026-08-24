@@ -118,7 +118,9 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ isAgeVerified, currentUser, o
         }
 
         if (usersRes.status === 'fulfilled') {
-          const rawUsers: any[] = Array.isArray(usersRes.value?.data?.users)
+          const rawUsers: any[] = Array.isArray(usersRes.value?.data?.data)
+            ? usersRes.value.data.data
+            : Array.isArray(usersRes.value?.data?.users)
             ? usersRes.value.data.users
             : Array.isArray(usersRes.value?.data)
             ? usersRes.value.data

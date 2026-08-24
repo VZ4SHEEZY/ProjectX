@@ -5,6 +5,47 @@ const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const mongoose = require('mongoose');
 
+// Return real conversation summaries instead of a suggested-user list.
+router.get('/', protect, async (req, res) => {
+  try {
+    const messages = await Message.find({
+      $or: [{ sender: req.user._id }, { recipient: req.user._id }]
+    })
+      .populate('sender', 'username displayName avatar isOnline')
+      .populate('recipient', 'username displayName avatar isOnline')
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .lean();
+
+    const conversations = new Map();
+    for (const message of messages) {
+      const sentByCurrentUser = message.sender?._id?.toString() === req.user._id.toString();
+      const otherUser = sentByCurrentUser ? message.recipient : message.sender;
+      if (!otherUser?._id) continue;
+      const id = otherUser._id.toString();
+      const current = conversations.get(id);
+      if (!current) {
+        conversations.set(id, {
+          userId: id,
+          username: otherUser.username,
+          displayName: otherUser.displayName,
+          avatar: otherUser.avatar,
+          isOnline: otherUser.isOnline,
+          lastMessage: message.content,
+          lastMessageTime: message.createdAt,
+          unreadCount: 0
+        });
+      }
+      if (!message.read && !sentByCurrentUser) conversations.get(id).unreadCount += 1;
+    }
+
+    res.json({ success: true, data: [...conversations.values()] });
+  } catch (error) {
+    console.error('Conversation list error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch conversations' });
+  }
+});
+
 // Keep static paths before /:recipientId so they are not interpreted as user IDs.
 router.get('/unread/count', protect, async (req, res) => {
   try {
@@ -49,6 +90,9 @@ router.post('/', protect, async (req, res) => {
 
     await message.save();
     await message.populate('sender', 'username avatar');
+    await message.populate('recipient', 'username avatar');
+
+    req.app.get('io')?.to(`user:${recipientId}`).emit('message', message);
 
     res.json({
       success: true,

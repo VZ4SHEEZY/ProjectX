@@ -59,16 +59,17 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
         ]);
 
         if (trendRes.status === 'fulfilled') {
-          const data = trendRes.value?.data;
+          const data = trendRes.value?.data?.data || trendRes.value?.data;
           // API may return { tags: [...] } or { trending: [...] } or plain array
-          const tags: string[] = data?.tags?.map((t: any) => t.name || t) ||
+          const tags: string[] = data?.hashtags?.map((t: any) => t.tag || t.name || t) ||
+                                  data?.tags?.map((t: any) => t.name || t) ||
                                   data?.trending?.map((t: any) => t.name || t) ||
                                   (Array.isArray(data) ? data.map((t: any) => t.name || t) : []);
           setTrendingSearches(tags.slice(0, 8));
         }
 
         if (usersRes.status === 'fulfilled') {
-          const rawUsers: any[] = usersRes.value?.data?.users || usersRes.value?.data || [];
+          const rawUsers: any[] = usersRes.value?.data?.data || usersRes.value?.data?.users || [];
           const mapped: SearchResult[] = rawUsers.map((u: any) => ({
             id: u._id,
             type: 'user',
@@ -98,7 +99,7 @@ const SearchSystem: React.FC<SearchSystemProps> = ({ isOpen, onClose, onResultCl
     try {
       const typeParam = activeFilter === 'all' ? undefined : (activeFilter === 'content' ? 'posts' : activeFilter) as any;
       const res = await searchAPI.search(searchQuery, typeParam);
-      const data = res?.data;
+      const data = res?.data?.data || res?.data;
 
       let combined: SearchResult[] = [];
 

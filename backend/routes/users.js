@@ -2,8 +2,16 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Post = require('../models/Post');
-const { protect } = require('../middleware/auth');
+const { protect, optionalAuth } = require('../middleware/auth');
 const { createNotification } = require('./notifications');
+const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const PUBLIC_USER_FIELDS = [
+  'username', 'displayName', 'avatar', 'banner', 'bio', 'faction', 'factionColor',
+  'isVerified', 'isAgeVerified', 'isCreator', 'creatorStatus', 'followersCount',
+  'followingCount', 'postsCount', 'theme', 'location', 'website', 'socialLinks',
+  'subscriptionTiers', 'profilePrivacy', 'isOnline', 'lastActive', 'createdAt'
+].join(' ');
 
 // @route   GET /api/users
 // @desc    Get all users (with filters)
@@ -24,9 +32,10 @@ router.get('/', async (req, res) => {
 
     // Search by username or display name
     if (search) {
+      const safeSearch = escapeRegex(String(search).slice(0, 100));
       query.$or = [
-        { username: { $regex: search, $options: 'i' } },
-        { displayName: { $regex: search, $options: 'i' } }
+        { username: { $regex: safeSearch, $options: 'i' } },
+        { displayName: { $regex: safeSearch, $options: 'i' } }
       ];
     }
 
@@ -40,7 +49,7 @@ router.get('/', async (req, res) => {
     if (isVerified === 'true') query.isVerified = true;
 
     const users = await User.find(query)
-      .select('-email -password -walletPrivateKey -subscriptions -purchasedContent')
+      .select(PUBLIC_USER_FIELDS)
       .sort(sort)
       .limit(limit * 1)
       .skip((page - 1) * limit);
@@ -81,7 +90,7 @@ router.get('/suggested', protect, async (req, res) => {
       isActive: true,
       isCreator: true
     })
-    .select('-email -password -walletPrivateKey')
+    .select(PUBLIC_USER_FIELDS)
     .sort('-followersCount')
     .limit(parseInt(limit));
 
@@ -99,15 +108,19 @@ router.get('/suggested', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/users/:username
-// @desc    Get user by username
+// @route   GET /api/users/:identifier
+// @desc    Get user by username or MongoDB ID
 // @access  Public
-router.get('/:username', async (req, res) => {
+router.get('/:identifier', optionalAuth, async (req, res) => {
   try {
-    const user = await User.findOne({ 
-      username: req.params.username,
+    const identifier = req.params.identifier;
+    const identityQuery = require('mongoose').isValidObjectId(identifier)
+      ? { _id: identifier }
+      : { username: identifier.toLowerCase() };
+    const user = await User.findOne({
+      ...identityQuery,
       isActive: true 
-    }).select('-email -password -walletPrivateKey');
+    }).select(PUBLIC_USER_FIELDS);
 
     if (!user) {
       return res.status(404).json({
@@ -125,12 +138,15 @@ router.get('/:username', async (req, res) => {
     .limit(12)
     .populate('author', 'username displayName avatar isVerified');
 
+    const data = user.toObject();
+    data.isFollowing = Boolean(req.user?.following?.some(
+      followedId => followedId.toString() === user._id.toString()
+    ));
+
     res.json({
       success: true,
-      data: {
-        user,
-        posts
-      }
+      data,
+      posts
     });
   } catch (error) {
     res.status(500).json({
@@ -237,6 +253,8 @@ router.post('/:id/follow', protect, async (req, res) => {
       userToFollow.followers.push(req.user._id);
     }
 
+    currentUser.followingCount = currentUser.following.length;
+    userToFollow.followersCount = userToFollow.followers.length;
     await currentUser.save();
     await userToFollow.save();
 
@@ -253,6 +271,8 @@ router.post('/:id/follow', protect, async (req, res) => {
     res.json({
       success: true,
       isFollowing: !isFollowing,
+      followersCount: userToFollow.followersCount,
+      followingCount: currentUser.followingCount,
       message: isFollowing ? 'Unfollowed successfully' : 'Followed successfully'
     });
   } catch (error) {

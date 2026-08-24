@@ -1,7 +1,7 @@
 
 import React, { lazy, Suspense, useState, useEffect } from 'react';
 import AuthPage from './components/AuthPage';
-import { userAPI } from './services/api';
+import { authAPI, userAPI } from './services/api';
 import { API_BASE_URL } from './config';
 
 import BiometricScanner from './components/BiometricScanner';
@@ -33,7 +33,6 @@ const CommentSystem = lazy(() => import('./components/CommentSystem'));
 const DMSystem = lazy(() => import('./components/DMSystem'));
 const SettingsPage = lazy(() => import('./components/SettingsPage'));
 const ThemeEditor = lazy(() => import('./components/ThemeEditor'));
-const LiveStream = lazy(() => import('./components/LiveStream'));
 const Stories = lazy(() => import('./components/Stories').then(module => ({ default: module.Stories })));
 const CreateStory = lazy(() => import('./components/Stories').then(module => ({ default: module.CreateStory })));
 const Groups = lazy(() => import('./components/Groups').then(module => ({ default: module.Groups })));
@@ -42,6 +41,20 @@ type OnboardingStep = 'auth' | 'scanning' | 'reveal' | 'app';
 type MainView = 'feed' | 'explore' | 'messages' | 'profile' | 'userprofile' | 'admin';
 type FeedTab = 'discover' | 'friends' | 'faction';
 // Cache bust: force redeploy
+
+const routeFromLocation = (): { view: MainView; userId?: string } => {
+  const segments = window.location.pathname.split('/').filter(Boolean);
+  if (segments[0] === 'users' && segments[1]) {
+    return { view: 'userprofile', userId: decodeURIComponent(segments[1]) };
+  }
+  if (['feed', 'explore', 'messages', 'profile', 'admin'].includes(segments[0])) {
+    return { view: segments[0] as MainView };
+  }
+  return { view: 'feed' };
+};
+
+const pathForRoute = (view: MainView, userId?: string) =>
+  view === 'userprofile' && userId ? `/users/${encodeURIComponent(userId)}` : `/${view}`;
 
 const mapApiUser = (apiUser: any): User => ({
   id: apiUser.id || apiUser._id,
@@ -64,8 +77,10 @@ const App: React.FC = () => {
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('auth');
   const [isLoading, setIsLoading] = useState(true);
   
-  const [currentView, setCurrentView] = useState<MainView>('feed');
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const initialRoute = routeFromLocation();
+  const [currentView, setCurrentView] = useState<MainView>(initialRoute.view);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(initialRoute.userId || null);
+  const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
   const [feedTab, setFeedTab] = useState<FeedTab>('discover');
   const [creatorModeEnabled, setCreatorModeEnabled] = useState(false);
   const [isTipModalOpen, setIsTipModalOpen] = useState(false);
@@ -84,7 +99,6 @@ const App: React.FC = () => {
   const [activePostId, setActivePostId] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isThemeEditorOpen, setIsThemeEditorOpen] = useState(false);
-  const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false);
   
   // New Feature States
   const [isStoriesOpen, setIsStoriesOpen] = useState(false);
@@ -145,6 +159,17 @@ const App: React.FC = () => {
       setIsLoading(false);
     };
     restore();
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const route = routeFromLocation();
+      setCurrentView(route.view);
+      setSelectedUserId(route.userId || null);
+      setIsMobileMenuOpen(false);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   // Show age verification modal if user is not verified (and not on auth page)
@@ -263,11 +288,13 @@ const App: React.FC = () => {
 
   // Logout function - clears all local state and auth
   const handleLogout = () => {
+    void authAPI.logout().catch(() => undefined);
     localStorage.removeItem('cdToken');
     localStorage.removeItem('cdUser');
     setUser(null);
     setOnboardingStep('auth');
     setCurrentView('feed');
+    window.history.replaceState({}, '', '/');
   };
 
   // Navigation handler - switches between main views
@@ -276,12 +303,19 @@ const App: React.FC = () => {
       setSelectedUserId(userId);
     }
     setCurrentView(view);
+    const nextPath = pathForRoute(view, userId);
+    if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
     setIsMobileMenuOpen(false);
   };
 
   const handleViewUserProfile = (userId: string) => {
     if (!userId) return;
     navigateTo('userprofile', userId);
+  };
+
+  const handleMessageUser = (userId: string) => {
+    setMessageRecipientId(userId);
+    navigateTo('messages');
   };
 
   // Handle post publish
@@ -597,6 +631,7 @@ const App: React.FC = () => {
             isOpen={true}
             onClose={() => navigateTo('feed')}
             currentUser={{ _id: user.id, name: user.username, avatar: user.avatar }}
+            initialRecipientId={messageRecipientId}
           />
         )}
         
@@ -638,7 +673,8 @@ const App: React.FC = () => {
               userId={selectedUserId}
               username={selectedUserId}
               currentUser={user}
-              onBack={() => setCurrentView('feed')}
+              onBack={() => window.history.length > 1 ? window.history.back() : navigateTo('feed')}
+              onMessage={handleMessageUser}
             />
           </div>
         )}
@@ -736,12 +772,13 @@ const App: React.FC = () => {
               <span className="lg:hidden hidden sm:inline">VERIFY AGE</span>
             </button>
           )}
-          <button 
-            onClick={() => setIsLiveStreamOpen(true)}
-            className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 bg-red-500/20 text-red-500 text-xs font-bold rounded-lg hover:bg-red-500 hover:text-white transition-colors"
+          <button
+            disabled
+            title="Live streaming is not available yet"
+            className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 bg-gray-800/60 text-gray-500 text-xs font-bold rounded-lg cursor-not-allowed"
           >
-            <Radio size={12} className="animate-pulse" />
-            <span className="hidden sm:inline">GO LIVE</span>
+            <Radio size={12} />
+            <span className="hidden sm:inline">LIVE (SOON)</span>
           </button>
         </div>
       </div>
@@ -787,13 +824,6 @@ const App: React.FC = () => {
       {isThemeEditorOpen && <ThemeEditor
         isOpen={isThemeEditorOpen}
         onClose={() => setIsThemeEditorOpen(false)}
-      />}
-
-      {/* Live Stream */}
-      {isLiveStreamOpen && <LiveStream
-        isOpen={isLiveStreamOpen}
-        onClose={() => setIsLiveStreamOpen(false)}
-        currentUser={{ name: user.username, avatar: user.avatar }}
       />}
 
       {/* Legacy Modals */}

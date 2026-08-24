@@ -163,7 +163,7 @@ git push origin feature/my-feature
 # Login first
 curl -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@cyberdope.com","password":"CyberDope2026"}'
+  -d '{"email":"qa-user@example.invalid","password":"<QA_PASSWORD>"}'
 
 # Response: { token: "eyJhbGc...", user: {...} }
 TOKEN="eyJhbGc..."
@@ -537,7 +537,7 @@ curl https://cyberdope-api.onrender.com/health
 # Can login?
 curl -X POST https://cyberdope-api.onrender.com/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@cyberdope.com","password":"CyberDope2026"}'
+  -d '{"email":"qa-user@example.invalid","password":"<QA_PASSWORD>"}'
 
 # Get token, test protected endpoint
 TOKEN="..."
@@ -668,7 +668,7 @@ If someone else needs to work on CyberDope:
 - [ ] `npm start` (backend should start)
 - [ ] `cd ../app && npm run dev` (frontend should load)
 - [ ] Open http://localhost:5173 in browser
-- [ ] Try to login with test@cyberdope.com / CyberDope2026
+- [ ] Log in with a dedicated QA account; never document its password.
 - [ ] If it works, they're ready to develop!
 
 ---

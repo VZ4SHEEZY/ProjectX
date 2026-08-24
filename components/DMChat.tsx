@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Trash2, CheckCheck, Clock } from 'lucide-react';
 import { messageAPI } from '../services/api';
+import { socketService } from '../services/socket';
 
 interface DMChatProps {
   isOpen: boolean;
@@ -55,10 +56,22 @@ const DMChat: React.FC<DMChatProps> = ({
   useEffect(() => {
     if (isOpen && recipientId) {
       loadMessages();
-      const interval = setInterval(loadMessages, 3000); // Poll every 3 seconds
-      return () => clearInterval(interval);
+      socketService.onMessage((message: Message) => {
+        const senderId = message.sender?._id;
+        const recipient = message.recipient?._id;
+        if (senderId !== recipientId || recipient !== currentUser._id) return;
+        setMessages(current => current.some(item => item._id === message._id)
+          ? current
+          : [...current, message]);
+        void messageAPI.markMessageAsRead(message._id);
+      });
+      const fallback = setInterval(loadMessages, 30000);
+      return () => {
+        clearInterval(fallback);
+        socketService.offMessage();
+      };
     }
-  }, [isOpen, recipientId]);
+  }, [isOpen, recipientId, currentUser._id]);
 
   // Auto-scroll to bottom
   useEffect(() => {

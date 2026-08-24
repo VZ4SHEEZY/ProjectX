@@ -10,9 +10,10 @@ interface UserProfilePageProps {
   currentUser?: User;
   onBack: () => void;
   onFollowChange?: (userId: string, isFollowing: boolean) => void;
+  onMessage?: (userId: string) => void;
 }
 
-const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, currentUser, onBack }) => {
+const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, currentUser, onBack, onMessage }) => {
   const [user, setUser] = useState<any>(null);
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -37,9 +38,9 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
     setIsLoading(true);
     try {
       // Fetch user by ID or username
-      const endpoint = userId ? `/users/${userId}` : `/users/username/${username}`;
       const userRes = await userAPI.getUser(userId || username!);
-      const userData = userRes.data?.data || userRes.data;
+      const payload = userRes.data?.data || userRes.data;
+      const userData = payload?.user || payload;
       
       setUser(userData);
       setIsFollowing(userData.isFollowing || false);
@@ -75,6 +76,10 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
       const response = await userAPI.followUser(user._id);
       if (response.data?.success) {
         setIsFollowing(response.data.isFollowing);
+        setUser((current: any) => current ? {
+          ...current,
+          followersCount: response.data.followersCount ?? current.followersCount
+        } : current);
         // Trigger refresh across app
         window.dispatchEvent(new Event('followingUpdated'));
       }
@@ -159,7 +164,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
                   {isFollowing ? <UserCheck size={16} /> : <UserPlus size={16} />}
                   {isFollowing ? 'FOLLOWING' : 'FOLLOW'}
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 border border-[#39FF14] text-[#39FF14] rounded hover:bg-[#39FF14] hover:text-black transition-all font-bold">
+                <button onClick={() => onMessage?.(user._id)} className="flex items-center gap-2 px-4 py-2 border border-[#39FF14] text-[#39FF14] rounded hover:bg-[#39FF14] hover:text-black transition-all font-bold">
                   <MessageSquare size={16} />
                   MESSAGE
                 </button>

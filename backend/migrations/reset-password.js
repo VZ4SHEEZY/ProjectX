@@ -1,13 +1,14 @@
-require('dotenv').config({ path: '/Users/bojackson/ProjectX/backend/.env' });
+require('dotenv').config();
 const mongoose = require('mongoose');
-
-// Pre-hashed password for 'CyberDope2026' using bcryptjs
-// Generated with: bcrypt.hash('CyberDope2026', 10)
-const NEW_HASHED_PASSWORD = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJ/VdCmgqNe';
+const bcrypt = require('bcryptjs');
 
 async function main() {
   if (!process.env.MONGODB_URI) {
     console.error('❌ MONGODB_URI not set in .env file');
+    process.exit(1);
+  }
+  if (!process.env.RESET_PASSWORD || !process.env.TARGET_USERNAME) {
+    console.error('RESET_PASSWORD and TARGET_USERNAME are required');
     process.exit(1);
   }
 
@@ -18,22 +19,21 @@ async function main() {
     const db = mongoose.connection.db;
     
     // Get the user
-    const user = await db.collection('users').findOne({ username: 'vz4sheezy' });
+    const user = await db.collection('users').findOne({ username: process.env.TARGET_USERNAME });
     
     if (!user) {
-      console.error('❌ User "vz4sheezy" not found');
+      console.error('❌ Target user not found');
       process.exit(1);
     }
 
     // Update the password hash
     const result = await db.collection('users').updateOne(
       { _id: user._id },
-      { $set: { password: NEW_HASHED_PASSWORD } }
+      { $set: { password: await bcrypt.hash(process.env.RESET_PASSWORD, 12) } }
     );
 
     if (result.modifiedCount === 1) {
-      console.log(`✅ Password reset for vz4sheezy`);
-      console.log(`   New password: CyberDope2026`);
+      console.log('✅ Password reset for target user');
       
       // Verify
       const updated = await db.collection('users').findOne({ username: 'vz4sheezy' });

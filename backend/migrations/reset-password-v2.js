@@ -1,10 +1,14 @@
-require('dotenv').config({ path: '/Users/bojackson/ProjectX/backend/.env' });
+require('dotenv').config();
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 async function main() {
   if (!process.env.MONGODB_URI) {
     console.error('❌ MONGODB_URI not set in .env file');
+    process.exit(1);
+  }
+  if (!process.env.RESET_PASSWORD || !process.env.TARGET_USERNAME) {
+    console.error('RESET_PASSWORD and TARGET_USERNAME are required');
     process.exit(1);
   }
 
@@ -15,16 +19,16 @@ async function main() {
     const db = mongoose.connection.db;
     
     // Get the user
-    const user = await db.collection('users').findOne({ username: 'vz4sheezy' });
+    const user = await db.collection('users').findOne({ username: process.env.TARGET_USERNAME });
     
     if (!user) {
-      console.error('❌ User "vz4sheezy" not found');
+      console.error('❌ Target user not found');
       process.exit(1);
     }
 
     // Generate fresh hash
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash('CyberDope2026', salt);
+    const hashedPassword = await bcrypt.hash(process.env.RESET_PASSWORD, salt);
 
     console.log(`Generated hash: ${hashedPassword.substring(0, 50)}...`);
 
@@ -35,7 +39,7 @@ async function main() {
     );
 
     if (result.modifiedCount === 1) {
-      console.log(`✅ Password reset for vz4sheezy`);
+      console.log('✅ Password reset for target user');
       
       // Verify
       const updated = await db.collection('users').findOne({ username: 'vz4sheezy' });
@@ -45,7 +49,7 @@ async function main() {
       console.log('   isAdmin:', updated.isAdmin);
       
       // Also verify the password comparison works
-      const isMatch = await bcrypt.compare('CyberDope2026', hashedPassword);
+      const isMatch = await bcrypt.compare(process.env.RESET_PASSWORD, hashedPassword);
       console.log('   Password match verification:', isMatch ? '✅ PASS' : '❌ FAIL');
     } else {
       console.error('\n❌ Password update failed');

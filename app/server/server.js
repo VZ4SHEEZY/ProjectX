@@ -7,9 +7,13 @@ const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = 'cyberdope-secret-2077';
-const MONGO_URI = 'mongodb+srv://cyberdope:CyberDope2077!@cluster0.qdpgx7l.mongodb.net/cyberdope?appName=Cluster0';
+const JWT_SECRET = process.env.JWT_SECRET;
+const MONGO_URI = process.env.MONGODB_URI;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+
+if (!JWT_SECRET || !MONGO_URI) {
+  throw new Error('JWT_SECRET and MONGODB_URI are required');
+}
 
 mongoose.connect(MONGO_URI).then(() => console.log('✅ MongoDB connected')).catch(err => console.error('MongoDB error:', err));
 
