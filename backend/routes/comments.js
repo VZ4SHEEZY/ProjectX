@@ -6,6 +6,7 @@ const { protect, optionalAuth } = require('../middleware/auth');
 const { canViewPost } = require('../services/accessPolicy');
 const { createNotification } = require('./notifications');
 const mongoose = require('mongoose');
+const { hasPlatformRole, auditPlatformAction } = require('../services/platformAuthorization');
 
 // @route   GET /api/posts/:postId/comments
 // @desc    Get all comments for a post
@@ -200,7 +201,8 @@ router.delete('/comments/:id', protect, async (req, res) => {
     }
 
     // Check ownership or admin
-    if (comment.author.toString() !== req.user._id.toString() && !req.user.isAdmin) {
+    const administrativeOverride = comment.author.toString() !== req.user._id.toString();
+    if (administrativeOverride && !await hasPlatformRole(req.user, 'admin')) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to delete this comment'
@@ -211,6 +213,7 @@ router.delete('/comments/:id', protect, async (req, res) => {
     comment.isDeleted = true;
     comment.text = '[deleted]';
     await comment.save();
+    if (administrativeOverride) await auditPlatformAction(req.user, 'delete_comment', { targetType: 'comment', targetId: comment._id });
 
     // Update post comment count
     const post = await Post.findById(comment.post);

@@ -3,12 +3,13 @@ const router = express.Router();
 const { protect: auth } = require('../middleware/auth');
 const Story = require('../models/Story');
 const User = require('../models/User');
-const { requireAdmin } = require('../middleware/admin');
+const { requireAdmin, logAdminAction } = require('../middleware/admin');
 
 // Clean up expired stories. Keep this before /:id routes so Express cannot shadow it.
-router.delete('/cleanup/expired', auth, requireAdmin, async (req, res) => {
+router.delete('/cleanup/expired', auth, requireAdmin, logAdminAction('cleanup_expired_stories'), async (req, res) => {
   try {
     const result = await Story.deleteMany({ expiresAt: { $lt: new Date() } });
+    await req.logAdminAction({ targetType: 'system', deletedCount: result.deletedCount });
     res.json({ success: true, deleted: result.deletedCount });
   } catch (error) {
     console.error('Cleanup Stories Error:', error);

@@ -226,8 +226,7 @@ userSchema.methods.toPublicProfile = function(options = {}) {
     socialLinks: this.socialLinks,
     subscriptionTiers: this.subscriptionTiers,
     isActive: this.isActive,
-    createdAt: this.createdAt,
-    isAdmin: this.isAdmin
+    createdAt: this.createdAt
   };
   // Verification assertions are account-private and only returned by authenticated
   // self endpoints. Public callers must never receive verification state or dates.
@@ -239,6 +238,8 @@ userSchema.methods.toPublicProfile = function(options = {}) {
     // Temporary self-response aliases retained for the existing frontend.
     profile.isAgeVerified = this.isAgeVerified === true;
     profile.isCreatorVerified = this.isCreatorVerified === true;
+    // Platform authority is account-private. Public profile APIs never expose it.
+    profile.isAdmin = this.isAdmin === true;
   }
   if (profile.theme) {
     const theme = profile.theme.toObject ? profile.theme.toObject() : profile.theme;

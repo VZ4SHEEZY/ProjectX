@@ -7,6 +7,7 @@ const { createNotification } = require('./notifications');
 const Notification = require('../models/Notification');
 const ContentView = require('../models/ContentView');
 const { canViewPost, publicUserProjection } = require('../services/accessPolicy');
+const { hasPlatformRole, auditPlatformAction } = require('../services/platformAuthorization');
 
 async function filterAuthorizedPosts(viewer, posts) {
   const allowed = [];
@@ -435,7 +436,8 @@ router.put('/:id', protect, async (req, res) => {
     }
 
     // Check ownership
-    if (post.author.toString() !== req.user._id.toString() && !req.user.isAdmin) {
+    const administrativeOverride = post.author.toString() !== req.user._id.toString();
+    if (administrativeOverride && !await hasPlatformRole(req.user, 'admin')) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to update this post'
@@ -456,6 +458,7 @@ router.put('/:id', protect, async (req, res) => {
       updateFields,
       { new: true, runValidators: true }
     ).populate('author', 'username displayName avatar isVerified');
+    if (administrativeOverride) await auditPlatformAction(req.user, 'modify_post', { targetType: 'post', targetId: post._id, fields: Object.keys(updateFields) });
 
     res.json({
       success: true,
@@ -485,7 +488,8 @@ router.delete('/:id', protect, async (req, res) => {
     }
 
     // Check ownership
-    if (post.author.toString() !== req.user._id.toString() && !req.user.isAdmin) {
+    const administrativeOverride = post.author.toString() !== req.user._id.toString();
+    if (administrativeOverride && !await hasPlatformRole(req.user, 'admin')) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to delete this post'
@@ -493,6 +497,7 @@ router.delete('/:id', protect, async (req, res) => {
     }
 
     await post.deleteOne();
+    if (administrativeOverride) await auditPlatformAction(req.user, 'delete_post', { targetType: 'post', targetId: post._id });
 
     res.json({
       success: true,

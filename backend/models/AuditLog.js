@@ -11,25 +11,14 @@ const auditLogSchema = new mongoose.Schema({
   // What action was performed
   action: {
     type: String,
-    enum: [
-      'broadcast_announcement',
-      'delete_post',
-      'delete_comment',
-      'ban_user',
-      'unban_user',
-      'modify_user',
-      'view_analytics',
-      'create_announcement',
-      'edit_announcement',
-      'delete_announcement'
-    ],
     required: true
   },
+  actorRole: { type: String, enum: ['moderator', 'admin', 'platform_owner'], required: true, default: 'admin' },
   
   // Target of the action (optional - null for global actions)
   targetType: {
     type: String,
-    enum: ['user', 'post', 'comment', 'announcement', null],
+    enum: ['user', 'post', 'comment', 'announcement', 'faction', 'world_state', 'system', 'migration', null],
     default: null
   },
   targetId: mongoose.Schema.Types.ObjectId,

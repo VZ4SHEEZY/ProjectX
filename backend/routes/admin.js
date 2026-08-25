@@ -2,7 +2,7 @@ const express = require('express');
 const User = require('../models/User');
 const Post = require('../models/Post');
 const { protect } = require('../middleware/auth');
-const { requireAdmin, logAdminAction } = require('../middleware/admin');
+const { requireAdmin, requirePlatformOwner, logAdminAction } = require('../middleware/admin');
 const observability = require('../services/observability');
 
 const router = express.Router();
@@ -10,6 +10,12 @@ const router = express.Router();
 // GET /api/admin/diagnostics - bounded, aggregate operational health (admin only)
 router.get('/diagnostics', protect, requireAdmin, (req, res) => {
   res.json({ success: true, data: observability.diagnostics() });
+});
+
+// Owner-only system surface: bounded diagnostics, never configuration secrets.
+router.get('/platform-owner/diagnostics', protect, requirePlatformOwner, logAdminAction('view_platform_owner_diagnostics'), async (req, res) => {
+  await req.logAdminAction({ targetType: 'system' });
+  res.json({ success: true, data: { authority: 'platform_owner', diagnostics: observability.diagnostics() } });
 });
 
 // GET /api/admin/stats - platform totals and faction leaderboard (admin only)

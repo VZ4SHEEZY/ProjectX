@@ -30,6 +30,7 @@ router.post('/', protect, requireAdmin, logAdminAction('broadcast_announcement')
     });
 
     await announcement.save();
+    await req.logAdminAction({ targetType: 'announcement', targetId: announcement._id, targetTypeScope: targetType, targetFaction: targetFaction || null });
 
     // If faction announcement, create a post in that faction
     if (targetType === 'faction' && targetFaction) {

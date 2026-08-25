@@ -9,6 +9,7 @@ process.env.JWT_SECRET = 'route-test-secret';
 const User = require('../models/User');
 const Post = require('../models/Post');
 const AuditLog = require('../models/AuditLog');
+const PlatformRole = require('../models/PlatformRole');
 const creatorRouter = require('../routes/creator');
 const adminRouter = require('../routes/admin');
 const observability = require('../services/observability');
@@ -18,7 +19,8 @@ const originalMethods = {
   userCountDocuments: User.countDocuments,
   userAggregate: User.aggregate,
   postAggregate: Post.aggregate,
-  auditCreate: AuditLog.create
+  auditCreate: AuditLog.create,
+  platformRoleFind: PlatformRole.find
 };
 
 const app = express();
@@ -36,11 +38,15 @@ const restoreMocks = () => {
   User.aggregate = originalMethods.userAggregate;
   Post.aggregate = originalMethods.postAggregate;
   AuditLog.create = originalMethods.auditCreate;
+  PlatformRole.find = originalMethods.platformRoleFind;
 };
 
 test.afterEach(restoreMocks);
 
-test.beforeEach(() => observability.resetForTests());
+test.beforeEach(() => {
+  observability.resetForTests();
+  PlatformRole.find = () => ({ select: () => ({ lean: async () => [] }) });
+});
 
 const mockUserLookups = (authenticatedUser, routeUser) => {
   let calls = 0;
@@ -165,6 +171,23 @@ test('admin diagnostics return aggregate health without secrets or PII', async (
   assert.equal(response.body.data.recentErrors[0].event, 'test_failure');
   assert.equal(response.body.data.recentErrors[0].error.message, undefined);
   assert.equal(JSON.stringify(response.body).includes(process.env.JWT_SECRET), false);
+});
+
+test('platform owner role inherits admin access and owner diagnostics stay privileged', async () => {
+  User.findById = () => Promise.resolve({ _id: userId, isAdmin: false, isActive: true });
+  PlatformRole.find = () => ({ select: () => ({ lean: async () => [{ role: 'platform_owner' }] }) });
+  AuditLog.create = async () => ({});
+  const response = await request(app).get('/api/admin/platform-owner/diagnostics').set(auth);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.authority, 'platform_owner');
+  assert.equal(JSON.stringify(response.body).includes('secret'), false);
+});
+
+test('normal admin cannot access platform-owner-only diagnostics', async () => {
+  User.findById = () => Promise.resolve({ _id: userId, isAdmin: true, isActive: true });
+  PlatformRole.find = () => ({ select: () => ({ lean: async () => [{ role: 'admin' }] }) });
+  const response = await request(app).get('/api/admin/platform-owner/diagnostics').set(auth);
+  assert.equal(response.status, 403);
 });
 
 test('admin statistics return platform totals and ranked factions', async () => {

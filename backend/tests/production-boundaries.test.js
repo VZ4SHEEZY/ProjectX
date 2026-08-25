@@ -11,6 +11,8 @@ process.env.JWT_SECRET = 'production-boundary-test-secret';
 
 const User = require('../models/User');
 const Story = require('../models/Story');
+const PlatformRole = require('../models/PlatformRole');
+const AuditLog = require('../models/AuditLog');
 const Message = require('../models/Message');
 const Post = require('../models/Post');
 const Follow = require('../models/Follow');
@@ -34,6 +36,8 @@ const original = {
   ,followExists: Follow.exists
   ,followDeleteOne: Follow.deleteOne
   ,blockExists: Block.exists
+  ,platformRoleFind: PlatformRole.find
+  ,auditCreate: AuditLog.create
 };
 
 test.afterEach(() => {
@@ -47,6 +51,8 @@ test.afterEach(() => {
   Follow.exists = original.followExists;
   Follow.deleteOne = original.followDeleteOne;
   Block.exists = original.blockExists;
+  PlatformRole.find = original.platformRoleFind;
+  AuditLog.create = original.auditCreate;
 });
 
 const appFor = (path, router) => {
@@ -183,6 +189,8 @@ test('follow toggles keep denormalized follower counts consistent', async () => 
 
 test('story cleanup rejects non-admins and works for admins', async () => {
   const app = appFor('/api/stories', storiesRouter);
+  PlatformRole.find = () => ({ select: () => ({ lean: async () => [] }) });
+  AuditLog.create = async () => ({});
   User.findById = () => Promise.resolve({ _id: userId, isAdmin: false });
   let response = await request(app).delete('/api/stories/cleanup/expired').set(auth);
   assert.equal(response.status, 403);

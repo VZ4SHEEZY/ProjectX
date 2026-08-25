@@ -35,6 +35,13 @@ async function main() {
       factionMapping: factionCounts, unaffiliatedUsers: users.filter(user => user.faction === 'Unaffiliated').length, unmappedFactions, missingFactions,
       relationshipsDroppedOrChanged: { rejectedDanglingFollows: pre.report.rejectedDanglingFollows, rejectedSelfFollows: pre.report.rejectedSelfFollows, duplicateEdgesCanonicalized: duplicateLegacyReferences, topFriendsExcluded: true },
       recordsThatWouldFailMigration: pre.report.rejectedDanglingFollows + pre.report.rejectedSelfFollows + unmappedFactions,
+      platformOwnerVerification: {
+        account: 'vz4sheezy', durableLegacyAdminMatch: pre.report.platformOwnerIdentity.durableLegacyAdminMatch,
+        existingAdministrativeAuthorityRetained: pre.report.platformOwnerIdentity.retainsLegacyAdminAuthority,
+        normalizedRole: 'platform_owner', normalizedRoleRecordsToCreate: pre.report.platformOwnersToCreate,
+        authorityHierarchy: ['moderator', 'admin', 'platform_owner'], factionAndCreatorRolesOrthogonal: true,
+        publicApiExposure: false, auditableStateChanges: true
+      },
       legacyUsersModified: 0, fakeLegacyTopFriendsExcluded: true
     }, null, 2));
   } finally { await mongoose.disconnect(); }

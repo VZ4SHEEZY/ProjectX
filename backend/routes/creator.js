@@ -3,6 +3,7 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const Tip = require('../models/Tip');
+const { requireAdmin, logAdminAction } = require('../middleware/admin');
 
 const MAX_SUBSCRIPTION_TIERS = 6;
 const ALLOWED_TIER_ICONS = new Set(['users', 'star', 'crown', 'zap']);
@@ -303,14 +304,8 @@ router.get('/dashboard', protect, async (req, res) => {
 // @route   POST /api/creator/verify-admin
 // @desc    Admin: Set isCreatorVerified for a user (document identity check)
 // @access  Private (admin only)
-router.post('/verify-admin', protect, async (req, res) => {
+router.post('/verify-admin', protect, requireAdmin, logAdminAction('creator_verification_override'), async (req, res) => {
   try {
-    // Check if requester is admin
-    const admin = await User.findById(req.user._id);
-    if (!admin.isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
     const { userId } = req.body;
     if (!userId) {
       return res.status(400).json({ error: 'User ID required' });
@@ -333,6 +328,7 @@ router.post('/verify-admin', protect, async (req, res) => {
     }
 
     await user.save();
+    await req.logAdminAction({ targetType: 'user', targetId: user._id, creatorStatus: user.creatorStatus });
 
     res.json({
       success: true,

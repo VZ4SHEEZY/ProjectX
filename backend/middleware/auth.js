@@ -121,7 +121,8 @@ exports.requireSubscription = async (req, res, next) => {
 
 // Admin middleware
 exports.adminOnly = async (req, res, next) => {
-  if (!req.user.isAdmin) {
+  const { hasPlatformRole } = require('../services/platformAuthorization');
+  if (!await hasPlatformRole(req.user, 'admin')) {
     return res.status(403).json({
       success: false,
       message: 'Admin access required'
