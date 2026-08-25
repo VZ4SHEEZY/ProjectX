@@ -265,7 +265,7 @@ export interface SubscriptionTier {
 
 export interface AdminStats {
   totals: { users: number; posts: number; likes: number; activeFactions: number };
-  factions: Array<{ name: string; users: number; posts: number; likes: number; points: number }>;
+  factions: Array<{ name: string; users: number; posts: number; likes: number; engagementSignals: number; trustedForProgression: false }>;
   generatedAt: string;
 }
 

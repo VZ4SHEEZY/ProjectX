@@ -13,6 +13,8 @@ const User = require('../models/User');
 const Story = require('../models/Story');
 const Message = require('../models/Message');
 const Post = require('../models/Post');
+const Follow = require('../models/Follow');
+const Block = require('../models/Block');
 const usersRouter = require('../routes/users');
 const storiesRouter = require('../routes/stories');
 const messagesRouter = require('../routes/messages');
@@ -28,6 +30,10 @@ const original = {
   messageCount: Message.countDocuments
   ,userFindOne: User.findOne
   ,postFind: Post.find
+  ,userExists: User.exists
+  ,followExists: Follow.exists
+  ,followDeleteOne: Follow.deleteOne
+  ,blockExists: Block.exists
 };
 
 test.afterEach(() => {
@@ -37,6 +43,10 @@ test.afterEach(() => {
   Message.countDocuments = original.messageCount;
   User.findOne = original.userFindOne;
   Post.find = original.postFind;
+  User.exists = original.userExists;
+  Follow.exists = original.followExists;
+  Follow.deleteOne = original.followDeleteOne;
+  Block.exists = original.blockExists;
 });
 
 const appFor = (path, router) => {
@@ -88,7 +98,7 @@ test('group name declares only one unique index', () => {
   assert.equal(nameIndexes[0][1].unique, true);
 });
 
-test('profile updates cannot self-promote a user to creator', async () => {
+test('profile updates reject self-promotion and unsupported fields', async () => {
   const user = { _id: userId, isCreator: false };
   let update;
   User.findById = (id, fields, options) => {
@@ -106,9 +116,9 @@ test('profile updates cannot self-promote a user to creator', async () => {
     .set(auth)
     .send({ bio: 'updated', isCreator: true });
 
-  assert.equal(response.status, 200);
-  assert.equal(update.bio, 'updated');
-  assert.equal(update.isCreator, undefined);
+  assert.equal(response.status, 400);
+  assert.match(response.body.message, /Unsupported profile fields/);
+  assert.equal(update, undefined);
 });
 
 test('public profiles resolve by ID and exclude private account fields', async () => {
@@ -156,6 +166,10 @@ test('follow toggles keep denormalized follower counts consistent', async () => 
     save: async () => {}
   };
   User.findById = id => Promise.resolve(String(id) === targetId ? targetUser : currentUser);
+  Block.exists = async () => null;
+  User.exists = async query => query?._id?.toString?.() === userId && query.following ? { _id: userId } : null;
+  Follow.exists = async () => null;
+  Follow.deleteOne = async () => ({ deletedCount: 0 });
 
   const response = await request(appFor('/api/users', usersRouter))
     .post(`/api/users/${targetId}/follow`)

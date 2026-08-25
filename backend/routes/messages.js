@@ -4,10 +4,12 @@ const Message = require('../models/Message');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const mongoose = require('mongoose');
+const { canDirectMessage, isBlockedEitherWay } = require('../services/relationshipPolicy');
 
 // Return real conversation summaries instead of a suggested-user list.
 router.get('/', protect, async (req, res) => {
   try {
+    const blocked = req.user.blockedUsers || [];
     const messages = await Message.find({
       $or: [{ sender: req.user._id }, { recipient: req.user._id }]
     })
@@ -21,7 +23,7 @@ router.get('/', protect, async (req, res) => {
     for (const message of messages) {
       const sentByCurrentUser = message.sender?._id?.toString() === req.user._id.toString();
       const otherUser = sentByCurrentUser ? message.recipient : message.sender;
-      if (!otherUser?._id) continue;
+      if (!otherUser?._id || blocked.some(value => value.toString() === otherUser._id.toString()) || await isBlockedEitherWay(req.user._id, otherUser._id)) continue;
       const id = otherUser._id.toString();
       const current = conversations.get(id);
       if (!current) {
@@ -78,6 +80,8 @@ router.post('/', protect, async (req, res) => {
         message: 'Recipient not found'
       });
     }
+    const dmAccess = await canDirectMessage(req.user, recipient);
+    if (!dmAccess.allowed) return res.status(403).json({ success: false, code: dmAccess.reason, message: 'Direct messages are unavailable' });
 
     const message = new Message({
       sender: req.user._id,
@@ -112,6 +116,7 @@ router.post('/', protect, async (req, res) => {
 // GET /api/messages/:recipientId
 router.get('/:recipientId', protect, async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.recipientId) || await isBlockedEitherWay(req.user._id, req.params.recipientId)) return res.status(403).json({ success: false, message: 'Conversation unavailable' });
     const { limit = 50, skip = 0 } = req.query;
 
     const messages = await Message.find({

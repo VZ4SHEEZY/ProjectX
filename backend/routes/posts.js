@@ -4,6 +4,20 @@ const Post = require('../models/Post');
 const User = require('../models/User');
 const { protect, optionalAuth, requireAgeVerified } = require('../middleware/auth');
 const { createNotification } = require('./notifications');
+const Notification = require('../models/Notification');
+const ContentView = require('../models/ContentView');
+const { canViewPost, publicUserProjection } = require('../services/accessPolicy');
+
+async function filterAuthorizedPosts(viewer, posts) {
+  const allowed = [];
+  for (const post of posts) if ((await canViewPost(viewer, post, post.author)).allowed) {
+    const value = post.toObject();
+    value.author = publicUserProjection(value.author);
+    value.canAccess = true;
+    allowed.push(value);
+  }
+  return allowed;
+}
 
 // @route   GET /api/posts
 // @desc    Get all posts (feed)
@@ -36,15 +50,7 @@ router.get('/', optionalAuth, async (req, res) => {
     } else {
       // Default: only show public posts to non-logged in users
       // Logged-in users can see public, subscribers, ppv, and faction (if in faction)
-      if (!req.user) {
-        query.visibility = 'public';
-      } else {
-        const userFaction = req.user.faction;
-        query.$or = [
-          { visibility: { $in: ['public', 'subscribers', 'ppv'] } },
-          { visibility: 'faction', faction: userFaction }
-        ];
-      }
+      if (!req.user) query.visibility = 'public';
     }
 
     // Filter by following (for personalized feed)
@@ -58,33 +64,20 @@ router.get('/', optionalAuth, async (req, res) => {
     }
 
     const posts = await Post.find(query)
-      .populate('author', 'username displayName avatar isVerified')
+      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
       .sort(sort)
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
     // Check access for each post - skip if canAccess fails
-    const postsWithAccess = posts.map(post => {
-      try {
-        const postObj = post.toObject();
-        postObj.canAccess = post.canAccess(req.user);
-        if (!postObj.canAccess) {
-          postObj.mediaUrl = '';
-          postObj.thumbnailUrl = '';
-        }
-        return postObj;
-      } catch (err) {
-        console.error('Error processing post:', post._id, err);
-        return null; // Return null for posts that fail
-      }
-    }).filter(post => post !== null); // Remove null entries
+    const postsWithAccess = await filterAuthorizedPosts(req.user, posts);
 
     const count = await Post.countDocuments(query);
 
     res.json({
       success: true,
-      count: posts.length,
-      total: count,
+      count: postsWithAccess.length,
+      total: postsWithAccess.length,
       totalPages: Math.ceil(count / limit),
       currentPage: parseInt(page),
       data: postsWithAccess
@@ -118,15 +111,11 @@ router.get('/feed/foryou', protect, async (req, res) => {
     }
 
     const posts = await Post.find(query)
-      .populate('author', 'username displayName avatar isVerified')
+      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
       .sort('-createdAt')
       .limit(limit);
 
-    const postsWithAccess = posts.map(post => {
-      const postObj = post.toObject();
-      postObj.canAccess = post.canAccess(req.user);
-      return postObj;
-    });
+    const postsWithAccess = await filterAuthorizedPosts(req.user, posts);
 
     res.json({
       success: true,
@@ -177,20 +166,11 @@ router.get('/feed/following', protect, async (req, res) => {
     }
 
     const posts = await Post.find(query)
-      .populate('author', 'username displayName avatar isVerified')
+      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
       .sort('-createdAt')
       .limit(limit);
 
-    const postsWithAccess = posts.map(post => {
-      try {
-        const postObj = post.toObject();
-        postObj.canAccess = post.canAccess(req.user);
-        return postObj;
-      } catch (err) {
-        console.error('Error processing post:', post._id, err);
-        return null;
-      }
-    }).filter(post => post !== null);
+    const postsWithAccess = await filterAuthorizedPosts(req.user, posts);
 
     res.json({
       success: true,
@@ -238,20 +218,11 @@ router.get('/feed/faction', protect, async (req, res) => {
     }
 
     const posts = await Post.find(query)
-      .populate('author', 'username displayName avatar isVerified')
+      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
       .sort('-createdAt')
       .limit(limit);
 
-    const postsWithAccess = posts.map(post => {
-      try {
-        const postObj = post.toObject();
-        postObj.canAccess = post.canAccess(req.user);
-        return postObj;
-      } catch (err) {
-        console.error('Error processing post:', post._id, err);
-        return null;
-      }
-    }).filter(post => post !== null);
+    const postsWithAccess = await filterAuthorizedPosts(req.user, posts);
 
     const count = await Post.countDocuments(query);
 
@@ -294,7 +265,7 @@ router.get('/feed/trending', async (req, res) => {
       createdAt: { $gte: since },
       isNSFW: false
     })
-    .populate('author', 'username displayName avatar isVerified')
+    .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
     .sort('-stats.views -stats.likes')
     .limit(limit * 1)
     .skip((page - 1) * limit);
@@ -319,7 +290,7 @@ router.get('/feed/trending', async (req, res) => {
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
-      .populate('author', 'username displayName avatar isVerified')
+      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
       .populate({
         path: 'comments',
         populate: {
@@ -335,30 +306,20 @@ router.get('/:id', optionalAuth, async (req, res) => {
       });
     }
 
-    if (post.isNSFW && (!req.user || !req.user.isAgeVerified)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Age verification required to access this content',
-        requiresAgeVerification: true
-      });
-    }
-
-    // Check if user can access
-    if (!post.canAccess(req.user)) {
+    const access = await canViewPost(req.user, post, post.author);
+    if (!access.allowed) {
       return res.status(403).json({
         success: false,
         message: 'You do not have access to this content',
-        requiresSubscription: post.visibility === 'subscribers',
-        requiresPurchase: post.visibility === 'ppv',
-        price: post.price
+        code: access.reason,
+        requiresAgeVerification: access.reason === 'age_verification_required',
+        requiresSubscription: access.reason === 'subscription_required',
+        requiresPurchase: access.reason === 'purchase_required'
       });
     }
 
-    // Increment view count
-    post.stats.views += 1;
-    await post.save();
-
     const postObj = post.toObject();
+    postObj.author = publicUserProjection(postObj.author);
     postObj.canAccess = true;
 
     res.json({
@@ -559,6 +520,7 @@ router.post('/:id/like', protect, async (req, res) => {
         message: 'Post not found'
       });
     }
+    if (!(await canViewPost(req.user, post)).allowed) return res.status(403).json({ success: false, message: 'Post access denied' });
 
     const isLiked = post.likedBy.includes(req.user._id);
 
@@ -601,7 +563,7 @@ router.post('/:id/like', protect, async (req, res) => {
 // @route   POST /api/posts/:id/view
 // @desc    Record a view (for videos)
 // @access  Public
-router.post('/:id/view', async (req, res) => {
+router.post('/:id/view', optionalAuth, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
 
@@ -611,13 +573,17 @@ router.post('/:id/view', async (req, res) => {
         message: 'Post not found'
       });
     }
-
-    post.stats.views += 1;
-    await post.save();
+    if (!(await canViewPost(req.user, post)).allowed) return res.status(403).json({ success: false, message: 'Post access denied' });
+    await ContentView.create({ post: post._id, viewer: req.user?._id });
+    // This legacy counter is display-only engagement. ContentView records are permanently
+    // progression-ineligible and must never feed faction/allegiance/war calculations.
+    await Post.updateOne({ _id: post._id }, { $inc: { 'stats.views': 1 } });
 
     res.json({
       success: true,
-      views: post.stats.views
+      views: (post.stats?.views || 0) + 1,
+      trustClass: 'untrusted_engagement',
+      progressionEligible: false
     });
   } catch (error) {
     res.status(500).json({

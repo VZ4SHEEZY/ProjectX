@@ -193,9 +193,9 @@ test('admin statistics return platform totals and ranked factions', async () => 
     likes: 31,
     activeFactions: 2
   });
-  assert.deepEqual(response.body.data.factions.map(({ name, points }) => ({ name, points })), [
-    { name: 'Neon', points: 60 },
-    { name: 'Chrome', points: 51 }
+  assert.deepEqual(response.body.data.factions.map(({ name, engagementSignals, trustedForProgression }) => ({ name, engagementSignals, trustedForProgression })), [
+    { name: 'Chrome', engagementSignals: 15, trustedForProgression: false },
+    { name: 'Neon', engagementSignals: 24, trustedForProgression: false }
   ]);
   assert.match(response.body.data.generatedAt, /^\d{4}-\d{2}-\d{2}T/);
 });

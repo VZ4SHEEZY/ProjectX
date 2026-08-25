@@ -2,19 +2,23 @@ const express = require('express');
 const router = express.Router();
 const Comment = require('../models/Comment');
 const Post = require('../models/Post');
-const { protect } = require('../middleware/auth');
+const { protect, optionalAuth } = require('../middleware/auth');
+const { canViewPost } = require('../services/accessPolicy');
 const { createNotification } = require('./notifications');
 const mongoose = require('mongoose');
 
 // @route   GET /api/posts/:postId/comments
 // @desc    Get all comments for a post
 // @access  Public
-router.get('/posts/:postId/comments', async (req, res) => {
+router.get('/posts/:postId/comments', optionalAuth, async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.postId)) {
       return res.status(400).json({ success: false, message: 'Invalid post ID' });
     }
     const { page = 1, limit = 20, sort = '-createdAt' } = req.query;
+    const post = await Post.findById(req.params.postId).populate('author', '_id profilePrivacy isPrivate faction');
+    if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
+    if (!(await canViewPost(req.user, post, post.author)).allowed) return res.status(403).json({ success: false, message: 'Post access denied' });
 
     const comments = await Comment.find({
       post: req.params.postId,
@@ -76,6 +80,7 @@ router.post('/posts/:postId/comments', protect, async (req, res) => {
         message: 'Post not found'
       });
     }
+    if (!(await canViewPost(req.user, post)).allowed) return res.status(403).json({ success: false, message: 'Post access denied' });
 
     // Create comment
     const comment = await Comment.create({

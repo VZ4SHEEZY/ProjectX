@@ -78,9 +78,11 @@ router.get('/stats', protect, requireAdmin, logAdminAction('view_analytics'), as
       factions.set(_id, faction);
     });
 
+    // Observational admin analytics only. These raw counts are explicitly not a
+    // faction score and cannot be consumed as progression/allegiance/war input.
     const leaderboard = Array.from(factions.values())
-      .map(faction => ({ ...faction, points: faction.posts * 10 + faction.likes }))
-      .sort((a, b) => b.points - a.points || b.users - a.users || a.name.localeCompare(b.name));
+      .map(faction => ({ ...faction, engagementSignals: faction.posts + faction.likes, trustedForProgression: false }))
+      .sort((a, b) => b.users - a.users || a.name.localeCompare(b.name));
 
     await req.logAdminAction({ totals: { users: totalUsers, posts: postTotals[0]?.posts || 0 } });
 

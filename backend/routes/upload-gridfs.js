@@ -1,9 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const { protect } = require('../middleware/auth');
+const { protect, optionalAuth } = require('../middleware/auth');
 const { uploadToGridFS, downloadFromGridFS, getFileInfo, deleteFromGridFS } = require('../utils/gridfs');
 const Post = require('../models/Post');
+const { canViewPost } = require('../services/accessPolicy');
+const mongoose = require('mongoose');
+
+async function authorizeStoredPost(req, res, mediaUrl) {
+  const post = await Post.findOne({ mediaUrl }).populate('author', '_id profilePrivacy isPrivate faction');
+  if (!post) { res.status(404).json({ success: false, message: 'Media not found' }); return false; }
+  if (!(await canViewPost(req.user, post, post.author)).allowed) { res.status(403).json({ success: false, message: 'Media access denied' }); return false; }
+  return true;
+}
 
 // Use memory storage — stream directly to GridFS, no disk writes
 const upload = multer({
@@ -93,7 +102,7 @@ router.post('/video-gridfs', protect, upload.single('video'), async (req, res) =
 // @route   GET /api/upload/video/:fileId
 // @desc    Stream video from GridFS
 // @access  Public
-router.get('/video/:fileId', async (req, res) => {
+router.get('/video/:fileId', optionalAuth, async (req, res) => {
   try {
     const { fileId } = req.params;
 
@@ -102,8 +111,9 @@ router.get('/video/:fileId', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid file ID' });
     }
 
-    // Get file info
-    const fileInfo = await getFileInfo(require('mongoose').Types.ObjectId(fileId));
+    if (!await authorizeStoredPost(req, res, `/api/upload/video/${fileId}`)) return;
+    const objectId = new mongoose.Types.ObjectId(fileId);
+    const fileInfo = await getFileInfo(objectId);
 
     // Set headers for video streaming
     res.setHeader('Content-Type', fileInfo.metadata?.mimeType || 'video/mp4');
@@ -112,7 +122,7 @@ router.get('/video/:fileId', async (req, res) => {
 
     // Stream the file
     const downloadStream = require('../utils/gridfs').getGridFSBucket().openDownloadStream(
-      require('mongoose').Types.ObjectId(fileId)
+      objectId
     );
 
     downloadStream.on('error', (err) => {
@@ -169,7 +179,7 @@ router.delete('/video/:fileId', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid file ID' });
     }
 
-    const objectId = require('mongoose').Types.ObjectId(fileId);
+    const objectId = new mongoose.Types.ObjectId(fileId);
 
     // Get file info to verify ownership (optional but recommended)
     const fileInfo = await getFileInfo(objectId);
@@ -241,7 +251,7 @@ router.post('/image-gridfs', protect, upload.single('image'), async (req, res) =
 // @route   GET /api/upload/image/:fileId
 // @desc    Serve image from GridFS
 // @access  Public
-router.get('/image/:fileId', async (req, res) => {
+router.get('/image/:fileId', optionalAuth, async (req, res) => {
   try {
     const { fileId } = req.params;
 
@@ -249,12 +259,14 @@ router.get('/image/:fileId', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid file ID' });
     }
 
-    const fileInfo = await getFileInfo(require('mongoose').Types.ObjectId(fileId));
+    if (!await authorizeStoredPost(req, res, `/api/upload/image/${fileId}`)) return;
+    const objectId = new mongoose.Types.ObjectId(fileId);
+    const fileInfo = await getFileInfo(objectId);
     res.setHeader('Content-Type', fileInfo.metadata?.mimeType || 'image/jpeg');
     res.setHeader('Content-Length', fileInfo.length);
 
     const downloadStream = require('../utils/gridfs').getGridFSBucket().openDownloadStream(
-      require('mongoose').Types.ObjectId(fileId)
+      objectId
     );
 
     downloadStream.on('error', (err) => {

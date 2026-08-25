@@ -4,11 +4,15 @@ const User = require('../models/User');
 const Post = require('../models/Post');
 const { protect, optionalAuth } = require('../middleware/auth');
 const { createNotification } = require('./notifications');
+const Follow = require('../models/Follow');
+const { canViewProfile, canViewPost, publicUserProjection } = require('../services/accessPolicy');
+const { isBlockedEitherWay, isFollowing } = require('../services/relationshipPolicy');
+const { validateProfileUpdate } = require('../services/profileValidation');
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const PUBLIC_USER_FIELDS = [
   'username', 'displayName', 'avatar', 'banner', 'bio', 'faction', 'factionColor',
-  'isVerified', 'isAgeVerified', 'isCreator', 'creatorStatus', 'followersCount',
+  'isVerified', 'isCreator', 'creatorStatus', 'followersCount',
   'followingCount', 'postsCount', 'theme', 'location', 'website', 'socialLinks',
   'subscriptionTiers', 'profilePrivacy', 'isOnline', 'lastActive', 'createdAt'
 ].join(' ');
@@ -62,7 +66,7 @@ router.get('/', async (req, res) => {
       total: count,
       totalPages: Math.ceil(count / limit),
       currentPage: page,
-      data: users
+      data: users.map(user => publicUserProjection(user))
     });
   } catch (error) {
     res.status(500).json({
@@ -97,7 +101,7 @@ router.get('/suggested', protect, async (req, res) => {
     res.json({
       success: true,
       count: suggestedUsers.length,
-      data: suggestedUsers
+      data: suggestedUsers.map(user => publicUserProjection(user))
     });
   } catch (error) {
     res.status(500).json({
@@ -129,8 +133,16 @@ router.get('/:identifier', optionalAuth, async (req, res) => {
       });
     }
 
-    // Get user's posts
-    const posts = await Post.find({ 
+    const profileAccess = await canViewProfile(req.user, user);
+    if (!profileAccess.allowed) {
+      return res.status(profileAccess.reason === 'blocked' ? 404 : 403).json({
+        success: false,
+        code: profileAccess.reason === 'blocked' ? 'PROFILE_NOT_FOUND' : 'PRIVATE_PROFILE',
+        message: profileAccess.reason === 'blocked' ? 'User not found' : 'This profile is private'
+      });
+    }
+
+    const candidates = await Post.find({
       author: user._id,
       status: 'published'
     })
@@ -138,10 +150,10 @@ router.get('/:identifier', optionalAuth, async (req, res) => {
     .limit(12)
     .populate('author', 'username displayName avatar isVerified');
 
-    const data = user.toObject();
-    data.isFollowing = Boolean(req.user?.following?.some(
-      followedId => followedId.toString() === user._id.toString()
-    ));
+    const posts = [];
+    for (const post of candidates) if ((await canViewPost(req.user, post, user)).allowed) posts.push(post);
+    const data = publicUserProjection(user, { includePresence: true });
+    data.isFollowing = req.user ? await isFollowing(req.user._id, user._id) : false;
 
     res.json({
       success: true,
@@ -162,38 +174,14 @@ router.get('/:identifier', optionalAuth, async (req, res) => {
 // @access  Private
 router.put('/profile', protect, async (req, res) => {
   try {
-    const {
-      displayName,
-      bio,
-      avatar,
-      banner,
-      faction,
-      location,
-      website,
-      socialLinks,
-      theme,
-      creatorSettings,
-      profileLayout
-    } = req.body;
-
+    const validation = validateProfileUpdate(req.body);
+    if (validation.error) return res.status(400).json({ success: false, message: validation.error });
     const updateFields = {};
-    
-    if (displayName) updateFields.displayName = displayName;
-    if (bio !== undefined) updateFields.bio = bio;
-    if (avatar) updateFields.avatar = avatar;
-    if (banner) updateFields.banner = banner;
-    if (faction) updateFields.faction = faction;
-    if (location) updateFields.location = location;
-    if (website) updateFields.website = website;
-    if (socialLinks) updateFields.socialLinks = socialLinks;
-    // Deep merge theme so partial updates don't wipe other theme fields
-    if (theme) {
-      Object.keys(theme).forEach(key => {
-        updateFields[`theme.${key}`] = theme[key];
-      });
+    for (const [key, value] of Object.entries(validation.update)) {
+      if (['theme', 'socialLinks', 'profileLayout'].includes(key)) {
+        for (const [nestedKey, nestedValue] of Object.entries(value)) updateFields[`${key}.${nestedKey}`] = nestedValue;
+      } else updateFields[key] = value;
     }
-    if (creatorSettings) updateFields.creatorSettings = creatorSettings;
-    if (profileLayout) updateFields.profileLayout = profileLayout;
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
@@ -236,10 +224,11 @@ router.post('/:id/follow', protect, async (req, res) => {
       });
     }
 
+    if (await isBlockedEitherWay(req.user._id, userToFollow._id)) return res.status(403).json({ success: false, message: 'Relationship unavailable' });
     const currentUser = await User.findById(req.user._id);
-    const isFollowing = currentUser.following.includes(req.params.id);
+    const followingNow = await isFollowing(currentUser._id, userToFollow._id);
 
-    if (isFollowing) {
+    if (followingNow) {
       // Unfollow
       currentUser.following = currentUser.following.filter(
         id => id.toString() !== req.params.id
@@ -247,10 +236,12 @@ router.post('/:id/follow', protect, async (req, res) => {
       userToFollow.followers = userToFollow.followers.filter(
         id => id.toString() !== req.user._id.toString()
       );
+      await Follow.deleteOne({ follower: currentUser._id, followed: userToFollow._id });
     } else {
       // Follow
       currentUser.following.push(req.params.id);
-      userToFollow.followers.push(req.user._id);
+      if (!userToFollow.followers.some(id => id.toString() === req.user._id.toString())) userToFollow.followers.push(req.user._id);
+      await Follow.updateOne({ follower: currentUser._id, followed: userToFollow._id }, { $setOnInsert: { source: 'native' } }, { upsert: true });
     }
 
     currentUser.followingCount = currentUser.following.length;
@@ -259,7 +250,7 @@ router.post('/:id/follow', protect, async (req, res) => {
     await userToFollow.save();
 
     // Create follow notification (only if following, not unfollowing)
-    if (!isFollowing) {
+    if (!followingNow) {
       await createNotification(
         userToFollow._id,
         req.user._id,
@@ -270,10 +261,10 @@ router.post('/:id/follow', protect, async (req, res) => {
 
     res.json({
       success: true,
-      isFollowing: !isFollowing,
+      isFollowing: !followingNow,
       followersCount: userToFollow.followersCount,
       followingCount: currentUser.followingCount,
-      message: isFollowing ? 'Unfollowed successfully' : 'Followed successfully'
+      message: followingNow ? 'Unfollowed successfully' : 'Followed successfully'
     });
   } catch (error) {
     res.status(500).json({
@@ -287,7 +278,7 @@ router.post('/:id/follow', protect, async (req, res) => {
 // @route   GET /api/users/:id/followers
 // @desc    Get user's followers
 // @access  Public
-router.get('/:id/followers', async (req, res) => {
+router.get('/:id/followers', optionalAuth, async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
 
@@ -307,11 +298,12 @@ router.get('/:id/followers', async (req, res) => {
         message: 'User not found'
       });
     }
+    if (!(await canViewProfile(req.user, user)).allowed) return res.status(403).json({ success: false, message: 'Profile access denied' });
 
     res.json({
       success: true,
       count: user.followers.length,
-      data: user.followers
+      data: user.followers.map(item => publicUserProjection(item))
     });
   } catch (error) {
     res.status(500).json({
@@ -325,7 +317,7 @@ router.get('/:id/followers', async (req, res) => {
 // @route   GET /api/users/:id/following
 // @desc    Get users that a user is following
 // @access  Public
-router.get('/:id/following', async (req, res) => {
+router.get('/:id/following', optionalAuth, async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
 
@@ -345,11 +337,12 @@ router.get('/:id/following', async (req, res) => {
         message: 'User not found'
       });
     }
+    if (!(await canViewProfile(req.user, user)).allowed) return res.status(403).json({ success: false, message: 'Profile access denied' });
 
     res.json({
       success: true,
       count: user.following.length,
-      data: user.following
+      data: user.following.map(item => publicUserProjection(item))
     });
   } catch (error) {
     res.status(500).json({
@@ -363,7 +356,7 @@ router.get('/:id/following', async (req, res) => {
 // @route   GET /api/users/:id/stats
 // @desc    Get user statistics
 // @access  Public
-router.get('/:id/stats', async (req, res) => {
+router.get('/:id/stats', optionalAuth, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
 
@@ -373,6 +366,7 @@ router.get('/:id/stats', async (req, res) => {
         message: 'User not found'
       });
     }
+    if (!(await canViewProfile(req.user, user)).allowed) return res.status(403).json({ success: false, message: 'Profile access denied' });
 
     // Get post stats
     const postStats = await Post.aggregate([
@@ -397,7 +391,8 @@ router.get('/:id/stats', async (req, res) => {
         views: postStats[0]?.totalViews || 0,
         likes: postStats[0]?.totalLikes || 0,
         comments: postStats[0]?.totalComments || 0,
-        earnings: user.earnings
+        trustClass: 'untrusted_engagement',
+        progressionEligible: false
       }
     });
   } catch (error) {

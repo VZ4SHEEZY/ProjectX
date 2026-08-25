@@ -200,8 +200,8 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 };
 
 // Generate public profile (remove sensitive data)
-userSchema.methods.toPublicProfile = function() {
-  return {
+userSchema.methods.toPublicProfile = function(options = {}) {
+  const profile = {
     id: this._id,
     username: this.username,
     avatar: this.avatar,
@@ -210,7 +210,6 @@ userSchema.methods.toPublicProfile = function() {
     factionColor: this.factionColor,
     zodiacSign: this.zodiacSign,
     isVerified: this.isVerified,
-    isAgeVerified: this.isAgeVerified,
     isCreator: this.isCreator,
     followersCount: this.followersCount,
     followingCount: this.followingCount,
@@ -226,9 +225,25 @@ userSchema.methods.toPublicProfile = function() {
     subscriptionTiers: this.subscriptionTiers,
     isActive: this.isActive,
     createdAt: this.createdAt,
-    isAdmin: this.isAdmin,
-    adminSince: this.adminSince
+    isAdmin: this.isAdmin
   };
+  // Verification assertions are account-private and only returned by authenticated
+  // self endpoints. Public callers must never receive verification state or dates.
+  if (options.includePrivateVerification === true) {
+    profile.verification = {
+      age: { verified: this.isAgeVerified === true, verifiedAt: this.ageVerifiedAt || null },
+      creatorIdentity: { verified: this.isCreatorVerified === true, verifiedAt: this.creatorVerifiedAt || null }
+    };
+    // Temporary self-response aliases retained for the existing frontend.
+    profile.isAgeVerified = this.isAgeVerified === true;
+    profile.isCreatorVerified = this.isCreatorVerified === true;
+  }
+  if (profile.theme) {
+    const theme = profile.theme.toObject ? profile.theme.toObject() : profile.theme;
+    profile.theme = { ...theme };
+    delete profile.theme.customCss;
+  }
+  return profile;
 };
 
 module.exports = mongoose.model('User', userSchema);

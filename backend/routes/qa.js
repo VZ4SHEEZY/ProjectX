@@ -5,6 +5,19 @@ const Post = require('../models/Post');
 const Comment = require('../models/Comment');
 const Message = require('../models/Message');
 const Notification = require('../models/Notification');
+const Follow = require('../models/Follow');
+const Block = require('../models/Block');
+const Mute = require('../models/Mute');
+const FriendRequest = require('../models/FriendRequest');
+const Friendship = require('../models/Friendship');
+const TopFriend = require('../models/TopFriend');
+const Profile = require('../models/Profile');
+const ProfileLayout = require('../models/ProfileLayout');
+const ProfileModule = require('../models/ProfileModule');
+const FactionMembership = require('../models/FactionMembership');
+const Creator = require('../models/Creator');
+const AccountCapability = require('../models/AccountCapability');
+const ContentView = require('../models/ContentView');
 
 const router = express.Router();
 
@@ -25,12 +38,27 @@ async function removeQaData(runId) {
   if (!ids.length) return 0;
   const posts = await Post.find({ author: { $in: ids } }).select('_id').lean();
   const postIds = posts.map(post => post._id);
+  const profiles = await Profile.find({ user: { $in: ids } }).select('_id').lean();
+  const profileIds = profiles.map(profile => profile._id);
   await Promise.all([
     Comment.deleteMany({ $or: [{ author: { $in: ids } }, { post: { $in: postIds } }] }),
     Message.deleteMany({ $or: [{ sender: { $in: ids } }, { recipient: { $in: ids } }] }),
     Notification.deleteMany({ $or: [{ recipient: { $in: ids } }, { actor: { $in: ids } }] }),
     Post.deleteMany({ _id: { $in: postIds } }),
     User.updateMany({}, { $pull: { followers: { $in: ids }, following: { $in: ids } } })
+    ,Follow.deleteMany({ $or: [{ follower: { $in: ids } }, { followed: { $in: ids } }] })
+    ,Block.deleteMany({ $or: [{ blocker: { $in: ids } }, { blocked: { $in: ids } }] })
+    ,Mute.deleteMany({ $or: [{ muter: { $in: ids } }, { muted: { $in: ids } }] })
+    ,FriendRequest.deleteMany({ $or: [{ requester: { $in: ids } }, { recipient: { $in: ids } }] })
+    ,Friendship.deleteMany({ $or: [{ userLow: { $in: ids } }, { userHigh: { $in: ids } }] })
+    ,TopFriend.deleteMany({ $or: [{ owner: { $in: ids } }, { friend: { $in: ids } }] })
+    ,ProfileModule.deleteMany({ profile: { $in: profileIds } })
+    ,ProfileLayout.deleteMany({ profile: { $in: profileIds } })
+    ,Profile.deleteMany({ _id: { $in: profileIds } })
+    ,FactionMembership.deleteMany({ user: { $in: ids } })
+    ,Creator.deleteMany({ user: { $in: ids } })
+    ,AccountCapability.deleteMany({ user: { $in: ids } })
+    ,ContentView.deleteMany({ $or: [{ viewer: { $in: ids } }, { post: { $in: postIds } }] })
   ]);
   await User.deleteMany({ _id: { $in: ids }, isQaAccount: true });
   return ids.length;

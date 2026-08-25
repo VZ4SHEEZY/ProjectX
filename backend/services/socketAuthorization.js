@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Stream = require('../models/Stream');
 const Group = require('../models/Group');
 const observability = require('./observability');
+const { canDirectMessage } = require('./relationshipPolicy');
 
 const normalizeRoomRequest = (roomId) => {
   if (typeof roomId !== 'string' || roomId.length > 100) return null;
@@ -36,7 +37,9 @@ const authorizeRoom = async (roomId, userId) => {
   const participantIds = request.secondId ? [request.id, request.secondId] : [currentUserId, request.id];
   if (!participantIds.includes(currentUserId)) return null;
   const otherId = participantIds.find((id) => id !== currentUserId);
-  if (!otherId || !await User.exists({ _id: otherId, isActive: { $ne: false } })) return null;
+  if (!otherId) return null;
+  const recipient = await User.findOne({ _id: otherId, isActive: { $ne: false } }).select('_id allowDMs').lean();
+  if (!recipient || !(await canDirectMessage({ _id: userId }, recipient)).allowed) return null;
   return {
     room: `conversation:${participantIds.sort().join(':')}`,
     type: 'conversation',
@@ -68,9 +71,15 @@ const registerAuthorizedSocketHandlers = (io, socket) => {
     joinedAliases.delete(roomId);
   });
 
-  socket.on('typing', (data) => {
+  socket.on('typing', async (data) => {
     const authorization = joinedAliases.get(data?.roomId);
     if (authorization?.type !== 'conversation') return;
+    const recipient = await User.findById(authorization.resourceId).select('_id allowDMs').lean();
+    if (!recipient || !(await canDirectMessage({ _id: socket.userId }, recipient)).allowed) {
+      await socket.leave(authorization.room);
+      joinedAliases.delete(data.roomId);
+      return;
+    }
     socket.to(authorization.room).emit('user-typing', {
       userId: socket.userId,
       isTyping: data.isTyping === true

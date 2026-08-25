@@ -132,7 +132,7 @@ router.post('/register', [
     res.status(201).json({
       success: true,
       token,
-      user: user.toPublicProfile()
+      user: user.toPublicProfile({ includePrivateVerification: true })
     });
   } catch (error) {
     console.error('Register error:', error);
@@ -193,7 +193,7 @@ router.post('/login', [
     res.json({
       success: true,
       token,
-      user: user.toPublicProfile()
+      user: user.toPublicProfile({ includePrivateVerification: true })
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -220,7 +220,7 @@ router.get('/me', protect, async (req, res) => {
   try {
     res.json({
       success: true,
-      user: req.user.toPublicProfile()
+      user: req.user.toPublicProfile({ includePrivateVerification: true })
     });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });

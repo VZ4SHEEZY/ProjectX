@@ -116,7 +116,7 @@ const StatsView: React.FC<{ stats: AdminStats }> = ({ stats }) => {
                 <th className="p-4 text-right text-[#39FF14]">USERS</th>
                 <th className="p-4 text-right text-[#39FF14]">POSTS</th>
                 <th className="p-4 text-right text-[#39FF14]">LIKES</th>
-                <th className="p-4 text-right text-[#39FF14]">POINTS</th>
+                <th className="p-4 text-right text-[#39FF14]">RAW ENGAGEMENT</th>
               </tr>
             </thead>
             <tbody>
@@ -126,7 +126,7 @@ const StatsView: React.FC<{ stats: AdminStats }> = ({ stats }) => {
                   <td className="p-4 text-right text-gray-400">{faction.users.toLocaleString()}</td>
                   <td className="p-4 text-right text-gray-400">{faction.posts.toLocaleString()}</td>
                   <td className="p-4 text-right text-gray-400">{faction.likes.toLocaleString()}</td>
-                  <td className="p-4 text-right text-[#39FF14] font-bold">{faction.points.toLocaleString()}</td>
+                  <td className="p-4 text-right text-gray-400">{faction.engagementSignals.toLocaleString()}</td>
                 </tr>
               ))}
               {stats.factions.length === 0 && (

@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Post = require('../models/Post');
 const { optionalAuth } = require('../middleware/auth');
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const { canViewPost, publicUserProjection } = require('../services/accessPolicy');
 
 // @route   GET /api/search
 // @desc    Search users and posts
@@ -49,7 +50,7 @@ router.get('/', optionalAuth, async (req, res) => {
         .limit(type === 'all' ? 5 : limit * 1)
         .skip((page - 1) * limit);
 
-      results.users = users;
+      results.users = users.map(user => publicUserProjection(user));
     }
 
     // Search posts
@@ -73,12 +74,14 @@ router.get('/', optionalAuth, async (req, res) => {
       }
 
       const posts = await Post.find(postQuery)
-        .populate('author', 'username displayName avatar isVerified')
+        .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
         .sort(sort === 'relevance' ? '-stats.likes -stats.views' : '-createdAt')
         .limit(type === 'all' ? 10 : limit * 1)
         .skip((page - 1) * limit);
 
-      results.posts = posts;
+      for (const post of posts) if ((await canViewPost(req.user, post, post.author)).allowed) {
+        const value = post.toObject(); value.author = publicUserProjection(value.author); results.posts.push(value);
+      }
     }
 
     res.json({
@@ -104,7 +107,7 @@ router.get('/trending', async (req, res) => {
 
     // Get trending hashtags from posts
     const trendingHashtags = await Post.aggregate([
-      { $match: { status: 'published', createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } },
+      { $match: { status: 'published', visibility: 'public', isNSFW: false, createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } },
       { $unwind: '$tags' },
       { $group: { _id: '$tags', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
@@ -163,6 +166,7 @@ router.get('/suggestions', async (req, res) => {
 
     // Search hashtags
     const hashtags = await Post.distinct('tags', {
+      status: 'published', visibility: 'public', isNSFW: false,
       tags: { $regex: safeSearch, $options: 'i' }
     }).limit(parseInt(limit));
 
