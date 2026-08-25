@@ -9,7 +9,9 @@ const profileLayoutSchema = new mongoose.Schema({
     backgroundImage: String, cursorEffect: String, layoutStyle: String
   },
   factionStarterTheme: { type: String, enum: ['full', 'partial', 'off'], default: 'full' },
-  version: { type: Number, default: 1 }
+  version: { type: Number, default: 1 },
+  migrationRunId: { type: String, index: true },
+  sourceLegacyId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
 module.exports = mongoose.model('ProfileLayout', profileLayoutSchema);

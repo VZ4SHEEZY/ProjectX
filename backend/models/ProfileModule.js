@@ -7,7 +7,9 @@ const profileModuleSchema = new mongoose.Schema({
   enabled: { type: Boolean, default: true },
   config: { type: mongoose.Schema.Types.Mixed, default: {} },
   accessRule: { type: mongoose.Schema.Types.ObjectId, ref: 'AccessRule', default: null },
-  schemaVersion: { type: Number, default: 1 }
+  schemaVersion: { type: Number, default: 1 },
+  migrationRunId: { type: String, index: true },
+  sourceLegacyId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true, minimize: false });
 
 profileModuleSchema.index({ profile: 1, position: 1 }, { unique: true });

@@ -8,6 +8,7 @@
     "dev": "nodemon server.js",
     "seed": "node seed.js",
     "test": "node --test --test-concurrency=1 tests/*.test.js",
+    "test:migration": "node --test --test-concurrency=1 tests/release1-migration.test.js",
     "test:external": "node scripts/verify-external-integrations.js"
   },
   "dependencies": {

@@ -1,42 +1,42 @@
-/* Read-only Release 1 reconciliation. This script never writes, even with extra flags. */
+/* Strictly read-only Release 1 reconciliation: auto-create/index are disabled. */
 require('dotenv').config();
 const mongoose = require('mongoose');
+mongoose.set('autoIndex', false); mongoose.set('autoCreate', false);
 const User = require('../models/User');
 const Profile = require('../models/Profile');
-const ProfileLayout = require('../models/ProfileLayout');
-const ProfileModule = require('../models/ProfileModule');
-const Follow = require('../models/Follow');
-const Block = require('../models/Block');
+const FollowRequest = require('../models/FollowRequest');
+const Mute = require('../models/Mute');
 const TopFriend = require('../models/TopFriend');
 const Friendship = require('../models/Friendship');
-const Faction = require('../models/Faction');
-const FactionMembership = require('../models/FactionMembership');
+const { FOUNDING_FACTIONS, buildPreflight, approvedDifferences } = require('./002-release-1a-foundation');
 
 async function main() {
   if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is required');
-  await mongoose.connect(process.env.MONGODB_URI);
-  const users = await User.find({}).select('following blockedUsers faction').lean();
-  const ids = users.map(user => user._id);
-  const [profiles, layouts, modules, follows, blocks, topFriends, friendships, factions, memberships] = await Promise.all([
-    Profile.find({ user: { $in: ids } }).lean(), ProfileLayout.countDocuments(), ProfileModule.countDocuments(), Follow.find({}).lean(), Block.find({}).lean(), TopFriend.find({}).lean(), Friendship.find({}).lean(), Faction.find({ founding: true }).lean(), FactionMembership.find({ status: 'active' }).lean()
-  ]);
-  const profileUsers = new Set(profiles.map(item => String(item.user)));
-  const normalizedFollows = new Set(follows.map(item => `${item.follower}:${item.followed}`));
-  const normalizedBlocks = new Set(blocks.map(item => `${item.blocker}:${item.blocked}`));
-  const activeMembershipUsers = new Set(memberships.map(item => String(item.user)));
-  const friendshipPairs = new Set(friendships.map(item => `${item.userLow}:${item.userHigh}`));
-  const report = {
-    mode: 'read-only-reconciliation', users: users.length, profiles: profiles.length, layouts, modules, foundingFactions: factions.length,
-    missingProfiles: users.filter(user => !profileUsers.has(String(user._id))).length,
-    missingActiveFactionMemberships: users.filter(user => user.faction && user.faction !== 'Unaffiliated' && !activeMembershipUsers.has(String(user._id))).length,
-    legacyFollowsMissingNormalized: users.flatMap(user => (user.following || []).map(target => `${user._id}:${target}`)).filter(key => !normalizedFollows.has(key)).length,
-    legacyBlocksMissingNormalized: users.flatMap(user => (user.blockedUsers || []).map(target => `${user._id}:${target}`)).filter(key => !normalizedBlocks.has(key)).length,
-    invalidTopFriends: topFriends.filter(item => { const pair = [String(item.owner), String(item.friend)].sort(); return !friendshipPairs.has(`${pair[0]}:${pair[1]}`); }).length,
-    duplicateTopFriendPositions: topFriends.length - new Set(topFriends.map(item => `${item.owner}:${item.position}`)).size,
-    topFriends: topFriends.length
-  };
-  console.log(JSON.stringify(report, null, 2));
-  await mongoose.disconnect();
+  await mongoose.connect(process.env.MONGODB_URI, { autoIndex: false, autoCreate: false });
+  try {
+    const pre = await buildPreflight();
+    const users = await User.find({}).select('faction profilePrivacy isPrivate following followers blockedUsers theme.customCss profileLayout isCreator creatorStatus').lean();
+    const ids = new Set(users.map(user => String(user._id)));
+    const [followRequests, mutes, topFriends, friendships, privateProfiles] = await Promise.all([
+      FollowRequest.countDocuments(), Mute.countDocuments(), TopFriend.countDocuments(), Friendship.countDocuments(), Profile.countDocuments({ privacy: { $ne: 'public' } })
+    ]);
+    const factionCounts = Object.fromEntries(FOUNDING_FACTIONS.map(name => [name, users.filter(user => user.faction === name).length]));
+    const unmappedFactions = users.filter(user => user.faction && user.faction !== 'Unaffiliated' && !FOUNDING_FACTIONS.includes(user.faction)).length;
+    const missingFactions = users.filter(user => !user.faction).length;
+    const legacyPrivate = users.filter(user => user.isPrivate === true).length;
+    const duplicateLegacyReferences = users.reduce((sum, user) => sum + (user.following || []).length - new Set((user.following || []).map(String)).size, 0);
+    const selfLegacyReferences = users.reduce((sum, user) => sum + (user.following || []).filter(target => String(target) === String(user._id)).length, 0);
+    const danglingFollowerBackrefs = users.reduce((sum, user) => sum + (user.followers || []).filter(source => !ids.has(String(source))).length, 0);
+    console.log(JSON.stringify({
+      mode: 'read-only-reconciliation', productionWritesEnabled: false, ...pre.report,
+      approvedDifferences: approvedDifferences(pre.report), legacyFollowReferences: users.reduce((sum, user) => sum + (user.following || []).length, 0), duplicateLegacyReferences, selfLegacyReferences, danglingFollowerBackrefs,
+      followRequestsExisting: followRequests, mutesExisting: mutes, topFriendsExisting: topFriends, friendshipsExisting: friendships,
+      privateProfileImplications: { legacyPrivateAccounts: legacyPrivate, normalizedNonPublicProfiles: privateProfiles, followRequestsRequiredAfterBackfill: legacyPrivate, existingFollowEdgesRemainAccepted: pre.report.validFollows },
+      factionMapping: factionCounts, unaffiliatedUsers: users.filter(user => user.faction === 'Unaffiliated').length, unmappedFactions, missingFactions,
+      relationshipsDroppedOrChanged: { rejectedDanglingFollows: pre.report.rejectedDanglingFollows, rejectedSelfFollows: pre.report.rejectedSelfFollows, duplicateEdgesCanonicalized: duplicateLegacyReferences, topFriendsExcluded: true },
+      recordsThatWouldFailMigration: pre.report.rejectedDanglingFollows + pre.report.rejectedSelfFollows + unmappedFactions,
+      legacyUsersModified: 0, fakeLegacyTopFriendsExcluded: true
+    }, null, 2));
+  } finally { await mongoose.disconnect(); }
 }
-
 main().catch(error => { console.error(error.message); process.exitCode = 1; });

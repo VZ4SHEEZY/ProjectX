@@ -1,53 +1,82 @@
-/*
- * Additive Release 1A backfill. Dry-run is the default; pass --apply explicitly.
- * This script never removes legacy User fields and intentionally creates no TopFriend records.
- */
+/* Additive Release 1 backfill. Dry-run by default; legacy Users are never changed. */
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const User = require('../models/User');
-const Follow = require('../models/Follow');
-const Block = require('../models/Block');
 const Profile = require('../models/Profile');
 const ProfileLayout = require('../models/ProfileLayout');
 const ProfileModule = require('../models/ProfileModule');
+const Follow = require('../models/Follow');
+const Block = require('../models/Block');
 const Faction = require('../models/Faction');
 const FactionMembership = require('../models/FactionMembership');
 const Creator = require('../models/Creator');
 const AccountCapability = require('../models/AccountCapability');
 
-const apply = process.argv.includes('--apply');
-const slug = value => value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 const FOUNDING_FACTIONS = ['Neon Wraith','Iron Veil','Crimson Static','Void Circuit','Gold Syndicate','Azure Phantom','Toxic Bloom','Scarlet Dominion','Chrome Legion','Phantom Signal','Obsidian Pact','Ember Protocol','Violet Surge','Steel Covenant','Binary Ghost','Copper Throne','Nova Rift','Silver Wraith','Inferno Grid','Quantum Veil'];
+const MODULE_TYPES = ['identity','bio','faction','top_friends','posts','media','links'];
+const APPROVED = { users: 27, validFollows: 14, rejectedDanglingFollows: 8, profiles: 27, layouts: 27, modules: 189, factions: 20, memberships: 23, creators: 6, capabilities: 6, totalInserts: 312 };
+const MODELS = [ProfileLayout, ProfileModule, Follow, Block, FactionMembership, Creator, AccountCapability, Profile, Faction];
+const INDEXES = [[Profile,{user:1}],[ProfileLayout,{profile:1}],[ProfileModule,{profile:1,position:1}],[Follow,{follower:1,followed:1}],[Block,{blocker:1,blocked:1}],[Faction,{key:1}],[Faction,{name:1}],[FactionMembership,{user:1,status:1},{partialFilterExpression:{status:'active'}}],[Creator,{user:1}],[AccountCapability,{user:1,capability:1}]];
+const slug = v => v.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+const idxName = keys => Object.entries(keys).map(([k,v])=>`${k}_${v}`).join('_');
 
-async function main() {
-  if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is required');
-  await mongoose.connect(process.env.MONGODB_URI);
-  const users = await User.find({}).lean();
-  const legacyRules = await mongoose.connection.collection('accessrules').find({ expression: { $exists: false }, audience: { $exists: true } }).toArray();
-  const legacyModuleRules = await mongoose.connection.collection('profilemodules').find({ accessRule: { $exists: false }, 'accessRules.0': { $exists: true } }).toArray();
-  const report = { mode: apply ? 'apply' : 'dry-run', users: users.length, profiles: 0, follows: 0, blocks: 0, factions: 0, memberships: 0, creators: 0, accessRulesConverted: legacyRules.length, moduleRuleLinksConverted: legacyModuleRules.length, topFriends: 0 };
-  const factionNames = FOUNDING_FACTIONS;
-  report.factions = factionNames.length;
-  for (const name of factionNames) if (apply) await Faction.updateOne({ name }, { $setOnInsert: { key: slug(name), name, founding: true }, $set: { status: 'active' } }, { upsert: true });
-  if (apply) {
-    for (const rule of legacyRules) await mongoose.connection.collection('accessrules').updateOne({ _id: rule._id }, { $set: { expression: { op: 'predicate', type: rule.audience }, presentation: 'hidden', name: rule.name || '' }, $unset: { audience: '', effect: '', creatorTierId: '' } });
-    for (const module of legacyModuleRules) await mongoose.connection.collection('profilemodules').updateOne({ _id: module._id }, { $set: { accessRule: module.accessRules[0] }, $unset: { accessRules: '' } });
-  }
-  for (const user of users) {
-    report.profiles += 1; report.follows += new Set((user.following || []).map(String)).size; report.blocks += new Set((user.blockedUsers || []).map(String)).size;
-    if (user.faction && user.faction !== 'Unaffiliated') report.memberships += 1;
-    if (user.isCreator || user.creatorStatus === 'pending' || user.creatorStatus === 'approved') report.creators += 1;
-    if (!apply) continue;
-    const profile = await Profile.findOneAndUpdate({ user: user._id }, { $setOnInsert: { user: user._id, source: 'legacy_backfill' }, $set: { displayName: user.displayName || '', bio: user.bio || '', avatar: user.avatar || '', banner: user.banner || '', locationLabel: user.location || '', website: user.website || '', socialLinks: user.socialLinks || {}, privacy: user.profilePrivacy || 'public', followApprovalRequired: user.isPrivate === true } }, { upsert: true, new: true });
-    await ProfileLayout.updateOne({ profile: profile._id }, { $setOnInsert: { profile: profile._id, theme: { ...(user.theme || {}), customCss: undefined }, factionStarterTheme: 'full', version: 1 } }, { upsert: true });
-    if (!await ProfileModule.exists({ profile: profile._id })) await ProfileModule.insertMany(['identity','bio','faction','top_friends','posts','media','links'].map((type, position) => ({ profile: profile._id, type, position, enabled: true, config: {}, schemaVersion: 1 })));
-    for (const followed of new Set((user.following || []).map(String))) if (followed !== user._id.toString()) await Follow.updateOne({ follower: user._id, followed }, { $setOnInsert: { source: 'legacy_backfill' } }, { upsert: true });
-    for (const blocked of new Set((user.blockedUsers || []).map(String))) if (blocked !== user._id.toString()) await Block.updateOne({ blocker: user._id, blocked }, { $setOnInsert: { source: 'legacy_backfill' } }, { upsert: true });
-    if (user.faction && user.faction !== 'Unaffiliated') { const faction = await Faction.findOne({ name: user.faction }); await FactionMembership.updateOne({ user: user._id, status: 'active' }, { $setOnInsert: { faction: faction._id, source: 'legacy_backfill', joinedAt: user.createdAt || new Date() } }, { upsert: true }); }
-    if (user.isCreator || ['pending','approved'].includes(user.creatorStatus)) { const state = user.isCreator || user.creatorStatus === 'approved' ? 'active' : 'pending'; await Creator.updateOne({ user: user._id }, { $setOnInsert: { source: 'legacy_backfill' }, $set: { state, applicationDate: user.creatorApplicationDate, approvedDate: user.creatorApprovedDate } }, { upsert: true }); await AccountCapability.updateOne({ user: user._id, capability: 'creator_mode' }, { $set: { state: state === 'active' ? 'enabled' : 'pending' } }, { upsert: true }); }
-  }
-  console.log(JSON.stringify(report, null, 2));
-  await mongoose.disconnect();
+function analyzeLegacy(users) {
+  const ids = new Set(users.map(u=>String(u._id))), follows = new Map(), blocks = new Map(), rejected = [];
+  const add = (kind, source, raw) => { const target=String(raw), key=`${source._id}:${target}`; if (!mongoose.isValidObjectId(target)||!ids.has(target)) rejected.push({kind,reason:'dangling',sourceLegacyId:String(source._id)}); else if (String(source._id)===target) rejected.push({kind,reason:'self',sourceLegacyId:String(source._id)}); else (kind==='follow'?follows:blocks).set(key,kind==='follow'?{follower:source._id,followed:raw,sourceLegacyId:source._id}:{blocker:source._id,blocked:raw,sourceLegacyId:source._id}); };
+  for (const user of users) { for (const target of user.following||[]) add('follow',user,target); for (const target of user.blockedUsers||[]) add('block',user,target); }
+  return { validEdges:[...follows.values()], validBlocks:[...blocks.values()], rejected };
 }
+function malformedLayout(user) {
+  const value=user.profileLayout||user.layout;
+  if(!value)return false;
+  if(Array.isArray(value))return value.some(x=>!x||typeof x!=='object'||!['x','y','w','h'].every(k=>Number.isFinite(x[k])));
+  if(typeof value!=='object')return true;
+  // Empty legacy zones are harmless defaults. Any populated zone needs manual
+  // migration because legacy widget names/coordinates are not the V2 contract.
+  return Object.values(value).some(zone=>!Array.isArray(zone)||zone.length>0);
+}
+async function readiness() {
+  const out=[]; for (const [Model,keys,extra={}] of INDEXES) { const exists=(await mongoose.connection.db.listCollections({name:Model.collection.name}).toArray()).length; const found=exists&&(await Model.collection.indexes()).find(i=>JSON.stringify(i.key)===JSON.stringify(keys)); out.push({collection:Model.collection.name,name:idxName(keys),ready:Boolean(found&&found.unique),canCreate:!found||Boolean(found.unique),options:extra}); } return out;
+}
+async function ensureIndexes() { for (const [Model,keys,extra={}] of INDEXES) await Model.collection.createIndex(keys,{unique:true,name:idxName(keys),...extra}); const result=await readiness(); if(result.some(x=>!x.ready)) throw new Error('Required unique index verification failed'); return result; }
 
-main().catch(error => { console.error(error.message); process.exitCode = 1; });
+async function buildPreflight() {
+  const users=await User.find({}).lean(), analysis=analyzeLegacy(users), ids=users.map(u=>u._id);
+  const [profiles,factions,creators,caps,rules,links,indexes]=await Promise.all([Profile.find({user:{$in:ids}}).lean(),Faction.find({name:{$in:FOUNDING_FACTIONS}}).lean(),Creator.find({user:{$in:ids}}).lean(),AccountCapability.find({user:{$in:ids},capability:'creator_mode'}).lean(),mongoose.connection.collection('accessrules').find({expression:{$exists:false},audience:{$exists:true}}).toArray(),mongoose.connection.collection('profilemodules').find({accessRule:{$exists:false},'accessRules.0':{$exists:true}}).toArray(),readiness()]);
+  const pByUser=new Map(profiles.map(p=>[String(p.user),p])), pids=profiles.map(p=>p._id);
+  const [layouts,modules,follows,blocks,members]=await Promise.all([ProfileLayout.find({profile:{$in:pids}}).lean(),ProfileModule.find({profile:{$in:pids}}).lean(),Follow.find({}).lean(),Block.find({}).lean(),FactionMembership.find({user:{$in:ids},status:'active'}).lean()]);
+  const layoutSet=new Set(layouts.map(x=>String(x.profile))), moduleSet=new Set(modules.map(x=>String(x.profile))), followSet=new Set(follows.map(x=>`${x.follower}:${x.followed}`)), blockSet=new Set(blocks.map(x=>`${x.blocker}:${x.blocked}`)), memberSet=new Set(members.map(x=>String(x.user))), creatorSet=new Set(creators.map(x=>String(x.user))), capSet=new Set(caps.map(x=>String(x.user)));
+  let pc=0,lc=0,mc=0,membership=0,creator=0,cap=0;
+  for(const u of users){const p=pByUser.get(String(u._id));if(!p){pc++;lc++;mc+=7}else{if(!layoutSet.has(String(p._id)))lc++;if(!moduleSet.has(String(p._id)))mc+=7}if(u.faction&&u.faction!=='Unaffiliated'&&FOUNDING_FACTIONS.includes(u.faction)&&!memberSet.has(String(u._id)))membership++;if(u.isCreator||['pending','approved'].includes(u.creatorStatus)){if(!creatorSet.has(String(u._id)))creator++;if(!capSet.has(String(u._id)))cap++;}}
+  const ftc=analysis.validEdges.filter(x=>!followSet.has(`${x.follower}:${x.followed}`)).length, btc=analysis.validBlocks.filter(x=>!blockSet.has(`${x.blocker}:${x.blocked}`)).length, fc=FOUNDING_FACTIONS.filter(n=>!factions.some(f=>f.name===n)).length;
+  const projectedTotalInserts=pc+lc+mc+ftc+btc+fc+membership+creator+cap;
+  const reconciledTotalRecords=profiles.length+pc+layouts.length+lc+modules.length+mc+analysis.validEdges.length+analysis.validBlocks.length+factions.length+fc+members.length+membership+creators.length+creator+caps.length+cap;
+  const report={usersDiscovered:users.length,validFollows:analysis.validEdges.length,followsToCreate:ftc,rejectedDanglingFollows:analysis.rejected.filter(x=>x.kind==='follow'&&x.reason==='dangling').length,rejectedSelfFollows:analysis.rejected.filter(x=>x.kind==='follow'&&x.reason==='self').length,rejectedInvalidBlocks:analysis.rejected.filter(x=>x.kind==='block').length,profilesToCreate:pc,layoutsToCreate:lc,modulesToCreate:mc,factionsToCreate:fc,membershipsToCreate:membership,creatorsToCreate:creator,capabilitiesToCreate:cap,blocksToCreate:btc,malformedLegacyLayouts:users.filter(malformedLayout).length,discardedLegacyCustomCss:users.filter(u=>(typeof u.customCss==='string'&&u.customCss.trim())||(typeof u.theme?.customCss==='string'&&u.theme.customCss.trim())).length,legacyAccessRulesRequiringConversion:rules.length,legacyModuleRuleLinksRequiringConversion:links.length,projectedTotalInserts,reconciledTotalRecords,reconciledProfiles:profiles.length+pc,reconciledLayouts:layouts.length+lc,reconciledModules:modules.length+mc,reconciledFactions:factions.length+fc,reconciledMemberships:members.length+membership,reconciledCreators:creators.length+creator,reconciledCapabilities:caps.length+cap,indexReadiness:indexes,indexesReady:indexes.every(x=>x.ready),indexesCreatable:indexes.every(x=>x.canCreate),rollbackReady:MODELS.every(M=>M.schema.path('migrationRunId')),topFriendsToCreate:0};
+  return {users,analysis,report};
+}
+function approvedDifferences(r){const got={users:r.usersDiscovered,validFollows:r.validFollows,rejectedDanglingFollows:r.rejectedDanglingFollows,profiles:r.reconciledProfiles,layouts:r.reconciledLayouts,modules:r.reconciledModules,factions:r.reconciledFactions,memberships:r.reconciledMemberships,creators:r.reconciledCreators,capabilities:r.reconciledCapabilities,totalInserts:r.reconciledTotalRecords};return Object.entries(APPROVED).filter(([k,v])=>got[k]!==v).map(([k,v])=>({metric:k,approved:v,observed:got[k]}));}
+function validateRunId(id){if(!id||!/^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/.test(id))throw new Error('A non-ambiguous migrationRunId (8-128 safe characters) is required');}
+
+async function applyMigration({migrationRunId,override=false,manifestPath,failAfter=0}){
+  validateRunId(migrationRunId); if((await Promise.all(MODELS.map(M=>M.exists({migrationRunId})))).some(Boolean))throw new Error(`migrationRunId already exists: ${migrationRunId}`);
+  const pre=await buildPreflight(), diffs=approvedDifferences(pre.report); if(diffs.length&&!override)throw new Error(`Approved reconciliation mismatch; apply aborted: ${JSON.stringify(diffs)}`); if(pre.report.legacyAccessRulesRequiringConversion||pre.report.legacyModuleRuleLinksRequiringConversion)throw new Error('Legacy access-rule conversion requires a separately reversible migration'); if(!pre.report.indexesCreatable||!pre.report.rollbackReady)throw new Error('Index or rollback preflight failed'); pre.report.indexReadiness=await ensureIndexes();pre.report.indexesReady=true;
+  const manifest={migrationRunId,records:[]}; let inserts=0; const session=await mongoose.startSession();
+  const record=(doc,M)=>{manifest.records.push({collection:M.collection.name,id:String(doc._id)});if(failAfter&&++inserts>=failAfter)throw new Error('Injected migration failure');};
+  try{await session.withTransaction(async()=>{
+    for(const name of FOUNDING_FACTIONS)if(!await Faction.exists({name}).session(session)){const d=(await Faction.create([{key:slug(name),name,founding:true,status:'active',migrationRunId}],{session}))[0];record(d,Faction)}
+    for(const u of pre.users){let p=await Profile.findOne({user:u._id}).session(session);if(!p){p=(await Profile.create([{user:u._id,source:'legacy_backfill',migrationRunId,sourceLegacyId:u._id,displayName:u.displayName||'',bio:u.bio||'',avatar:u.avatar||'',banner:u.banner||'',locationLabel:u.location||'',website:u.website||'',socialLinks:u.socialLinks||{},privacy:u.profilePrivacy||'public',followApprovalRequired:u.isPrivate===true}],{session}))[0];record(p,Profile)}if(!await ProfileLayout.exists({profile:p._id}).session(session)){const d=(await ProfileLayout.create([{profile:p._id,theme:{...(u.theme||{}),customCss:undefined},factionStarterTheme:'full',version:1,migrationRunId,sourceLegacyId:u._id}],{session}))[0];record(d,ProfileLayout)}if(!await ProfileModule.exists({profile:p._id}).session(session))for(const [position,type]of MODULE_TYPES.entries()){const d=(await ProfileModule.create([{profile:p._id,type,position,enabled:true,config:{},schemaVersion:1,migrationRunId,sourceLegacyId:u._id}],{session}))[0];record(d,ProfileModule)}if(u.faction&&u.faction!=='Unaffiliated'&&FOUNDING_FACTIONS.includes(u.faction)&&!await FactionMembership.exists({user:u._id,status:'active'}).session(session)){const f=await Faction.findOne({name:u.faction}).session(session),d=(await FactionMembership.create([{user:u._id,faction:f._id,status:'active',source:'legacy_backfill',joinedAt:u.createdAt||new Date(),migrationRunId,sourceLegacyId:u._id}],{session}))[0];record(d,FactionMembership)}if(u.isCreator||['pending','approved'].includes(u.creatorStatus)){const state=u.isCreator||u.creatorStatus==='approved'?'active':'pending';if(!await Creator.exists({user:u._id}).session(session)){const d=(await Creator.create([{user:u._id,state,source:'legacy_backfill',migrationRunId,sourceLegacyId:u._id}],{session}))[0];record(d,Creator)}if(!await AccountCapability.exists({user:u._id,capability:'creator_mode'}).session(session)){const d=(await AccountCapability.create([{user:u._id,capability:'creator_mode',state:state==='active'?'enabled':'pending',migrationRunId,sourceLegacyId:u._id}],{session}))[0];record(d,AccountCapability)}}}
+    for(const e of pre.analysis.validEdges)if(!await Follow.exists({follower:e.follower,followed:e.followed}).session(session)){const d=(await Follow.create([{...e,source:'legacy_backfill',migrationRunId}],{session}))[0];record(d,Follow)}for(const e of pre.analysis.validBlocks)if(!await Block.exists({blocker:e.blocker,blocked:e.blocked}).session(session)){const d=(await Block.create([{...e,source:'legacy_backfill',migrationRunId}],{session}))[0];record(d,Block)}
+  })}finally{await session.endSession()}
+  // withTransaction may retry its callback; canonicalize the side-channel
+  // manifest so it describes committed documents exactly once.
+  manifest.records=[...new Map(manifest.records.map(item=>[`${item.collection}:${item.id}`,item])).values()];
+  const target=manifestPath||path.join(__dirname,'..','migration-manifests',`${migrationRunId}.json`);fs.mkdirSync(path.dirname(target),{recursive:true});fs.writeFileSync(target,`${JSON.stringify(manifest,null,2)}\n`,{flag:'wx',mode:0o600});return{mode:'apply',migrationRunId,preflight:pre.report,inserted:manifest.records.length,manifest:target};
+}
+async function rollbackMigration({migrationRunId,dryRun=true}){validateRunId(migrationRunId);const counts={};for(const M of MODELS)counts[M.collection.name]=await M.countDocuments({migrationRunId});const total=Object.values(counts).reduce((a,b)=>a+b,0);if(!total)throw new Error(`No records found for migrationRunId: ${migrationRunId}`);if(!dryRun){const s=await mongoose.startSession();try{await s.withTransaction(async()=>{for(const M of MODELS)await M.deleteMany({migrationRunId},{session:s})})}finally{await s.endSession()}}return{mode:dryRun?'rollback-dry-run':'rollback',migrationRunId,recordsMatched:total,collections:counts};}
+function args(argv){const val=f=>{const i=argv.indexOf(f);return i<0?undefined:argv[i+1]},apply=argv.includes('--apply'),rollback=argv.includes('--rollback');if(apply&&rollback)throw new Error('--apply and --rollback are mutually exclusive');return{apply,rollback,override:argv.includes('--override-approved-counts'),dryRun:!apply||argv.includes('--dry-run'),migrationRunId:val('--migration-run-id'),manifestPath:val('--manifest')}}
+async function cli(){const a=args(process.argv.slice(2));if(!process.env.MONGODB_URI)throw new Error('MONGODB_URI is required');await mongoose.connect(process.env.MONGODB_URI,{autoIndex:false,autoCreate:false});try{if(a.rollback)return console.log(JSON.stringify(await rollbackMigration(a),null,2));if(a.apply)return console.log(JSON.stringify(await applyMigration({...a,migrationRunId:a.migrationRunId||`release1_${Date.now()}_${crypto.randomUUID()}`}),null,2));const p=await buildPreflight();console.log(JSON.stringify({mode:'dry-run',migrationRunId:a.migrationRunId||`release1_${Date.now()}_${crypto.randomUUID()}`,...p.report,approvedDifferences:approvedDifferences(p.report)},null,2))}finally{await mongoose.disconnect()}}
+if(require.main===module)cli().catch(e=>{console.error(e.message);process.exitCode=1});
+module.exports={FOUNDING_FACTIONS,MODULE_TYPES,APPROVED,analyzeLegacy,buildPreflight,ensureIndexes,applyMigration,rollbackMigration,approvedDifferences};

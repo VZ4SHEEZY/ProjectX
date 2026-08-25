@@ -6,7 +6,9 @@ const accountCapabilitySchema = new mongoose.Schema({
   state: { type: String, enum: ['disabled', 'pending', 'enabled', 'suspended', 'revoked'], default: 'disabled' },
   reasonCode: String,
   activatedAt: Date,
-  suspendedAt: Date
+  suspendedAt: Date,
+  migrationRunId: { type: String, index: true },
+  sourceLegacyId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
 accountCapabilitySchema.index({ user: 1, capability: 1 }, { unique: true });
