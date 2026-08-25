@@ -420,6 +420,7 @@ const App: React.FC = () => {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label={isMobileMenuOpen ? 'Close navigation' : 'Open navigation'}
             className="md:hidden w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg transition-colors"
           >
             {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
@@ -533,7 +534,7 @@ const App: React.FC = () => {
             onClick={() => setIsThemeEditorOpen(true)}
             title="Profile V2 Studio"
             aria-label="Open Profile V2 Studio"
-            className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center text-gray-500 hover:text-[#39FF14] hover:bg-[#39FF14]/10 rounded-lg transition-colors"
+            className="hidden md:flex w-10 h-10 items-center justify-center text-gray-500 hover:text-[#39FF14] hover:bg-[#39FF14]/10 rounded-lg transition-colors"
           >
             <Palette size={18} />
           </button>
@@ -566,6 +567,7 @@ const App: React.FC = () => {
             <MobileMenuItem active={currentView === 'profile'} onClick={() => navigateTo('profile')} icon={UserIcon} label="PROFILE" />
             <MobileMenuItem onClick={() => { setIsStoriesOpen(true); setIsMobileMenuOpen(false); }} icon={Image} label="STORIES" />
             <MobileMenuItem onClick={() => { setIsGroupsOpen(true); setIsMobileMenuOpen(false); }} icon={Users} label="COMMUNITIES" />
+            <MobileMenuItem onClick={() => { setIsThemeEditorOpen(true); setIsMobileMenuOpen(false); }} icon={Palette} label="PROFILE V2 STUDIO" />
             {user.isAdmin && (
               <MobileMenuItem active={currentView === 'admin'} onClick={() => navigateTo('admin')} icon={BarChart3} label="ADMIN" />
             )}

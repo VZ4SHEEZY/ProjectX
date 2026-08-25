@@ -34,9 +34,12 @@ test('creator can edit and persist the active tier catalog UI', async ({ monitor
   await expect(page.getByText('Browser Tier')).toBeVisible();
 });
 
-test('Profile V2 Studio exposes responsive preview, modules, access rules, and Top Friends', async ({ monitoredPage: page }) => {
+test('Profile V2 Studio exposes responsive preview, modules, access rules, and Top Friends', async ({ monitoredPage: page }, testInfo) => {
   await login(page);
-  await page.getByLabel('Open Profile V2 Studio').click();
+  if (testInfo.project.name === 'mobile-chromium') {
+    await page.getByLabel('Open navigation').click();
+    await page.getByRole('button', { name: 'PROFILE V2 STUDIO' }).click();
+  } else await page.getByLabel('Open Profile V2 Studio').click();
   await expect(page.getByTestId('profile-v2-studio')).toBeVisible();
   await expect(page.getByText(/Live desktop preview/i)).toBeVisible();
   await page.getByRole('button', { name: 'modules', exact: true }).click();
@@ -45,6 +48,8 @@ test('Profile V2 Studio exposes responsive preview, modules, access rules, and T
   await expect(page.getByText('Human-readable module access')).toBeVisible();
   await page.getByRole('button', { name: 'friends', exact: true }).click();
   await expect(page.getByText('Your Top Friends')).toBeVisible();
+  await page.getByRole('button', { name: 'social', exact: true }).click();
+  await expect(page.getByText(/Follow, Friend, Block, and Mute are separate controls/i)).toBeVisible();
   await page.getByLabel('Switch preview device').click();
   await expect(page.getByText(/Live mobile preview/i)).toBeVisible();
 });

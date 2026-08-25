@@ -69,9 +69,10 @@ router.put('/me/modules', protect, async (req, res) => {
   if (modules.some(item => item.type === 'creator_summary') && !req.user.isCreator && !await AccountCapability.exists({ user: req.user._id, capability: 'creator_mode', state: 'enabled' })) return res.status(403).json({ success: false, message: 'Creator module requires Creator Mode' });
   const profile = await Profile.findOne({ user: req.user._id });
   if (!profile) return res.status(409).json({ success: false, message: 'Create the normalized profile first' });
-  await ProfileModule.deleteMany({ profile: profile._id });
   const ruleIds = modules.map(item => item.accessRuleId).filter(Boolean);
   if (ruleIds.length !== await AccessRule.countDocuments({ _id: { $in: ruleIds }, owner: req.user._id })) return res.status(400).json({ success: false, message: 'Access rules must belong to the profile owner' });
+  // A rejected request must never erase the last known-good published profile.
+  await ProfileModule.deleteMany({ profile: profile._id });
   if (modules.length) await ProfileModule.insertMany(modules.map((item, index) => ({ profile: profile._id, type: item.type, position: item.position, enabled: item.enabled, config: configs[index].update, accessRule: item.accessRuleId || null, schemaVersion: 1 })));
   res.json({ success: true });
 });
