@@ -13,7 +13,7 @@ const safeUrl = value => {
 
 function validateProfileUpdate(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'Profile update must be an object' };
-  const allowed = new Set(['displayName','bio','avatar','banner','faction','location','website','socialLinks','theme','profileLayout','profilePrivacy','isPrivate','showOnlineStatus','allowDMs']);
+  const allowed = new Set(['displayName','bio','avatar','banner','location','website','socialLinks','theme','profileLayout','profilePrivacy','isPrivate','showOnlineStatus','allowDMs','dmAudience','friendRequestAudience']);
   const unknown = Object.keys(body).filter(key => !allowed.has(key));
   if (unknown.length) return { error: `Unsupported profile fields: ${unknown.join(', ')}` };
   const update = {};
@@ -23,8 +23,9 @@ function validateProfileUpdate(body) {
   for (const key of ['avatar','banner','website']) if (body[key] !== undefined) {
     const value = safeUrl(body[key]); if (value === undefined) return { error: `${key} must be an http(s) URL` }; update[key] = value;
   }
-  if (body.faction !== undefined) { if (!FACTIONS.includes(body.faction)) return { error: 'Invalid faction' }; update.faction = body.faction; }
-  if (body.profilePrivacy !== undefined) { if (!['public','private'].includes(body.profilePrivacy)) return { error: 'Invalid profile privacy' }; update.profilePrivacy = body.profilePrivacy; }
+  if (body.profilePrivacy !== undefined) { if (!['public','users','followers','friends','private'].includes(body.profilePrivacy)) return { error: 'Invalid profile privacy' }; update.profilePrivacy = body.profilePrivacy; }
+  if (body.dmAudience !== undefined) { if (!['nobody','friends','mutual_follows','subscribers','friends_subscribers','everyone'].includes(body.dmAudience)) return { error: 'Invalid DM audience' }; update.dmAudience = body.dmAudience; }
+  if (body.friendRequestAudience !== undefined) { if (!['nobody','users','followers','friends_of_friends','everyone'].includes(body.friendRequestAudience)) return { error: 'Invalid friend request audience' }; update.friendRequestAudience = body.friendRequestAudience; }
   for (const key of ['isPrivate','showOnlineStatus','allowDMs']) if (body[key] !== undefined) { if (typeof body[key] !== 'boolean') return { error: `${key} must be boolean` }; update[key] = body[key]; }
   if (body.socialLinks !== undefined) {
     if (!body.socialLinks || typeof body.socialLinks !== 'object' || Array.isArray(body.socialLinks)) return { error: 'socialLinks must be an object' };

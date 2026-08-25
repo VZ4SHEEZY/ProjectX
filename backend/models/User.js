@@ -70,7 +70,7 @@ const userSchema = new mongoose.Schema({
   adminSince: Date,
   
   // Privacy settings
-  profilePrivacy: { type: String, enum: ['public', 'private'], default: 'public' },
+  profilePrivacy: { type: String, enum: ['public', 'users', 'followers', 'friends', 'private'], default: 'public' },
   
   // Profile customization layout
   profileLayout: {
@@ -144,6 +144,8 @@ const userSchema = new mongoose.Schema({
   isPrivate: { type: Boolean, default: false },
   showOnlineStatus: { type: Boolean, default: true },
   allowDMs: { type: Boolean, default: true },
+  dmAudience: { type: String, enum: ['nobody', 'friends', 'mutual_follows', 'subscribers', 'friends_subscribers', 'everyone'], default: 'everyone' },
+  friendRequestAudience: { type: String, enum: ['nobody', 'users', 'followers', 'friends_of_friends', 'everyone'], default: 'everyone' },
   
   // Blocked users
   blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],

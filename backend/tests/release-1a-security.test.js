@@ -7,7 +7,7 @@ const Follow = require('../models/Follow');
 const Block = require('../models/Block');
 const Friendship = require('../models/Friendship');
 const ContentView = require('../models/ContentView');
-const { canViewPost, canViewProfile, evaluateAccessRules, publicUserProjection, privateVerificationProjection } = require('../services/accessPolicy');
+const { canViewPost, canViewProfile, evaluateAccessRules, evaluateAccessExpression, validateAccessExpression, publicUserProjection, privateVerificationProjection } = require('../services/accessPolicy');
 const { validateProfileUpdate } = require('../services/profileValidation');
 
 const ownerId = new mongoose.Types.ObjectId();
@@ -59,11 +59,35 @@ test('access rules use server context with explicit deny precedence', () => {
   assert.equal(evaluateAccessRules(context, [{ audience: 'subscribers', effect: 'allow' }]).allowed, false);
 });
 
+test('Release 1 access expressions support constrained AND and OR without executable policy code', () => {
+  const context = { authenticated: true, follows: false, friends: true, sameFaction: true, ageVerified: false, isOwner: false };
+  const friendOrSubscriber = { op: 'or', children: [{ op: 'predicate', type: 'friends' }, { op: 'predicate', type: 'subscribers' }] };
+  const factionAndFriend = { op: 'and', children: [{ op: 'predicate', type: 'same_faction' }, { op: 'predicate', type: 'friends' }] };
+  assert.equal(evaluateAccessExpression(context, friendOrSubscriber).allowed, true);
+  assert.equal(evaluateAccessExpression(context, factionAndFriend).allowed, true);
+  assert.equal(evaluateAccessExpression(context, { op: 'and', children: [{ op: 'predicate', type: 'age_verified' }, { op: 'predicate', type: 'subscribers' }] }).allowed, false);
+  assert.equal(validateAccessExpression({ op: 'javascript', code: 'return true' }), false);
+  assert.equal(validateAccessExpression({ op: 'predicate', type: 'unknown' }), false);
+});
+
+test('Release 1 profile privacy includes authenticated users, followers, friends, and owner-only', async () => {
+  const viewer = { _id: viewerId };
+  assert.equal((await canViewProfile(viewer, { _id: ownerId, profilePrivacy: 'users' })).allowed, true);
+  assert.equal((await canViewProfile(null, { _id: ownerId, profilePrivacy: 'users' })).allowed, false);
+  Follow.exists = async () => ({ _id: new mongoose.Types.ObjectId() });
+  assert.equal((await canViewProfile(viewer, { _id: ownerId, profilePrivacy: 'followers' })).allowed, true);
+  Follow.exists = async () => null; Friendship.exists = async () => ({ _id: new mongoose.Types.ObjectId() });
+  assert.equal((await canViewProfile(viewer, { _id: ownerId, profilePrivacy: 'friends' })).allowed, true);
+  assert.equal((await canViewProfile(viewer, { _id: ownerId, profilePrivacy: 'private' })).allowed, false);
+});
+
 test('profile contract rejects executable and unknown content while accepting validated theme tokens', () => {
   assert.match(validateProfileUpdate({ theme: { customCss: 'body{}' } }).error, /Unsupported theme fields/);
   assert.match(validateProfileUpdate({ customHtml: '<script>alert(1)</script>' }).error, /Unsupported profile fields/);
   assert.equal(validateProfileUpdate({ theme: { primaryColor: '#abcdef', animations: false } }).error, undefined);
   assert.match(validateProfileUpdate({ website: 'javascript:alert(1)' }).error, /http\(s\)/);
+  assert.match(validateProfileUpdate({ faction: 'Iron Veil' }).error, /Unsupported profile fields/);
+  assert.equal(validateProfileUpdate({ profilePrivacy: 'users', dmAudience: 'friends_subscribers', friendRequestAudience: 'followers' }).error, undefined);
 });
 
 test('raw content view records are structurally progression-ineligible', () => {

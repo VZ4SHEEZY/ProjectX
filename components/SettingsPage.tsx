@@ -7,8 +7,9 @@ import {
   Key, Fingerprint, Mail, Smartphone
 } from 'lucide-react';
 import GlitchButton from './GlitchButton';
-import { uploadAPI, userAPI } from '../services/api';
+import { uploadAPI, userAPI, profileAPI } from '../services/api';
 import { User as UserType } from '../types';
+import TopFriendsEditor from './TopFriendsEditor';
 
 interface SettingsPageProps {
   isOpen: boolean;
@@ -45,6 +46,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
   // Privacy settings
   const [showOnlineStatus, setShowOnlineStatus] = useState(true);
   const [allowDMs, setAllowDMs] = useState(true);
+  const [profilePrivacy, setProfilePrivacy] = useState('public');
+  const [privateAccount, setPrivateAccount] = useState(false);
+  const [dmAudience, setDmAudience] = useState('everyone');
+  const [friendRequestAudience, setFriendRequestAudience] = useState('everyone');
+  const [factionStarterTheme, setFactionStarterTheme] = useState('full');
   const [showWallet, setShowWallet] = useState(false);
   
   // Appearance settings
@@ -63,7 +69,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
     setIsSaving(true);
     setSaveError('');
     try {
-      await userAPI.updateProfile({ displayName, bio });
+      await userAPI.updateProfile({ displayName, bio, profilePrivacy, isPrivate: privateAccount, dmAudience, friendRequestAudience });
+      await profileAPI.updateMine({ displayName, bio, profilePrivacy, isPrivate: privateAccount, dmAudience, friendRequestAudience }, { factionStarterTheme });
       onProfileUpdate?.({ displayName, bio });
       onClose();
     } catch {
@@ -204,6 +211,31 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ isOpen, onClose, currentUse
                   />
                   <p className="text-gray-500 text-xs text-right">{bio.length}/500</p>
                 </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="text-gray-400 text-sm flex items-center gap-3"><input type="checkbox" checked={privateAccount} onChange={e => setPrivateAccount(e.target.checked)} /> Require approval for new followers</label>
+                  <label className="text-gray-400 text-sm">Profile privacy
+                    <select aria-label="Profile privacy" value={profilePrivacy} onChange={e => setProfilePrivacy(e.target.value)} className="mt-2 w-full bg-black border border-gray-700 rounded px-3 py-2 text-white">
+                      <option value="public">Public</option><option value="users">CyberDope users only</option><option value="followers">Followers</option><option value="friends">Friends</option><option value="private">Owner only</option>
+                    </select>
+                  </label>
+                  <label className="text-gray-400 text-sm">Who can message you
+                    <select aria-label="DM audience" value={dmAudience} onChange={e => setDmAudience(e.target.value)} className="mt-2 w-full bg-black border border-gray-700 rounded px-3 py-2 text-white">
+                      <option value="nobody">Nobody</option><option value="friends">Friends only</option><option value="mutual_follows">Mutual follows</option><option value="subscribers">Subscribers</option><option value="friends_subscribers">Friends + subscribers</option><option value="everyone">Everyone</option>
+                    </select>
+                  </label>
+                  <label className="text-gray-400 text-sm">Friend requests
+                    <select aria-label="Friend request audience" value={friendRequestAudience} onChange={e => setFriendRequestAudience(e.target.value)} className="mt-2 w-full bg-black border border-gray-700 rounded px-3 py-2 text-white">
+                      <option value="nobody">Nobody</option><option value="users">CyberDope users</option><option value="followers">Followers</option><option value="friends_of_friends">Friends of friends</option><option value="everyone">Everyone</option>
+                    </select>
+                  </label>
+                  <label className="text-gray-400 text-sm">Faction theme influence
+                    <select aria-label="Faction theme" value={factionStarterTheme} onChange={e => setFactionStarterTheme(e.target.value)} className="mt-2 w-full bg-black border border-gray-700 rounded px-3 py-2 text-white">
+                      <option value="full">Full</option><option value="partial">Partial</option><option value="off">Off</option>
+                    </select>
+                  </label>
+                </div>
+                <TopFriendsEditor />
 
               </div>
             )}

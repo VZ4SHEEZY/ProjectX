@@ -40,3 +40,32 @@ test('wallet and payment failure paths never require a real wallet', async ({ re
   expect((await request.post(`${data.apiURL}/wallet/connect`, { headers, data: { address: '0x0000000000000000000000000000000000000001', signature: '0x00', challengeId: 'invalid' } })).status()).toBeGreaterThanOrEqual(400);
   expect((await request.post(`${data.apiURL}/tips/intents`, { headers, data: { creatorId: userFor(data, 'creator').id, amount: '1.00' } })).status()).toBe(503);
 });
+
+test('Release 1 private follows, friendship, Top Friends, and locked modules persist', async ({ request }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium', 'The API state transition is covered once per isolated run.');
+  const data = await runtime();
+  const login = async (role: string) => { const user = userFor(data, role); const response = await request.post(`${data.apiURL}/auth/login`, { data: { email: user.email, password: data.password } }); return { user, token: (await response.json()).token }; };
+  const primary = await login('primary'), peer = await login('peer');
+  const headers = (token: string) => ({ authorization: `Bearer ${token}` });
+  expect((await request.put(`${data.apiURL}/users/profile`, { headers: headers(peer.token), data: { profilePrivacy: 'followers', isPrivate: true, dmAudience: 'friends', friendRequestAudience: 'everyone' } })).ok()).toBeTruthy();
+  const follow = await request.post(`${data.apiURL}/users/${peer.user.id}/follow`, { headers: headers(primary.token) });
+  expect(follow.status()).toBe(202); expect((await follow.json()).followStatus).toBe('requested');
+  const followRequests = await (await request.get(`${data.apiURL}/social/follow-requests`, { headers: headers(peer.token) })).json();
+  expect(followRequests.data).toHaveLength(1);
+  expect((await request.patch(`${data.apiURL}/social/follow-requests/${followRequests.data[0]._id}`, { headers: headers(peer.token), data: { status: 'accepted' } })).ok()).toBeTruthy();
+  const friendRequest = await request.post(`${data.apiURL}/social/friends/requests/${peer.user.id}`, { headers: headers(primary.token) });
+  expect(friendRequest.status()).toBe(201);
+  const incoming = await (await request.get(`${data.apiURL}/social/friends/requests`, { headers: headers(peer.token) })).json();
+  expect((await request.patch(`${data.apiURL}/social/friends/requests/${incoming.data[0]._id}`, { headers: headers(peer.token), data: { status: 'accepted' } })).ok()).toBeTruthy();
+  expect((await request.put(`${data.apiURL}/social/top-friends`, { headers: headers(peer.token), data: { friendIds: [primary.user.id] } })).ok()).toBeTruthy();
+  const top = await (await request.get(`${data.apiURL}/social/top-friends/${peer.user.id}`, { headers: headers(primary.token) })).json();
+  expect(top.data[0].friend._id).toBe(primary.user.id);
+  const ruleResponse = await request.put(`${data.apiURL}/profiles/me/access-rules`, { headers: headers(peer.token), data: { rules: [{ name: 'Subscribers', presentation: 'locked_preview', expression: { op: 'predicate', type: 'subscribers' } }] } });
+  const ruleId = (await ruleResponse.json()).data[0]._id;
+  expect((await request.put(`${data.apiURL}/profiles/me/modules`, { headers: headers(peer.token), data: { modules: [{ type: 'bio', position: 0, enabled: true, config: {}, accessRuleId: ruleId }] } })).ok()).toBeTruthy();
+  const publicProfile = await (await request.get(`${data.apiURL}/profiles/${peer.user.id}`, { headers: headers(primary.token) })).json();
+  expect(publicProfile.data.modules[0]).toMatchObject({ type: 'bio', locked: true, presentation: 'locked_preview' });
+  expect((await request.put(`${data.apiURL}/users/profile`, { headers: headers(peer.token), data: { profilePrivacy: 'public', isPrivate: false } })).ok()).toBeTruthy();
+  const defaults = ['identity','bio','faction','top_friends','posts','media','links'].map((type, position) => ({ type, position, enabled: true, config: {} }));
+  expect((await request.put(`${data.apiURL}/profiles/me/modules`, { headers: headers(peer.token), data: { modules: defaults } })).ok()).toBeTruthy();
+});

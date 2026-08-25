@@ -4,6 +4,11 @@ const User = require('../models/User');
 const { body, validationResult } = require('express-validator');
 const cdpService = require('../services/cdp');
 const { protect } = require('../middleware/auth');
+const Faction = require('../models/Faction');
+const FactionMembership = require('../models/FactionMembership');
+const Profile = require('../models/Profile');
+const ProfileLayout = require('../models/ProfileLayout');
+const ProfileModule = require('../models/ProfileModule');
 
 const router = express.Router();
 
@@ -113,6 +118,14 @@ router.post('/register', [
       zodiacSign,
       dateOfBirth: dateOfBirth || ''
     });
+
+    // Establish normalized Release 1 identity records immediately. Legacy fields remain
+    // dual-written until reconciliation proves the normalized records authoritative.
+    const factionRecord = await Faction.findOneAndUpdate({ name: faction }, { $setOnInsert: { key: faction.toLowerCase().replace(/[^a-z0-9]+/g, '_'), name: faction, color: factionColor, founding: true }, $set: { status: 'active' } }, { upsert: true, new: true });
+    await FactionMembership.create({ user: user._id, faction: factionRecord._id, status: 'active', source: 'native', joinedAt: new Date() });
+    const profile = await Profile.create({ user: user._id, displayName: req.body.displayName || '', avatar: user.avatar, privacy: 'public', source: 'native' });
+    await ProfileLayout.create({ profile: profile._id, factionStarterTheme: 'full', version: 1 });
+    await ProfileModule.insertMany(['identity','bio','faction','top_friends','posts','media','links'].map((type, position) => ({ profile: profile._id, type, position, enabled: true, config: {}, schemaVersion: 1 })));
 
     // Create embedded wallet (silent, no user interaction)
     try {

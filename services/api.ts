@@ -121,6 +121,32 @@ export const userAPI = {
     api.delete('/notifications'),
 };
 
+export const socialAPI = {
+  getFriends: () => api.get('/social/friends'),
+  getFriendRequests: () => api.get('/social/friends/requests'),
+  sendFriendRequest: (userId: string) => api.post(`/social/friends/requests/${userId}`),
+  respondFriendRequest: (requestId: string, status: 'accepted' | 'declined') => api.patch(`/social/friends/requests/${requestId}`, { status }),
+  removeFriend: (userId: string) => api.delete(`/social/friends/${userId}`),
+  getFollowRequests: () => api.get('/social/follow-requests'),
+  respondFollowRequest: (requestId: string, status: 'accepted' | 'declined') => api.patch(`/social/follow-requests/${requestId}`, { status }),
+  getTopFriends: (userId: string) => api.get(`/social/top-friends/${userId}`),
+  setTopFriends: (friendIds: string[]) => api.put('/social/top-friends', { friendIds }),
+  getBlocks: () => api.get('/social/blocks'),
+  block: (userId: string) => api.put(`/social/blocks/${userId}`),
+  unblock: (userId: string) => api.delete(`/social/blocks/${userId}`),
+  getMutes: () => api.get('/social/mutes'),
+  mute: (userId: string) => api.put(`/social/mutes/${userId}`),
+  unmute: (userId: string) => api.delete(`/social/mutes/${userId}`),
+};
+
+export const profileAPI = {
+  getPublic: (identifier: string) => api.get(`/profiles/${identifier}`),
+  getMine: () => api.get('/profiles/me'),
+  updateMine: (profile: Record<string, unknown>, layout?: Record<string, unknown>) => api.put('/profiles/me', { profile, layout }),
+  saveModules: (modules: unknown[]) => api.put('/profiles/me/modules', { modules }),
+  saveAccessRules: (rules: unknown[]) => api.put('/profiles/me/access-rules', { rules }),
+};
+
 // ==================== POST API ====================
 export const postAPI = {
   getPosts: (params?: { type?: string; visibility?: string; sort?: string; page?: number; limit?: number; following?: boolean; author?: string }) =>

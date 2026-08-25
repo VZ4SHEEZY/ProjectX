@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Heart, MessageSquare, UserPlus, UserCheck } from 'lucide-react';
+import { ArrowLeft, MessageSquare, UserPlus, UserCheck, UserMinus, Ban, VolumeX } from 'lucide-react';
 import { User } from '../types';
-import { userAPI, postAPI } from '../services/api';
+import { userAPI, postAPI, profileAPI, socialAPI } from '../services/api';
 import VideoModal from './VideoModal';
+import ProfileV2Modules, { ProfileV2Module } from './ProfileV2Modules';
 
 interface UserProfilePageProps {
   userId: string;
@@ -17,9 +18,12 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
   const [user, setUser] = useState<any>(null);
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [followStatus, setFollowStatus] = useState('none');
+  const [isFriend, setIsFriend] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [topFriends, setTopFriends] = useState<any[]>([]);
+  const [profileModules, setProfileModules] = useState<ProfileV2Module[]>([]);
 
   // Listen for follow updates from other components
   useEffect(() => {
@@ -44,6 +48,12 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
       
       setUser(userData);
       setIsFollowing(userData.isFollowing || false);
+      setFollowStatus(userData.followStatus || (userData.isFollowing ? 'following' : 'none'));
+      setIsFriend(Boolean(userData.isFriend));
+      try {
+        const normalized = await profileAPI.getPublic(userData._id);
+        setProfileModules(normalized.data?.data?.modules || []);
+      } catch { setProfileModules([]); }
 
       // Check if profile is private
       if (userData.profilePrivacy === 'private' && !userData.isFollowing && userData._id !== currentUser?.id) {
@@ -57,9 +67,8 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
 
         // Load top friends (followers + following mix)
         try {
-          const followersRes = await userAPI.getFollowers(userData._id, { limit: 8 });
-          const followers = followersRes.data?.data || [];
-          setTopFriends(followers.slice(0, 8));
+          const topFriendsRes = await socialAPI.getTopFriends(userData._id);
+          setTopFriends((topFriendsRes.data?.data || []).map((entry: any) => entry.friend));
         } catch (err) {
           console.error('Load top friends error:', err);
         }
@@ -76,6 +85,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
       const response = await userAPI.followUser(user._id);
       if (response.data?.success) {
         setIsFollowing(response.data.isFollowing);
+        setFollowStatus(response.data.followStatus || (response.data.isFollowing ? 'following' : 'none'));
         setUser((current: any) => current ? {
           ...current,
           followersCount: response.data.followersCount ?? current.followersCount
@@ -87,6 +97,12 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
       console.error('Follow error:', error);
     }
   };
+
+  const handleFriend = async () => {
+    try { if (isFriend) { await socialAPI.removeFriend(user._id); setIsFriend(false); } else { await socialAPI.sendFriendRequest(user._id); } } catch (error) { console.error('Friend action error:', error); }
+  };
+
+  const handleBlock = async () => { if (window.confirm(`Block ${user.username}?`)) { await socialAPI.block(user._id); onBack(); } };
 
   if (isLoading) {
     return (
@@ -162,12 +178,17 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
                   }`}
                 >
                   {isFollowing ? <UserCheck size={16} /> : <UserPlus size={16} />}
-                  {isFollowing ? 'FOLLOWING' : 'FOLLOW'}
+                  {followStatus === 'requested' ? 'REQUESTED' : isFollowing ? 'FOLLOWING' : 'FOLLOW'}
+                </button>
+                <button onClick={handleFriend} className="flex items-center gap-2 px-4 py-2 border border-[#FF00FF] text-[#FF00FF] rounded font-bold">
+                  {isFriend ? <UserMinus size={16} /> : <UserPlus size={16} />}{isFriend ? 'UNFRIEND' : 'ADD FRIEND'}
                 </button>
                 <button onClick={() => onMessage?.(user._id)} className="flex items-center gap-2 px-4 py-2 border border-[#39FF14] text-[#39FF14] rounded hover:bg-[#39FF14] hover:text-black transition-all font-bold">
                   <MessageSquare size={16} />
                   MESSAGE
                 </button>
+                <button aria-label="Mute user" onClick={() => socialAPI.mute(user._id)} className="p-2 border border-gray-700 text-gray-400 rounded"><VolumeX size={16} /></button>
+                <button aria-label="Block user" onClick={handleBlock} className="p-2 border border-red-800 text-red-400 rounded"><Ban size={16} /></button>
               </div>
             )}
           </div>
@@ -184,6 +205,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
         </div>
       ) : (
         <>
+          {profileModules.length > 0 && <div className="p-6 border-b border-[#39FF14]/20"><ProfileV2Modules modules={profileModules.filter(module => !['posts','top_friends'].includes(module.type))} userId={user._id} owner={user} posts={userPosts} /></div>}
           {/* Posts Grid */}
           <div className="p-6 border-b border-[#39FF14]/20">
             <h3 className="text-white font-bold text-lg mb-4">Posts ({userPosts.length})</h3>

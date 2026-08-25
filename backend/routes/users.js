@@ -5,8 +5,10 @@ const Post = require('../models/Post');
 const { protect, optionalAuth } = require('../middleware/auth');
 const { createNotification } = require('./notifications');
 const Follow = require('../models/Follow');
+const FollowRequest = require('../models/FollowRequest');
+const Profile = require('../models/Profile');
 const { canViewProfile, canViewPost, publicUserProjection } = require('../services/accessPolicy');
-const { isBlockedEitherWay, isFollowing } = require('../services/relationshipPolicy');
+const { isBlockedEitherWay, isFollowing, areFriends } = require('../services/relationshipPolicy');
 const { validateProfileUpdate } = require('../services/profileValidation');
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -154,6 +156,8 @@ router.get('/:identifier', optionalAuth, async (req, res) => {
     for (const post of candidates) if ((await canViewPost(req.user, post, user)).allowed) posts.push(post);
     const data = publicUserProjection(user, { includePresence: true });
     data.isFollowing = req.user ? await isFollowing(req.user._id, user._id) : false;
+    data.isFriend = req.user ? await areFriends(req.user._id, user._id) : false;
+    data.followStatus = data.isFollowing ? 'following' : (req.user && await FollowRequest.exists({ requester: req.user._id, recipient: user._id, status: 'pending' }) ? 'requested' : 'none');
 
     res.json({
       success: true,
@@ -188,6 +192,9 @@ router.put('/profile', protect, async (req, res) => {
       updateFields,
       { new: true, runValidators: true }
     ).select('-password -walletPrivateKey');
+    const profileFields = {};
+    for (const [legacy, normalized] of [['displayName','displayName'],['bio','bio'],['avatar','avatar'],['banner','banner'],['location','locationLabel'],['website','website'],['socialLinks','socialLinks'],['profilePrivacy','privacy'],['isPrivate','followApprovalRequired'],['dmAudience','dmAudience'],['friendRequestAudience','friendRequestAudience']]) if (validation.update[legacy] !== undefined) profileFields[normalized] = validation.update[legacy];
+    if (Object.keys(profileFields).length) await Profile.updateOne({ user: req.user._id }, { $set: profileFields, $setOnInsert: { source: 'native' } }, { upsert: true, runValidators: true });
 
     res.json({
       success: true,
@@ -237,6 +244,9 @@ router.post('/:id/follow', protect, async (req, res) => {
         id => id.toString() !== req.user._id.toString()
       );
       await Follow.deleteOne({ follower: currentUser._id, followed: userToFollow._id });
+    } else if (userToFollow.isPrivate === true) {
+      const request = await FollowRequest.findOneAndUpdate({ requester: currentUser._id, recipient: userToFollow._id, status: 'pending' }, { $setOnInsert: { requester: currentUser._id, recipient: userToFollow._id, status: 'pending' } }, { upsert: true, new: true });
+      return res.status(202).json({ success: true, isFollowing: false, followStatus: 'requested', requestId: request._id, followersCount: userToFollow.followersCount, followingCount: currentUser.followingCount, message: 'Follow request sent' });
     } else {
       // Follow
       currentUser.following.push(req.params.id);
@@ -262,6 +272,7 @@ router.post('/:id/follow', protect, async (req, res) => {
     res.json({
       success: true,
       isFollowing: !followingNow,
+      followStatus: followingNow ? 'none' : 'following',
       followersCount: userToFollow.followersCount,
       followingCount: currentUser.followingCount,
       message: followingNow ? 'Unfollowed successfully' : 'Followed successfully'

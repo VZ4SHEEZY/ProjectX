@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Plus, MessageSquare, UserCheck } from 'lucide-react';
-import { userAPI } from '../services/api';
+import { Heart, UserCheck } from 'lucide-react';
+import { socialAPI } from '../services/api';
 
 interface Following {
   _id: string;
@@ -23,9 +23,9 @@ const TopFriendsWidget: React.FC<TopFriendsWidgetProps> = ({ userId }) => {
     
     const fetchFollowing = async () => {
       try {
-        const response = await userAPI.getFollowing(userId, { limit: 8 });
+        const response = await socialAPI.getTopFriends(userId);
         if (response.data?.success && response.data.data) {
-          setFollowing(response.data.data);
+          setFollowing(response.data.data.map((entry: any) => entry.friend));
         }
       } catch (err) {
         console.error('Failed to fetch following:', err);
@@ -57,7 +57,7 @@ const TopFriendsWidget: React.FC<TopFriendsWidgetProps> = ({ userId }) => {
     return (
       <div className="w-full h-full bg-black/80 backdrop-blur-md border-2 border-[#FF00FF] flex flex-col items-center justify-center p-4 text-center">
         <Heart size={24} className="text-[#FF00FF] mb-2 opacity-50" />
-        <p className="text-gray-400 text-xs font-mono">Follow creators to see them here</p>
+        <p className="text-gray-400 text-xs font-mono">No Top Friends selected</p>
       </div>
     );
   }
@@ -69,7 +69,7 @@ const TopFriendsWidget: React.FC<TopFriendsWidgetProps> = ({ userId }) => {
         <div className="flex items-center gap-2">
           <Heart size={16} className="text-[#FF00FF] fill-[#FF00FF] animate-pulse" />
           <span className="font-mono font-bold tracking-widest text-xs uppercase text-[#FF00FF]">
-            Following
+            Top Friends
           </span>
         </div>
         <span className="text-[9px] font-mono text-gray-500">{following.length} users</span>

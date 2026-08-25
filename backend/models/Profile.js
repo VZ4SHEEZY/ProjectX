@@ -9,7 +9,10 @@ const profileSchema = new mongoose.Schema({
   locationLabel: { type: String, maxlength: 100, default: '' },
   website: { type: String, maxlength: 200, default: '' },
   socialLinks: { type: Map, of: String, default: {} },
-  privacy: { type: String, enum: ['public', 'followers', 'friends', 'private'], default: 'public' },
+  privacy: { type: String, enum: ['public', 'users', 'followers', 'friends', 'private'], default: 'public' },
+  followApprovalRequired: { type: Boolean, default: false },
+  friendRequestAudience: { type: String, enum: ['nobody', 'users', 'followers', 'friends_of_friends', 'everyone'], default: 'everyone' },
+  dmAudience: { type: String, enum: ['nobody', 'friends', 'mutual_follows', 'subscribers', 'friends_subscribers', 'everyone'], default: 'everyone' },
   source: { type: String, enum: ['native', 'legacy_backfill'], default: 'native' }
 }, { timestamps: true });
 

@@ -20,7 +20,7 @@ interface FeedProps {
 
 type FeedTab = 'discover' | 'friends' | 'faction';
 
-// Feed tabs: Discover (algorithm), Friends (following), Faction (private)
+// Compatibility key "friends" currently means the distinct Following feed.
 
 // Progress Indicator Component
 const ProgressIndicator: React.FC<{ total: number; current: number }> = ({ total, current }) => {

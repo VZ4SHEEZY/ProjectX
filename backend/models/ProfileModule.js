@@ -6,7 +6,7 @@ const profileModuleSchema = new mongoose.Schema({
   position: { type: Number, min: 0, required: true },
   enabled: { type: Boolean, default: true },
   config: { type: mongoose.Schema.Types.Mixed, default: {} },
-  accessRules: [{ type: mongoose.Schema.Types.ObjectId, ref: 'AccessRule' }],
+  accessRule: { type: mongoose.Schema.Types.ObjectId, ref: 'AccessRule', default: null },
   schemaVersion: { type: Number, default: 1 }
 }, { timestamps: true, minimize: false });
 

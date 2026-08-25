@@ -8,7 +8,7 @@ const profileLayoutSchema = new mongoose.Schema({
     animations: Boolean, glowEffects: Boolean, scanlines: Boolean,
     backgroundImage: String, cursorEffect: String, layoutStyle: String
   },
-  factionStarterTheme: { type: String, enum: ['full', 'partial', 'off'], default: 'partial' },
+  factionStarterTheme: { type: String, enum: ['full', 'partial', 'off'], default: 'full' },
   version: { type: Number, default: 1 }
 }, { timestamps: true });
 

@@ -591,7 +591,7 @@ const App: React.FC = () => {
                     : 'bg-black/50 border border-gray-800 text-gray-400 hover:text-white'
                 }`}
               >
-                FRIENDS
+                FOLLOWING
               </button>
               <button
                 onClick={() => setFeedTab('faction')}

@@ -38,7 +38,7 @@ const authorizeRoom = async (roomId, userId) => {
   if (!participantIds.includes(currentUserId)) return null;
   const otherId = participantIds.find((id) => id !== currentUserId);
   if (!otherId) return null;
-  const recipient = await User.findOne({ _id: otherId, isActive: { $ne: false } }).select('_id allowDMs').lean();
+  const recipient = await User.findOne({ _id: otherId, isActive: { $ne: false } }).select('_id allowDMs dmAudience').lean();
   if (!recipient || !(await canDirectMessage({ _id: userId }, recipient)).allowed) return null;
   return {
     room: `conversation:${participantIds.sort().join(':')}`,
@@ -74,7 +74,7 @@ const registerAuthorizedSocketHandlers = (io, socket) => {
   socket.on('typing', async (data) => {
     const authorization = joinedAliases.get(data?.roomId);
     if (authorization?.type !== 'conversation') return;
-    const recipient = await User.findById(authorization.resourceId).select('_id allowDMs').lean();
+    const recipient = await User.findById(authorization.resourceId).select('_id allowDMs dmAudience').lean();
     if (!recipient || !(await canDirectMessage({ _id: socket.userId }, recipient)).allowed) {
       await socket.leave(authorization.room);
       joinedAliases.delete(data.roomId);

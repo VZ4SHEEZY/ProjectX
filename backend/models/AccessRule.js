@@ -2,12 +2,12 @@ const mongoose = require('mongoose');
 
 const accessRuleSchema = new mongoose.Schema({
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  effect: { type: String, enum: ['allow', 'deny'], default: 'allow' },
-  audience: { type: String, enum: ['everyone', 'followers', 'friends', 'same_faction', 'age_verified', 'subscribers', 'creator_tier', 'owner'], required: true },
-  creatorTierId: { type: mongoose.Schema.Types.ObjectId },
+  name: { type: String, trim: true, maxlength: 80, default: '' },
+  expression: { type: mongoose.Schema.Types.Mixed, required: true },
+  presentation: { type: String, enum: ['hidden', 'locked_preview'], default: 'hidden' },
   enabled: { type: Boolean, default: true }
 }, { timestamps: true });
 
-accessRuleSchema.index({ owner: 1, audience: 1, enabled: 1 });
+accessRuleSchema.index({ owner: 1, enabled: 1 });
 
 module.exports = mongoose.model('AccessRule', accessRuleSchema);

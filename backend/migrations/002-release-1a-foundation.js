@@ -17,22 +17,29 @@ const AccountCapability = require('../models/AccountCapability');
 
 const apply = process.argv.includes('--apply');
 const slug = value => value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+const FOUNDING_FACTIONS = ['Neon Wraith','Iron Veil','Crimson Static','Void Circuit','Gold Syndicate','Azure Phantom','Toxic Bloom','Scarlet Dominion','Chrome Legion','Phantom Signal','Obsidian Pact','Ember Protocol','Violet Surge','Steel Covenant','Binary Ghost','Copper Throne','Nova Rift','Silver Wraith','Inferno Grid','Quantum Veil'];
 
 async function main() {
   if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is required');
   await mongoose.connect(process.env.MONGODB_URI);
   const users = await User.find({}).lean();
-  const report = { mode: apply ? 'apply' : 'dry-run', users: users.length, profiles: 0, follows: 0, blocks: 0, factions: 0, memberships: 0, creators: 0, topFriends: 0 };
-  const factionNames = [...new Set(users.map(user => user.faction).filter(name => name && name !== 'Unaffiliated'))];
+  const legacyRules = await mongoose.connection.collection('accessrules').find({ expression: { $exists: false }, audience: { $exists: true } }).toArray();
+  const legacyModuleRules = await mongoose.connection.collection('profilemodules').find({ accessRule: { $exists: false }, 'accessRules.0': { $exists: true } }).toArray();
+  const report = { mode: apply ? 'apply' : 'dry-run', users: users.length, profiles: 0, follows: 0, blocks: 0, factions: 0, memberships: 0, creators: 0, accessRulesConverted: legacyRules.length, moduleRuleLinksConverted: legacyModuleRules.length, topFriends: 0 };
+  const factionNames = FOUNDING_FACTIONS;
   report.factions = factionNames.length;
   for (const name of factionNames) if (apply) await Faction.updateOne({ name }, { $setOnInsert: { key: slug(name), name, founding: true }, $set: { status: 'active' } }, { upsert: true });
+  if (apply) {
+    for (const rule of legacyRules) await mongoose.connection.collection('accessrules').updateOne({ _id: rule._id }, { $set: { expression: { op: 'predicate', type: rule.audience }, presentation: 'hidden', name: rule.name || '' }, $unset: { audience: '', effect: '', creatorTierId: '' } });
+    for (const module of legacyModuleRules) await mongoose.connection.collection('profilemodules').updateOne({ _id: module._id }, { $set: { accessRule: module.accessRules[0] }, $unset: { accessRules: '' } });
+  }
   for (const user of users) {
     report.profiles += 1; report.follows += new Set((user.following || []).map(String)).size; report.blocks += new Set((user.blockedUsers || []).map(String)).size;
     if (user.faction && user.faction !== 'Unaffiliated') report.memberships += 1;
     if (user.isCreator || user.creatorStatus === 'pending' || user.creatorStatus === 'approved') report.creators += 1;
     if (!apply) continue;
-    const profile = await Profile.findOneAndUpdate({ user: user._id }, { $setOnInsert: { user: user._id, source: 'legacy_backfill' }, $set: { displayName: user.displayName || '', bio: user.bio || '', avatar: user.avatar || '', banner: user.banner || '', locationLabel: user.location || '', website: user.website || '', socialLinks: user.socialLinks || {}, privacy: user.profilePrivacy === 'private' || user.isPrivate ? 'private' : 'public' } }, { upsert: true, new: true });
-    await ProfileLayout.updateOne({ profile: profile._id }, { $setOnInsert: { profile: profile._id, theme: { ...(user.theme || {}), customCss: undefined }, factionStarterTheme: 'partial', version: 1 } }, { upsert: true });
+    const profile = await Profile.findOneAndUpdate({ user: user._id }, { $setOnInsert: { user: user._id, source: 'legacy_backfill' }, $set: { displayName: user.displayName || '', bio: user.bio || '', avatar: user.avatar || '', banner: user.banner || '', locationLabel: user.location || '', website: user.website || '', socialLinks: user.socialLinks || {}, privacy: user.profilePrivacy || 'public', followApprovalRequired: user.isPrivate === true } }, { upsert: true, new: true });
+    await ProfileLayout.updateOne({ profile: profile._id }, { $setOnInsert: { profile: profile._id, theme: { ...(user.theme || {}), customCss: undefined }, factionStarterTheme: 'full', version: 1 } }, { upsert: true });
     if (!await ProfileModule.exists({ profile: profile._id })) await ProfileModule.insertMany(['identity','bio','faction','top_friends','posts','media','links'].map((type, position) => ({ profile: profile._id, type, position, enabled: true, config: {}, schemaVersion: 1 })));
     for (const followed of new Set((user.following || []).map(String))) if (followed !== user._id.toString()) await Follow.updateOne({ follower: user._id, followed }, { $setOnInsert: { source: 'legacy_backfill' } }, { upsert: true });
     for (const blocked of new Set((user.blockedUsers || []).map(String))) if (blocked !== user._id.toString()) await Block.updateOne({ blocker: user._id, blocked }, { $setOnInsert: { source: 'legacy_backfill' } }, { upsert: true });

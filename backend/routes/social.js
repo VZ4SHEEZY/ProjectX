@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const { protect, optionalAuth } = require('../middleware/auth');
 const User = require('../models/User');
 const Follow = require('../models/Follow');
+const FollowRequest = require('../models/FollowRequest');
 const Block = require('../models/Block');
 const Mute = require('../models/Mute');
 const FriendRequest = require('../models/FriendRequest');
@@ -18,6 +19,15 @@ router.post('/friends/requests/:userId', protect, async (req, res) => {
   if (!validOther(req, res)) return;
   if (!await User.exists({ _id: req.params.userId, isActive: { $ne: false } })) return res.status(404).json({ success: false, message: 'User not found' });
   if (await isBlockedEitherWay(req.user._id, req.params.userId)) return res.status(403).json({ success: false, message: 'Relationship unavailable' });
+  const recipient = await User.findById(req.params.userId).select('friendRequestAudience').lean();
+  const audience = recipient?.friendRequestAudience || 'everyone';
+  if (audience === 'nobody') return res.status(403).json({ success: false, message: 'Friend requests are disabled' });
+  if (audience === 'followers' && !await require('../services/relationshipPolicy').isFollowing(req.user._id, req.params.userId)) return res.status(403).json({ success: false, message: 'Only followers may send friend requests' });
+  if (audience === 'friends_of_friends') {
+    const requesterFriendships = await Friendship.find({ $or: [{ userLow: req.user._id }, { userHigh: req.user._id }] }).select('userLow userHigh').lean();
+    const requesterFriends = requesterFriendships.map(item => item.userLow.toString() === req.user._id.toString() ? item.userHigh : item.userLow);
+    if (!requesterFriends.length || !await Friendship.exists({ $or: [{ userLow: { $in: requesterFriends }, userHigh: req.params.userId }, { userLow: req.params.userId, userHigh: { $in: requesterFriends } }] })) return res.status(403).json({ success: false, message: 'Only friends of friends may send friend requests' });
+  }
   const [userLow, userHigh] = orderedPair(req.user._id, req.params.userId);
   if (await Friendship.exists({ userLow, userHigh })) return res.status(409).json({ success: false, message: 'Already friends' });
   const inverse = await FriendRequest.findOne({ requester: req.params.userId, recipient: req.user._id, status: 'pending' });
@@ -28,6 +38,32 @@ router.post('/friends/requests/:userId', protect, async (req, res) => {
     { upsert: true, new: true }
   );
   res.status(201).json({ success: true, data: request });
+});
+
+router.get('/follow-requests', protect, async (req, res) => {
+  const data = await FollowRequest.find({ recipient: req.user._id, status: 'pending' }).sort('-createdAt').populate('requester', 'username displayName avatar isVerified faction').lean();
+  res.json({ success: true, data: data.map(item => ({ ...item, requester: publicUserProjection(item.requester) })) });
+});
+
+router.patch('/follow-requests/:requestId', protect, async (req, res) => {
+  if (!['accepted','declined'].includes(req.body?.status)) return res.status(400).json({ success: false, message: 'Status must be accepted or declined' });
+  const request = await FollowRequest.findOne({ _id: req.params.requestId, recipient: req.user._id, status: 'pending' });
+  if (!request) return res.status(404).json({ success: false, message: 'Follow request not found' });
+  if (await isBlockedEitherWay(request.requester, request.recipient)) return res.status(403).json({ success: false, message: 'Relationship unavailable' });
+  request.status = req.body.status; request.respondedAt = new Date(); await request.save();
+  if (request.status === 'accepted') {
+    await Follow.updateOne({ follower: request.requester, followed: request.recipient }, { $setOnInsert: { source: 'native' } }, { upsert: true });
+    await User.updateOne({ _id: request.requester }, { $addToSet: { following: request.recipient } });
+    await User.updateOne({ _id: request.recipient }, { $addToSet: { followers: request.requester } });
+    await User.updateOne({ _id: request.requester }, [{ $set: { followingCount: { $size: { $ifNull: ['$following', []] } } } }]);
+    await User.updateOne({ _id: request.recipient }, [{ $set: { followersCount: { $size: { $ifNull: ['$followers', []] } } } }]);
+  }
+  res.json({ success: true, data: request });
+});
+
+router.delete('/follow-requests/:userId', protect, async (req, res) => {
+  await FollowRequest.updateMany({ requester: req.user._id, recipient: req.params.userId, status: 'pending' }, { status: 'cancelled', respondedAt: new Date() });
+  res.json({ success: true });
 });
 
 router.patch('/friends/requests/:requestId', protect, async (req, res) => {
@@ -54,6 +90,11 @@ router.delete('/friends/:userId', protect, async (req, res) => {
 router.get('/friends', protect, async (req, res) => {
   const friendships = await Friendship.find({ $or: [{ userLow: req.user._id }, { userHigh: req.user._id }] }).populate('userLow userHigh', 'username displayName avatar isVerified isCreator').lean();
   res.json({ success: true, data: friendships.map(item => publicUserProjection(item.userLow._id.toString() === req.user._id.toString() ? item.userHigh : item.userLow)) });
+});
+
+router.get('/friends/requests', protect, async (req, res) => {
+  const data = await FriendRequest.find({ recipient: req.user._id, status: 'pending' }).sort('-createdAt').populate('requester', 'username displayName avatar isVerified faction').lean();
+  res.json({ success: true, data: data.map(item => ({ ...item, requester: publicUserProjection(item.requester) })) });
 });
 
 router.put('/top-friends', protect, async (req, res) => {
@@ -83,6 +124,7 @@ router.put('/blocks/:userId', protect, async (req, res) => {
   await Block.updateOne({ blocker: req.user._id, blocked: other }, { $setOnInsert: { source: 'native' } }, { upsert: true });
   await User.updateOne({ _id: req.user._id }, { $addToSet: { blockedUsers: other } });
   await Follow.deleteMany({ $or: [{ follower: req.user._id, followed: other }, { follower: other, followed: req.user._id }] });
+  await FollowRequest.updateMany({ $or: [{ requester: req.user._id, recipient: other }, { requester: other, recipient: req.user._id }], status: 'pending' }, { status: 'cancelled', respondedAt: new Date() });
   await User.updateOne({ _id: req.user._id }, { $pull: { followers: other, following: other } });
   await User.updateOne({ _id: other }, { $pull: { followers: req.user._id, following: req.user._id } });
   await User.updateOne({ _id: req.user._id }, [{ $set: { followersCount: { $size: { $ifNull: ['$followers', []] } }, followingCount: { $size: { $ifNull: ['$following', []] } } } }]);
@@ -109,6 +151,16 @@ router.put('/mutes/:userId', protect, async (req, res) => {
 router.delete('/mutes/:userId', protect, async (req, res) => {
   await Mute.deleteOne({ muter: req.user._id, muted: req.params.userId });
   res.json({ success: true });
+});
+
+router.get('/blocks', protect, async (req, res) => {
+  const entries = await Block.find({ blocker: req.user._id }).populate('blocked', 'username displayName avatar').lean();
+  res.json({ success: true, data: entries.map(item => publicUserProjection(item.blocked)) });
+});
+
+router.get('/mutes', protect, async (req, res) => {
+  const entries = await Mute.find({ muter: req.user._id }).populate('muted', 'username displayName avatar').lean();
+  res.json({ success: true, data: entries.map(item => publicUserProjection(item.muted)) });
 });
 
 for (const layer of router.stack) for (const handler of layer.route?.stack || []) {
