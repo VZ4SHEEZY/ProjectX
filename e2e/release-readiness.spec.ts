@@ -31,17 +31,20 @@ test('creator can edit and persist the active tier catalog UI', async ({ monitor
   await page.getByRole('button', { name: 'SAVE CHANGES' }).click();
   await page.getByRole('button', { name: 'SAVE TIERS' }).click();
   await page.getByRole('button', { name: 'EDIT TIERS' }).click();
-  await expect(page.getByText('Browser Tier')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Browser Tier' }).first()).toBeVisible();
 });
 
-test('Profile V2 Studio exposes responsive preview, modules, access rules, and Top Friends', async ({ monitoredPage: page }, testInfo) => {
+test('Profile Studio exposes product language, responsive preview, modules, access rules, and Top Friends', async ({ monitoredPage: page }, testInfo) => {
   await login(page);
   if (testInfo.project.name === 'mobile-chromium') {
     await page.getByLabel('Open navigation').click();
-    await page.getByRole('button', { name: 'PROFILE V2 STUDIO' }).click();
-  } else await page.getByLabel('Open Profile V2 Studio').click();
+    await page.getByRole('button', { name: 'PROFILE STUDIO' }).click();
+  } else await page.getByLabel('Open Profile Studio').click();
   await expect(page.getByTestId('profile-v2-studio')).toBeVisible();
   await expect(page.getByText(/Live desktop preview/i)).toBeVisible();
+  await expect(page.getByText('Typography')).toBeVisible();
+  await expect(page.getByText('fontFamily')).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'Right Sidebar' })).toHaveCount(1);
   await page.getByRole('button', { name: 'modules', exact: true }).click();
   await expect(page.getByText('Identity / Hero').first()).toBeVisible();
   await page.getByRole('button', { name: 'access', exact: true }).click();

@@ -9,6 +9,14 @@ export interface ProfileThemeTokens {
   spacing: 'compact' | 'comfortable' | 'spacious'; effectIntensity: 'off' | 'low' | 'medium';
 }
 
+export interface FactionVisualIdentity {
+  motif: 'grid'|'stripes'|'circuit'|'stars'|'noise'|'rings'|'weave'|'rays'|'dots'|'shards';
+  surface: 'glass'|'metal'|'paper'|'void';
+  silhouette: 'square'|'cut'|'soft'|'ornate';
+  rhythm: 'tight'|'balanced'|'cinematic';
+  label: string;
+}
+
 const base: ProfileThemeTokens = { primaryColor:'#39FF14', secondaryColor:'#FF00FF', accentColor:'#00FFFF', backgroundColor:'#050505', fontFamily:'mono', fontSize:'medium', animations:true, glowEffects:true, scanlines:false, backgroundImage:'', cursorEffect:'none', layoutStyle:'sidebar-right', borderStyle:'solid', borderRadius:'small', spacing:'comfortable', effectIntensity:'low' };
 
 const palettes: Record<string, Partial<ProfileThemeTokens>> = {
@@ -35,7 +43,33 @@ const palettes: Record<string, Partial<ProfileThemeTokens>> = {
   'Unaffiliated': { primaryColor:'#39FF14', secondaryColor:'#777777', accentColor:'#E5E7EB', backgroundColor:'#050505', glowEffects:false }
 };
 
+const factionVisuals: Record<string, FactionVisualIdentity> = {
+  'Neon Wraith': { motif:'shards', surface:'glass', silhouette:'cut', rhythm:'cinematic', label:'Acid spectral shards' },
+  'Iron Veil': { motif:'stripes', surface:'metal', silhouette:'square', rhythm:'tight', label:'Armored industrial bands' },
+  'Crimson Static': { motif:'noise', surface:'glass', silhouette:'cut', rhythm:'tight', label:'Broadcast interference' },
+  'Void Circuit': { motif:'circuit', surface:'void', silhouette:'cut', rhythm:'balanced', label:'Deep-space circuitry' },
+  'Gold Syndicate': { motif:'rays', surface:'paper', silhouette:'ornate', rhythm:'cinematic', label:'Gilded deco rays' },
+  'Azure Phantom': { motif:'rings', surface:'glass', silhouette:'soft', rhythm:'balanced', label:'Sonar rings' },
+  'Toxic Bloom': { motif:'dots', surface:'glass', silhouette:'soft', rhythm:'cinematic', label:'Bioluminescent spores' },
+  'Scarlet Dominion': { motif:'rays', surface:'paper', silhouette:'ornate', rhythm:'tight', label:'Imperial sunburst' },
+  'Chrome Legion': { motif:'grid', surface:'metal', silhouette:'square', rhythm:'tight', label:'Machined chrome grid' },
+  'Phantom Signal': { motif:'noise', surface:'void', silhouette:'cut', rhythm:'balanced', label:'Ghost transmission' },
+  'Obsidian Pact': { motif:'weave', surface:'void', silhouette:'ornate', rhythm:'cinematic', label:'Occult black weave' },
+  'Ember Protocol': { motif:'stripes', surface:'metal', silhouette:'cut', rhythm:'tight', label:'Heat-warning chevrons' },
+  'Violet Surge': { motif:'rings', surface:'glass', silhouette:'soft', rhythm:'cinematic', label:'Electric pulse rings' },
+  'Steel Covenant': { motif:'weave', surface:'metal', silhouette:'square', rhythm:'balanced', label:'Structural steel lattice' },
+  'Binary Ghost': { motif:'circuit', surface:'void', silhouette:'square', rhythm:'tight', label:'Terminal tracework' },
+  'Copper Throne': { motif:'weave', surface:'paper', silhouette:'ornate', rhythm:'balanced', label:'Etched copper filigree' },
+  'Nova Rift': { motif:'stars', surface:'void', silhouette:'cut', rhythm:'cinematic', label:'Prismatic starfield' },
+  'Silver Wraith': { motif:'shards', surface:'metal', silhouette:'soft', rhythm:'balanced', label:'Silver spectral facets' },
+  'Inferno Grid': { motif:'grid', surface:'metal', silhouette:'cut', rhythm:'tight', label:'Overheated tactical grid' },
+  'Quantum Veil': { motif:'stars', surface:'glass', silhouette:'soft', rhythm:'cinematic', label:'Quantum constellation' },
+  'Unaffiliated': { motif:'dots', surface:'void', silhouette:'square', rhythm:'balanced', label:'Open signal field' }
+};
+
 export const factionThemeNames = Object.keys(palettes);
+export const getFactionVisualIdentity = (faction?: string): FactionVisualIdentity => factionVisuals[faction || 'Unaffiliated'] || factionVisuals.Unaffiliated;
+export const factionVisualClass = (faction?: string) => { const visual = getFactionVisualIdentity(faction); return `profile-motif-${visual.motif} profile-surface-${visual.surface} profile-shape-${visual.silhouette} profile-rhythm-${visual.rhythm}`; };
 export const getFactionStarterTheme = (faction?: string): ProfileThemeTokens => ({ ...base, ...(palettes[faction || 'Unaffiliated'] || palettes.Unaffiliated) });
 
 export function resolveProfileTheme(faction: string | undefined, influence: FactionInfluence = 'full', custom: Partial<ProfileThemeTokens> = {}): ProfileThemeTokens {
@@ -50,6 +84,6 @@ export const profileThemeStyle = (theme: ProfileThemeTokens): CSSProperties => (
   '--profile-bg': theme.backgroundColor, '--profile-gap': theme.spacing === 'compact' ? '0.65rem' : theme.spacing === 'spacious' ? '1.5rem' : '1rem',
   '--profile-radius': theme.borderRadius === 'none' ? '0' : theme.borderRadius === 'small' ? '0.35rem' : theme.borderRadius === 'large' ? '1.25rem' : '0.75rem',
   backgroundColor: theme.backgroundColor, backgroundImage: theme.backgroundImage ? `linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.75)),url(${theme.backgroundImage})` : undefined,
-  backgroundSize: 'cover', backgroundAttachment: 'fixed', fontFamily: theme.fontFamily === 'mono' ? 'ui-monospace, monospace' : theme.fontFamily === 'serif' ? 'Georgia, serif' : 'ui-sans-serif, system-ui, sans-serif'
+  backgroundSize: 'cover', backgroundAttachment: 'fixed', fontFamily: theme.fontFamily === 'mono' ? 'ui-monospace, monospace' : theme.fontFamily === 'serif' ? 'Georgia, serif' : theme.fontFamily === 'display' ? 'Impact, Haettenschweiler, ui-sans-serif, sans-serif' : 'ui-sans-serif, system-ui, sans-serif'
 } as CSSProperties);
 import type { CSSProperties } from 'react';

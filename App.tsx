@@ -532,8 +532,8 @@ const App: React.FC = () => {
           {/* Settings */}
           <button
             onClick={() => setIsThemeEditorOpen(true)}
-            title="Profile V2 Studio"
-            aria-label="Open Profile V2 Studio"
+            title="Profile Studio"
+            aria-label="Open Profile Studio"
             className="hidden md:flex w-10 h-10 items-center justify-center text-gray-500 hover:text-[#39FF14] hover:bg-[#39FF14]/10 rounded-lg transition-colors"
           >
             <Palette size={18} />
@@ -567,7 +567,7 @@ const App: React.FC = () => {
             <MobileMenuItem active={currentView === 'profile'} onClick={() => navigateTo('profile')} icon={UserIcon} label="PROFILE" />
             <MobileMenuItem onClick={() => { setIsStoriesOpen(true); setIsMobileMenuOpen(false); }} icon={Image} label="STORIES" />
             <MobileMenuItem onClick={() => { setIsGroupsOpen(true); setIsMobileMenuOpen(false); }} icon={Users} label="COMMUNITIES" />
-            <MobileMenuItem onClick={() => { setIsThemeEditorOpen(true); setIsMobileMenuOpen(false); }} icon={Palette} label="PROFILE V2 STUDIO" />
+            <MobileMenuItem onClick={() => { setIsThemeEditorOpen(true); setIsMobileMenuOpen(false); }} icon={Palette} label="PROFILE STUDIO" />
             {user.isAdmin && (
               <MobileMenuItem active={currentView === 'admin'} onClick={() => navigateTo('admin')} icon={BarChart3} label="ADMIN" />
             )}
@@ -710,7 +710,7 @@ const App: React.FC = () => {
       />}
 
       {/* 3. Mobile Bottom Navigation Bar - 5 items: Home, Explore, Create, Messages, Profile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[9999] h-[calc(3.5rem+var(--sab))] bg-black/95 backdrop-blur-xl border-t border-[var(--primary-color,#39FF14)]/30 grid grid-cols-5 items-start pt-2 safe-bottom will-change-transform">
+      {!isThemeEditorOpen && <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[9999] h-[calc(3.5rem+var(--sab))] bg-black/95 backdrop-blur-xl border-t border-[var(--primary-color,#39FF14)]/30 grid grid-cols-5 items-start pt-2 safe-bottom will-change-transform">
         
         {/* HOME (Feed) */}
         <MobileNavButton 
@@ -754,10 +754,10 @@ const App: React.FC = () => {
           label="PROFILE"
         />
 
-      </nav>
+      </nav>}
 
       {/* Desktop Bottom Status Bar */}
-      <div className="hidden md:flex fixed bottom-0 left-0 w-full z-50 h-10 bg-black/90 backdrop-blur border-t border-gray-800 items-center justify-between px-4 lg:px-6">
+      {!isThemeEditorOpen && currentView !== 'userprofile' && <div className="hidden md:flex fixed bottom-0 left-0 w-full z-50 h-10 bg-black/90 backdrop-blur border-t border-gray-800 items-center justify-between px-4 lg:px-6">
         <div className="flex items-center gap-2 lg:gap-4 text-[10px] text-gray-500">
           <span className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-[var(--primary-color,#39FF14)] animate-pulse" />
@@ -794,7 +794,7 @@ const App: React.FC = () => {
             </button>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* 4. Global Modals - All the new functional components */}
       

@@ -11,6 +11,19 @@ test('login persists through refresh, deep links work, and logout clears session
   await expect.poll(() => page.evaluate(() => localStorage.getItem('cdToken'))).toBeNull();
 });
 
+test('mobile navigation keeps Profile Studio and logout reachable without overflow', async ({ monitoredPage: page }, testInfo) => {
+  test.skip(!testInfo.project.name.startsWith('mobile'), 'mobile-only navigation regression coverage');
+  await login(page);
+  await page.getByLabel('Open navigation').click();
+  await expect(page.getByRole('button', { name: 'PROFILE STUDIO' })).toBeInViewport();
+  await page.getByRole('button', { name: 'PROFILE STUDIO' }).click();
+  await expect(page.getByTestId('profile-v2-studio')).toBeVisible();
+  await page.getByLabel('Close').click();
+  await expect(page.getByTitle('Logout')).toBeInViewport();
+  await page.getByTitle('Logout').click();
+  await expect(page.getByRole('button', { name: 'ESTABLISH LINK' })).toBeVisible();
+});
+
 test('invalid and expired sessions fail closed', async ({ monitoredPage: page }) => {
   await page.addInitScript(() => { localStorage.setItem('cdToken', 'expired.invalid.token'); localStorage.setItem('cdUser', JSON.stringify({ id: 'x', username: 'invalid' })); });
   await page.goto('/profile');

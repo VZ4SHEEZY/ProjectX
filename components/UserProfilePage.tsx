@@ -4,7 +4,7 @@ import { User } from '../types';
 import { userAPI, postAPI, profileAPI, socialAPI } from '../services/api';
 import VideoModal from './VideoModal';
 import ProfileV2Modules, { ProfileV2Module } from './ProfileV2Modules';
-import { profileThemeStyle, resolveProfileTheme } from '../profileV2Themes';
+import { factionVisualClass, profileThemeStyle, resolveProfileTheme } from '../profileV2Themes';
 
 interface UserProfilePageProps {
   userId: string;
@@ -129,9 +129,9 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
 
   const resolvedTheme = resolveProfileTheme(user.faction, profileLayout?.factionStarterTheme || 'full', profileLayout?.theme || {});
   return (
-    <div className={`w-full h-full bg-black overflow-y-auto profile-v2-page profile-layout-${resolvedTheme.layoutStyle} profile-border-${resolvedTheme.borderStyle} ${resolvedTheme.scanlines?'profile-scanlines':''} ${resolvedTheme.glowEffects?'profile-glow':''}`} style={profileThemeStyle(resolvedTheme)}>
+    <div className={`w-full h-full bg-black overflow-y-auto profile-v2-page profile-layout-${resolvedTheme.layoutStyle} profile-border-${resolvedTheme.borderStyle} ${factionVisualClass(user.faction)} ${resolvedTheme.scanlines?'profile-scanlines':''} ${resolvedTheme.glowEffects?'profile-glow':''}`} style={profileThemeStyle(resolvedTheme)}>
       {/* Header with back button */}
-      <div className="sticky top-0 z-40 bg-black/80 backdrop-blur border-b border-[#39FF14]/20 p-4 flex items-center gap-3">
+      <div className="sticky top-0 z-20 bg-black/80 backdrop-blur border-b border-[#39FF14]/20 p-4 flex items-center gap-3 profile-public-toolbar">
         <button
           onClick={onBack}
           className="text-white hover:text-[#39FF14] transition-colors"
@@ -197,7 +197,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
           </div>
         </div>
       ) : (
-        <div className="max-w-6xl mx-auto p-4 md:p-8">
+        <div className="max-w-6xl mx-auto p-4 md:p-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
           {profileModules.length > 0 ? <ProfileV2Modules modules={profileModules} userId={user._id} owner={user} posts={userPosts} /> : <div className="p-6 border-b border-[#39FF14]/20">
             <h3 className="text-white font-bold text-lg mb-4">Posts ({userPosts.length})</h3>
             {userPosts.length === 0 ? (

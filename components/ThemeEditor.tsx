@@ -37,6 +37,7 @@ import RelationshipManager from "./RelationshipManager";
 import {
   FactionInfluence,
   ProfileThemeTokens,
+  factionVisualClass,
   getFactionStarterTheme,
   profileThemeStyle,
   resolveProfileTheme,
@@ -75,6 +76,9 @@ const defaultRule: Rule = {
   presentation: "locked_preview",
   enabled: true,
 };
+const designControlLabels:Record<string,string>={fontFamily:'Typography',layoutStyle:'Layout',spacing:'Spacing',borderStyle:'Frame',borderRadius:'Corners',effectIntensity:'Effect intensity'};
+const designValueLabels:Record<string,string>={mono:'Mono',sans:'Modern Sans',serif:'Editorial Serif',display:'Display','single':'Single Column','sidebar-left':'Left Sidebar','sidebar-right':'Right Sidebar','masonry':'Gallery Grid',compact:'Compact',comfortable:'Comfortable',spacious:'Spacious',minimal:'Minimal',solid:'Solid',double:'Double Line',glow:'Glow',none:'None',small:'Subtle',medium:'Medium',large:'Round',off:'Off',low:'Low'};
+const effectLabels:Record<string,string>={animations:'Motion',glowEffects:'Glow',scanlines:'Scanlines'};
 
 const SortableModule = ({ module, onToggle, onRemove, onRule, onConfig, rules }: any) => {
   const {
@@ -409,10 +413,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ isOpen, onClose }) => {
       className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex flex-col"
       data-testid="profile-v2-studio"
     >
-      <header className="h-16 border-b border-gray-800 flex items-center px-4 gap-3">
+      <header className="min-h-16 border-b border-gray-800 flex items-center px-3 md:px-4 py-2 gap-2 md:gap-3 profile-studio-header">
         <Palette className="text-[#39FF14]" />
         <div className="flex-1">
-          <h1 className="text-white font-black">PROFILE V2 STUDIO</h1>
+          <h1 className="text-white font-black">PROFILE STUDIO</h1>
           <p className="text-[10px] text-gray-500">
             Build a personal page—not a settings screen.
           </p>
@@ -427,7 +431,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ isOpen, onClose }) => {
         <button
           onClick={save}
           disabled={saving}
-          className="px-4 py-2 bg-[#39FF14] text-black font-bold text-xs rounded flex gap-2"
+          className="px-3 md:px-4 py-2 bg-[#39FF14] text-black font-bold text-xs rounded flex gap-2 whitespace-nowrap"
         >
           <Save size={14} />
           {saving ? "SAVING…" : "SAVE & PUBLISH"}
@@ -436,9 +440,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ isOpen, onClose }) => {
           <X className="text-gray-400" />
         </button>
       </header>
-      <div className="flex-1 grid lg:grid-cols-[380px_1fr] overflow-hidden">
-        <aside className="border-r border-gray-800 overflow-y-auto p-4">
-          <nav className="grid grid-cols-5 gap-1 mb-5">
+      <div className="profile-studio-workspace flex-1 grid lg:grid-cols-[380px_1fr] overflow-hidden">
+        <aside className="profile-studio-controls border-r border-gray-800 overflow-y-auto p-3 md:p-4">
+          <nav className="sticky top-0 z-10 bg-black/95 grid grid-cols-5 gap-1 mb-5 pb-2">
             {(["design", "modules", "access", "friends", "social"] as const).map(
               (value) => (
                 <button
@@ -522,7 +526,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ isOpen, onClose }) => {
                     ] as any[]
                   ).map(([key, values]) => (
                     <label key={key} className="block text-xs text-gray-400">
-                      {key}
+                      {designControlLabels[key] || key}
                       <select
                         value={(theme as any)[key]}
                         onChange={(e) =>
@@ -531,7 +535,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ isOpen, onClose }) => {
                         className="mt-1 w-full bg-black border border-gray-700 text-white p-2 rounded"
                       >
                         {values.map((v: string) => (
-                          <option key={v}>{v}</option>
+                          <option key={v} value={v}>{designValueLabels[v] || v}</option>
                         ))}
                       </select>
                     </label>
@@ -547,7 +551,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ isOpen, onClose }) => {
                           className={`p-2 border text-[10px] rounded ${theme[key] ? "border-green-600 text-green-300" : "border-gray-800 text-gray-500"}`}
                         >
                           <Check size={12} className="inline mr-1" />
-                          {key}
+                          {effectLabels[key] || key}
                         </button>
                       ),
                     )}
@@ -679,9 +683,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ isOpen, onClose }) => {
             </>
           )}
         </aside>
-        <main className="overflow-auto bg-[#030303] p-4 md:p-8">
+        <main className="profile-studio-preview overflow-auto bg-[#030303] p-3 md:p-8">
           <div
-            className={`${device === "mobile" ? "max-w-[390px]" : "max-w-6xl"} mx-auto transition-all profile-v2-page min-h-full p-3 md:p-6`}
+            className={`${device === "mobile" ? "max-w-[390px]" : "max-w-6xl"} ${factionVisualClass(owner.faction)} profile-layout-${resolved.layoutStyle} profile-border-${resolved.borderStyle} mx-auto transition-all profile-v2-page min-h-full p-3 md:p-6`}
             style={profileThemeStyle(resolved)}
           >
             <div
@@ -708,7 +712,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ isOpen, onClose }) => {
       {status && (
         <div
           role="status"
-          className="fixed bottom-4 right-4 bg-black border border-[#39FF14] text-white px-4 py-3 text-sm"
+          className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 bg-black border border-[#39FF14] text-white px-4 py-3 text-sm z-[220]"
         >
           {status}
         </div>
