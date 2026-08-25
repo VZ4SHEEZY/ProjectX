@@ -42,7 +42,8 @@ const TopFriendsWidget: React.FC<TopFriendsWidgetProps> = ({ userId }) => {
     };
 
     window.addEventListener('followingUpdated', handleFollowUpdate);
-    return () => window.removeEventListener('followingUpdated', handleFollowUpdate);
+    window.addEventListener('topFriendsUpdated', handleFollowUpdate);
+    return () => { window.removeEventListener('followingUpdated', handleFollowUpdate); window.removeEventListener('topFriendsUpdated', handleFollowUpdate); };
   }, [userId]);
 
   if (loading) {

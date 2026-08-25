@@ -458,3 +458,19 @@ input:focus-visible {
     height: 80px;
   }
 }
+/* Profile V2 uses scoped, server-sanitized design tokens only. */
+.profile-v2-page .profile-v2-modules{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--profile-gap,1rem)}
+.profile-v2-page .profile-v2-modules>*{grid-column:span 6;border-color:color-mix(in srgb,var(--profile-primary) 35%,transparent);border-radius:var(--profile-radius,.35rem)}
+.profile-v2-page .profile-v2-modules>*:first-child,.profile-v2-page .profile-v2-modules>*:nth-child(5){grid-column:1/-1}
+.profile-v2-page .profile-v2-card{box-shadow:0 0 28px color-mix(in srgb,var(--profile-primary) 8%,transparent)}
+.profile-v2-page.profile-layout-single .profile-v2-modules>*{grid-column:1/-1}
+.profile-v2-page.profile-layout-sidebar-left .profile-v2-modules>*:nth-child(odd){grid-column:span 4}.profile-v2-page.profile-layout-sidebar-left .profile-v2-modules>*:nth-child(even){grid-column:span 8}
+.profile-v2-page.profile-layout-sidebar-right .profile-v2-modules>*:nth-child(odd){grid-column:span 8}.profile-v2-page.profile-layout-sidebar-right .profile-v2-modules>*:nth-child(even){grid-column:span 4}
+.profile-v2-page.profile-layout-masonry .profile-v2-modules{align-items:start}.profile-v2-page.profile-layout-masonry .profile-v2-modules>*:nth-child(3n){grid-column:span 4}
+.profile-v2-page.profile-border-double .profile-v2-card{border-style:double;border-width:3px}.profile-v2-page.profile-border-glow .profile-v2-card{box-shadow:0 0 22px color-mix(in srgb,var(--profile-primary) 24%,transparent)}.profile-v2-page.profile-border-minimal .profile-v2-card{border-color:rgba(255,255,255,.09)}
+.profile-v2-page.profile-scanlines:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.12) 3px 4px)}
+.profile-v2-page .profile-v2-card h2{color:#fff;font-weight:800;font-size:1.1rem}
+.profile-v2-page .profile-kicker{color:var(--profile-primary);font-size:.65rem;text-transform:uppercase;letter-spacing:.22em;margin-bottom:.3rem}
+.profile-v2-page .profile-chip{display:inline-flex;align-items:center;gap:.35rem;border:1px solid color-mix(in srgb,var(--profile-primary) 45%,transparent);color:var(--profile-primary);padding:.45rem .7rem;border-radius:var(--profile-radius);font-size:.75rem}
+@media(max-width:767px){.profile-v2-page .profile-v2-modules>*{grid-column:1/-1!important}}
+@media(prefers-reduced-motion:reduce){.profile-v2-page *{animation:none!important;transition:none!important}}

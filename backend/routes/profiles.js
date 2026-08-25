@@ -6,7 +6,8 @@ const AccessRule = require('../models/AccessRule');
 const Profile = require('../models/Profile');
 const ProfileLayout = require('../models/ProfileLayout');
 const ProfileModule = require('../models/ProfileModule');
-const { validateProfileUpdate, MODULES } = require('../services/profileValidation');
+const AccountCapability = require('../models/AccountCapability');
+const { validateProfileUpdate, validateLayoutUpdate, validateModuleConfig, MODULES } = require('../services/profileValidation');
 const { canViewProfile, buildContext, evaluateAccessExpression, validateAccessExpression, publicUserProjection } = require('../services/accessPolicy');
 
 const router = express.Router();
@@ -16,7 +17,7 @@ router.get('/me', protect, async (req, res) => {
   const layout = profile ? await ProfileLayout.findOne({ profile: profile._id }).lean() : null;
   const modules = profile ? await ProfileModule.find({ profile: profile._id }).sort('position').lean() : [];
   const accessRules = await AccessRule.find({ owner: req.user._id }).lean();
-  res.json({ success: true, data: { profile, layout, modules, accessRules, compatibility: profile ? 'normalized' : 'legacy_user' } });
+  res.json({ success: true, data: { owner: publicUserProjection(req.user), profile, layout, modules, accessRules, compatibility: profile ? 'normalized' : 'legacy_user' } });
 });
 
 router.put('/me', protect, async (req, res) => {
@@ -38,9 +39,9 @@ router.put('/me', protect, async (req, res) => {
   if (source.friendRequestAudience !== undefined) compatibilityFields.friendRequestAudience = source.friendRequestAudience;
   if (Object.keys(compatibilityFields).length) await User.updateOne({ _id: req.user._id }, { $set: compatibilityFields });
   if (req.body.layout) {
-    const allowed = new Set(['theme','factionStarterTheme']);
-    if (Object.keys(req.body.layout).some(key => !allowed.has(key)) || (req.body.layout.factionStarterTheme && !['full','partial','off'].includes(req.body.layout.factionStarterTheme))) return res.status(400).json({ success: false, message: 'Invalid layout contract' });
-    await ProfileLayout.findOneAndUpdate({ profile: profile._id }, { $set: req.body.layout }, { upsert: true, new: true, runValidators: true });
+    const layoutValidation = validateLayoutUpdate(req.body.layout);
+    if (layoutValidation.error) return res.status(400).json({ success: false, message: layoutValidation.error });
+    await ProfileLayout.findOneAndUpdate({ profile: profile._id }, { $set: layoutValidation.update }, { upsert: true, new: true, runValidators: true });
   }
   res.json({ success: true, data: profile });
 });
@@ -63,12 +64,15 @@ router.put('/me/access-rules', protect, async (req, res) => {
 router.put('/me/modules', protect, async (req, res) => {
   const modules = req.body?.modules;
   if (!Array.isArray(modules) || modules.length > 20 || modules.some((item, index) => !item || !MODULES.has(item.type) || item.position !== index || typeof item.enabled !== 'boolean' || (item.accessRuleId && !mongoose.isValidObjectId(item.accessRuleId)) || (item.config && (typeof item.config !== 'object' || Array.isArray(item.config) || JSON.stringify(item.config).length > 4000)))) return res.status(400).json({ success: false, message: 'Invalid module contract' });
+  const configs = modules.map(item => validateModuleConfig(item.type, item.config || {}));
+  if (configs.some(item => item.error)) return res.status(400).json({ success: false, message: configs.find(item => item.error).error });
+  if (modules.some(item => item.type === 'creator_summary') && !req.user.isCreator && !await AccountCapability.exists({ user: req.user._id, capability: 'creator_mode', state: 'enabled' })) return res.status(403).json({ success: false, message: 'Creator module requires Creator Mode' });
   const profile = await Profile.findOne({ user: req.user._id });
   if (!profile) return res.status(409).json({ success: false, message: 'Create the normalized profile first' });
   await ProfileModule.deleteMany({ profile: profile._id });
   const ruleIds = modules.map(item => item.accessRuleId).filter(Boolean);
   if (ruleIds.length !== await AccessRule.countDocuments({ _id: { $in: ruleIds }, owner: req.user._id })) return res.status(400).json({ success: false, message: 'Access rules must belong to the profile owner' });
-  if (modules.length) await ProfileModule.insertMany(modules.map(item => ({ profile: profile._id, type: item.type, position: item.position, enabled: item.enabled, config: item.config || {}, accessRule: item.accessRuleId || null, schemaVersion: 1 })));
+  if (modules.length) await ProfileModule.insertMany(modules.map((item, index) => ({ profile: profile._id, type: item.type, position: item.position, enabled: item.enabled, config: configs[index].update, accessRule: item.accessRuleId || null, schemaVersion: 1 })));
   res.json({ success: true });
 });
 

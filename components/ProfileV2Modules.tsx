@@ -1,33 +1,19 @@
 import React from 'react';
-import { Lock } from 'lucide-react';
+import { BadgeCheck, ExternalLink, Image, Lock, Radio } from 'lucide-react';
 import TopFriendsWidget from './TopFriendsWidget';
 
-export interface ProfileV2Module { _id: string; type: string; position: number; config?: Record<string, unknown>; locked?: boolean; presentation?: string }
+export interface ProfileV2Module { _id: string; type: string; position: number; config?: Record<string, any>; locked?: boolean; presentation?: string; accessRule?: string | null }
+const requirementLabel=(node:any):string=>{if(!node)return'restricted access';if(node.op==='predicate')return({everyone:'Public',authenticated:'CyberDope users',followers:'Followers',friends:'Friends',same_faction:'Same faction',age_verified:'Age verified',subscribers:'Subscriber',creator_tier:'Membership tier',owner:'Only you'} as Record<string,string>)[node.type]||'Requirement';return(node.children||[]).map((child:any)=>child.op&&['and','or'].includes(child.op)?`(${requirementLabel(child)})`:requirementLabel(child)).join(node.op==='and'?' AND ':' OR ')};
+const shell='profile-v2-card border bg-black/70 backdrop-blur-md';
+const Identity=({owner,config}:any)=><section className={`${shell} overflow-hidden`}>{owner.banner&&<img src={owner.banner} alt="" className="h-32 md:h-44 w-full object-cover"/>}<div className="p-5 flex items-end gap-4 -mt-10 relative"><img src={owner.avatar} alt={`${owner.username}'s avatar`} className="h-24 w-24 rounded-[var(--profile-radius)] object-cover border-4 border-black"/><div className="pb-1 min-w-0"><h1 className="text-2xl md:text-3xl font-black text-white truncate">{owner.displayName||owner.username}</h1><p style={{color:'var(--profile-primary)'}}>@{owner.username} {owner.isVerified&&<BadgeCheck className="inline" size={16}/>}</p>{config?.tagline&&<p className="text-sm text-gray-300 mt-1">{config.tagline}</p>}</div></div></section>;
+const Bio=({owner,config}:any)=><section className={`${shell} p-5`}><p className="profile-kicker">Signal</p><h2>About</h2><p className="text-gray-300 whitespace-pre-wrap mt-3">{config?.text||owner.bio||'This signal has not been written yet.'}</p>{owner.location&&<p className="text-xs text-gray-500 mt-3">{owner.location}</p>}</section>;
+const Faction=({owner}:any)=><section className={`${shell} p-5 relative overflow-hidden`}><Radio className="absolute right-4 top-4 opacity-20" size={70}/><p className="profile-kicker">Faction identity</p><h2 style={{color:'var(--profile-primary)'}}>{owner.faction||'Unaffiliated'}</h2><p className="text-sm text-gray-400 mt-2">Membership remains distinct from platform authority.</p></section>;
+const Posts=({posts}:any)=><section className={`${shell} p-5`}><p className="profile-kicker">Transmission archive</p><h2>Posts <span className="text-gray-500">{posts.length}</span></h2><div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-4">{posts.slice(0,9).map((post:any)=><article key={post._id} className="aspect-square border border-white/10 overflow-hidden bg-black/50">{post.thumbnailUrl||post.mediaUrl?<img src={post.thumbnailUrl||post.mediaUrl} alt={post.title||'Post'} className="w-full h-full object-cover"/>:<p className="p-3 text-xs text-gray-300 line-clamp-6">{post.description||post.content}</p>}</article>)}</div>{!posts.length&&<p className="text-gray-500 text-sm mt-4">No transmissions published.</p>}</section>;
+const Media=({posts,config}:any)=>{const media=posts.filter((post:any)=>post.mediaUrl).slice(0,config?.limit||6);return <section className={`${shell} p-5`}><p className="profile-kicker">Gallery</p><h2><Image className="inline mr-2" size={18}/>Media</h2><div className="grid grid-cols-3 gap-2 mt-4">{media.map((post:any)=><img key={post._id} src={post.thumbnailUrl||post.mediaUrl} alt="Gallery item" className="w-full aspect-square object-cover"/>)}</div>{!media.length&&<p className="text-gray-500 text-sm mt-4">No media selected yet.</p>}</section>};
+const Links=({owner}:any)=>{const links=Object.entries(owner.socialLinks||{}).filter(([,value])=>value);return <section className={`${shell} p-5`}><p className="profile-kicker">Elsewhere</p><h2>Links</h2><div className="flex flex-wrap gap-2 mt-4">{owner.website&&<a href={owner.website} target="_blank" rel="noreferrer" className="profile-chip">Website <ExternalLink size={12}/></a>}{links.map(([name,url])=><a key={name} href={String(url)} target="_blank" rel="noreferrer" className="profile-chip">{name}</a>)}</div>{!owner.website&&!links.length&&<p className="text-gray-500 text-sm mt-3">No external links.</p>}</section>};
+const Creator=({owner,config}:any)=><section className={`${shell} p-5`}><p className="profile-kicker">Creator mode</p><h2>{config?.heading||`${owner.displayName||owner.username}'s creator channel`}</h2><p className="text-gray-400 text-sm mt-2">{config?.description||'Original work, drops, and supporter experiences live here.'}</p><span className="inline-block mt-4 text-[10px] uppercase tracking-widest border border-gray-700 px-2 py-1 text-gray-400">Subscriptions coming later</span></section>;
 
-const requirementLabel = (node: any): string => {
-  if (!node) return 'restricted access';
-  if (node.op === 'predicate') return String(node.type || 'requirement').replaceAll('_', ' ');
-  return (node.children || []).map(requirementLabel).join(node.op === 'and' ? ' and ' : ' or ');
-};
-
-const ProfileV2Modules: React.FC<{ modules: ProfileV2Module[]; userId: string; owner: any; posts?: any[] }> = ({ modules, userId, owner, posts = [] }) => (
-  <div className="space-y-4" data-testid="profile-v2-modules">
-    {modules.map(module => module.locked ? (
-      <section key={module._id} className="border border-[#39FF14]/30 bg-black/70 p-6 text-center" data-testid="locked-preview">
-        <Lock className="mx-auto mb-2 text-[#39FF14]" size={20} />
-        <p className="text-white font-bold">Locked</p>
-        <p className="text-xs text-gray-400">Requires {requirementLabel((module as any).requirements)}.</p>
-      </section>
-    ) : module.type === 'bio' ? (
-      <section key={module._id} className="border border-gray-800 p-4"><h3 className="text-white font-bold mb-2">About</h3><p className="text-gray-300">{owner.bio || 'No bio yet.'}</p></section>
-    ) : module.type === 'faction' ? (
-      <section key={module._id} className="border border-gray-800 p-4"><h3 className="text-white font-bold">Faction</h3><p className="text-[#39FF14]">{owner.faction}</p></section>
-    ) : module.type === 'top_friends' ? (
-      <section key={module._id} className="h-72"><TopFriendsWidget userId={userId} /></section>
-    ) : module.type === 'posts' ? (
-      <section key={module._id} className="border border-gray-800 p-4"><h3 className="text-white font-bold">Posts ({posts.length})</h3></section>
-    ) : null)}
-  </div>
-);
-
+export const PROFILE_MODULE_REGISTRY:Record<string,{label:string;description:string;component:React.FC<any>}>= {identity:{label:'Identity / Hero',description:'Avatar, banner, name and tagline',component:Identity},bio:{label:'Bio / About',description:'Your personal signal',component:Bio},faction:{label:'Faction',description:'Membership and identity',component:Faction},top_friends:{label:'Top Friends',description:'Your chosen inner circle',component:({userId}:any)=><section className="min-h-72"><TopFriendsWidget userId={userId}/></section>},posts:{label:'Content / Posts',description:'Published transmissions',component:Posts},media:{label:'Media / Gallery',description:'Visual archive',component:Media},links:{label:'Links',description:'Safe external destinations',component:Links},creator_summary:{label:'Creator',description:'Creator mode summary',component:Creator}};
+export const ProfileLockedPreview=({module}:{module:ProfileV2Module})=><section className={`${shell} p-8 text-center`} data-testid="locked-preview"><Lock className="mx-auto mb-3" style={{color:'var(--profile-primary)'}}/><h2>Locked signal</h2><p className="text-xs text-gray-400 mt-2">Requires {requirementLabel((module as any).requirements)}.</p></section>;
+const ProfileV2Modules:React.FC<{modules:ProfileV2Module[];userId:string;owner:any;posts?:any[];preview?:boolean}>=({modules,userId,owner,posts=[],preview=false})=><div className="profile-v2-modules" data-testid="profile-v2-modules">{modules.map(module=>{if(module.locked)return <ProfileLockedPreview key={module._id} module={module}/>;const entry=PROFILE_MODULE_REGISTRY[module.type];if(!entry)return null;const Component=entry.component;return <Component key={module._id} module={module} config={module.config||{}} userId={userId} owner={owner} posts={posts} preview={preview}/>})}</div>;
 export default ProfileV2Modules;

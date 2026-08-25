@@ -8,7 +8,7 @@ const Block = require('../models/Block');
 const Friendship = require('../models/Friendship');
 const ContentView = require('../models/ContentView');
 const { canViewPost, canViewProfile, evaluateAccessRules, evaluateAccessExpression, validateAccessExpression, publicUserProjection, privateVerificationProjection } = require('../services/accessPolicy');
-const { validateProfileUpdate } = require('../services/profileValidation');
+const { validateProfileUpdate, validateLayoutUpdate, validateModuleConfig } = require('../services/profileValidation');
 
 const ownerId = new mongoose.Types.ObjectId();
 const viewerId = new mongoose.Types.ObjectId();
@@ -88,6 +88,16 @@ test('profile contract rejects executable and unknown content while accepting va
   assert.match(validateProfileUpdate({ website: 'javascript:alert(1)' }).error, /http\(s\)/);
   assert.match(validateProfileUpdate({ faction: 'Iron Veil' }).error, /Unsupported profile fields/);
   assert.equal(validateProfileUpdate({ profilePrivacy: 'users', dmAudience: 'friends_subscribers', friendRequestAudience: 'followers' }).error, undefined);
+});
+
+test('Release 2 visual contracts accept approved tokens and reject executable or unbounded module configuration', () => {
+  assert.equal(validateLayoutUpdate({ factionStarterTheme: 'partial', theme: { fontFamily: 'display', spacing: 'spacious', borderStyle: 'double', effectIntensity: 'low' } }).error, undefined);
+  assert.match(validateLayoutUpdate({ theme: { fontFamily: 'Comic Sans MS' } }).error, /approved choice/);
+  assert.match(validateLayoutUpdate({ theme: { customCss: '*{display:none}' } }).error, /Unsupported theme fields/);
+  assert.equal(validateModuleConfig('identity', { tagline: 'Signal in the static' }).error, undefined);
+  assert.equal(validateModuleConfig('media', { limit: 12 }).error, undefined);
+  assert.match(validateModuleConfig('media', { remoteEmbed: '<iframe>' }).error, /Unsupported/);
+  assert.match(validateModuleConfig('creator_summary', { script: 'alert(1)' }).error, /Unsupported/);
 });
 
 test('raw content view records are structurally progression-ineligible', () => {

@@ -6,7 +6,8 @@ const profileLayoutSchema = new mongoose.Schema({
     primaryColor: String, secondaryColor: String, accentColor: String,
     backgroundColor: String, fontFamily: String, fontSize: String,
     animations: Boolean, glowEffects: Boolean, scanlines: Boolean,
-    backgroundImage: String, cursorEffect: String, layoutStyle: String
+    backgroundImage: String, cursorEffect: String, layoutStyle: String,
+    borderStyle: String, borderRadius: String, spacing: String, effectIntensity: String
   },
   factionStarterTheme: { type: String, enum: ['full', 'partial', 'off'], default: 'full' },
   version: { type: Number, default: 1 },

@@ -13,7 +13,7 @@ import { User } from './types';
 import { 
   Wallet, Zap, User as UserIcon, Settings, 
   Mail, Bell, Search, LogOut, LayoutGrid, Crown, Plus,
-  BarChart3, Home, Compass, Image, Users, Menu, X
+  BarChart3, Home, Compass, Image, Users, Menu, X, Palette
 } from 'lucide-react';
 
 const VideoFeed = lazy(() => import('./components/Feed'));
@@ -529,6 +529,14 @@ const App: React.FC = () => {
           />
 
           {/* Settings */}
+          <button
+            onClick={() => setIsThemeEditorOpen(true)}
+            title="Profile V2 Studio"
+            aria-label="Open Profile V2 Studio"
+            className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center text-gray-500 hover:text-[#39FF14] hover:bg-[#39FF14]/10 rounded-lg transition-colors"
+          >
+            <Palette size={18} />
+          </button>
           <button 
             onClick={() => setIsSettingsOpen(true)}
             title="Settings"

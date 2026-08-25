@@ -4,6 +4,7 @@ import { User } from '../types';
 import { userAPI, postAPI, profileAPI, socialAPI } from '../services/api';
 import VideoModal from './VideoModal';
 import ProfileV2Modules, { ProfileV2Module } from './ProfileV2Modules';
+import { profileThemeStyle, resolveProfileTheme } from '../profileV2Themes';
 
 interface UserProfilePageProps {
   userId: string;
@@ -24,6 +25,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [topFriends, setTopFriends] = useState<any[]>([]);
   const [profileModules, setProfileModules] = useState<ProfileV2Module[]>([]);
+  const [profileLayout, setProfileLayout] = useState<any>(null);
 
   // Listen for follow updates from other components
   useEffect(() => {
@@ -52,8 +54,11 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
       setIsFriend(Boolean(userData.isFriend));
       try {
         const normalized = await profileAPI.getPublic(userData._id);
-        setProfileModules(normalized.data?.data?.modules || []);
-      } catch { setProfileModules([]); }
+        const normalizedData = normalized.data?.data || {};
+        setProfileModules(normalizedData.modules || []);
+        setProfileLayout(normalizedData.layout || null);
+        setUser((current:any) => ({ ...current, ...(normalizedData.profile || {}), ...(normalizedData.owner || {}), location: normalizedData.profile?.locationLabel || current.location }));
+      } catch { setProfileModules([]); setProfileLayout(null); }
 
       // Check if profile is private
       if (userData.profilePrivacy === 'private' && !userData.isFollowing && userData._id !== currentUser?.id) {
@@ -122,8 +127,9 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
 
   const isPrivate = user.profilePrivacy === 'private' && !isFollowing && user._id !== currentUser?.id;
 
+  const resolvedTheme = resolveProfileTheme(user.faction, profileLayout?.factionStarterTheme || 'full', profileLayout?.theme || {});
   return (
-    <div className="w-full h-full bg-black overflow-y-auto">
+    <div className={`w-full h-full bg-black overflow-y-auto profile-v2-page profile-layout-${resolvedTheme.layoutStyle} profile-border-${resolvedTheme.borderStyle} ${resolvedTheme.scanlines?'profile-scanlines':''} ${resolvedTheme.glowEffects?'profile-glow':''}`} style={profileThemeStyle(resolvedTheme)}>
       {/* Header with back button */}
       <div className="sticky top-0 z-40 bg-black/80 backdrop-blur border-b border-[#39FF14]/20 p-4 flex items-center gap-3">
         <button
@@ -138,20 +144,10 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
         </div>
       </div>
 
-      {/* User Info Card */}
-      <div className="p-6 border-b border-[#39FF14]/20">
-        <div className="flex items-start gap-6 mb-6">
-          <img
-            src={user.avatar}
-            alt={user.username}
-            className="w-24 h-24 rounded-full border-2 border-[#39FF14]"
-          />
-          <div className="flex-1">
-            <h1 className="text-white text-2xl font-bold mb-2">{user.username}</h1>
-            <p className="text-gray-400 mb-4">{user.displayName || user.bio || 'No bio'}</p>
-            
-            {/* Stats */}
-            <div className="flex gap-6 mb-4">
+      {/* Relationship controls remain outside customizable modules. */}
+      <div className="p-4 border-b border-white/10 bg-black/80">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center gap-4">
+          <div className="flex gap-6 mr-auto">
               <div className="text-center">
                 <div className="text-[#39FF14] font-bold text-lg">{user.followersCount || 0}</div>
                 <div className="text-gray-400 text-xs">Followers</div>
@@ -164,11 +160,9 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
                 <div className="text-[#39FF14] font-bold text-lg">{user.postsCount || 0}</div>
                 <div className="text-gray-400 text-xs">Posts</div>
               </div>
-            </div>
-
-            {/* Action buttons */}
+          </div>
             {user._id !== currentUser?.id && (
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={handleFollow}
                   className={`flex items-center gap-2 px-4 py-2 rounded font-bold transition-all ${
@@ -191,7 +185,6 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
                 <button aria-label="Block user" onClick={handleBlock} className="p-2 border border-red-800 text-red-400 rounded"><Ban size={16} /></button>
               </div>
             )}
-          </div>
         </div>
       </div>
 
@@ -204,10 +197,8 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
           </div>
         </div>
       ) : (
-        <>
-          {profileModules.length > 0 && <div className="p-6 border-b border-[#39FF14]/20"><ProfileV2Modules modules={profileModules.filter(module => !['posts','top_friends'].includes(module.type))} userId={user._id} owner={user} posts={userPosts} /></div>}
-          {/* Posts Grid */}
-          <div className="p-6 border-b border-[#39FF14]/20">
+        <div className="max-w-6xl mx-auto p-4 md:p-8">
+          {profileModules.length > 0 ? <ProfileV2Modules modules={profileModules} userId={user._id} owner={user} posts={userPosts} /> : <div className="p-6 border-b border-[#39FF14]/20">
             <h3 className="text-white font-bold text-lg mb-4">Posts ({userPosts.length})</h3>
             {userPosts.length === 0 ? (
               <div className="text-gray-500 text-center py-8">No posts yet</div>
@@ -246,32 +237,8 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
                 ))}
               </div>
             )}
-          </div>
-
-          {/* Top Friends */}
-          {topFriends.length > 0 && (
-            <div className="p-6">
-              <h3 className="text-white font-bold text-lg mb-4">Top Friends</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {topFriends.map((friend) => (
-                  <div
-                    key={friend._id}
-                    className="bg-gray-900/50 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-900 transition-colors"
-                  >
-                    <img
-                      src={friend.avatar}
-                      alt={friend.username}
-                      className="w-12 h-12 rounded-full mx-auto mb-2 border border-[#39FF14]"
-                    />
-                    <p className="text-white font-bold text-sm truncate">{friend.username}</p>
-                    <p className="text-gray-400 text-xs mb-2">{friend.faction || 'Unaffiliated'}</p>
-                    <p className="text-[#39FF14] text-xs font-bold">{friend.followersCount || 0} followers</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
+          </div>}
+        </div>
       )}
 
       {/* Video Modal */}

@@ -1,9 +1,15 @@
 const FACTIONS = ['Neon Wraith','Iron Veil','Crimson Static','Void Circuit','Gold Syndicate','Azure Phantom','Toxic Bloom','Scarlet Dominion','Chrome Legion','Phantom Signal','Obsidian Pact','Ember Protocol','Violet Surge','Steel Covenant','Binary Ghost','Copper Throne','Nova Rift','Silver Wraith','Inferno Grid','Quantum Veil','Unaffiliated'];
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const URL_FIELDS = new Set(['avatar', 'banner', 'website', 'backgroundImage']);
-const THEME_KEYS = new Set(['primaryColor','secondaryColor','accentColor','backgroundColor','fontFamily','fontSize','animations','glowEffects','scanlines','backgroundImage','cursorEffect','layoutStyle']);
+const THEME_KEYS = new Set(['primaryColor','secondaryColor','accentColor','backgroundColor','fontFamily','fontSize','animations','glowEffects','scanlines','backgroundImage','cursorEffect','layoutStyle','borderStyle','borderRadius','spacing','effectIntensity']);
 const LAYOUT_KEYS = new Set(['leftZone','rightZone','bottomZone','hiddenWidgets','mobileOrder']);
 const MODULES = new Set(['identity','bio','faction','top_friends','posts','media','links','creator_summary']);
+const THEME_ENUMS = {
+  fontFamily: new Set(['mono','sans','serif','display']), fontSize: new Set(['small','medium','large']),
+  cursorEffect: new Set(['none','glow','trail']), layoutStyle: new Set(['single','sidebar-left','sidebar-right','masonry']),
+  borderStyle: new Set(['minimal','solid','double','glow']), borderRadius: new Set(['none','small','medium','large']),
+  spacing: new Set(['compact','comfortable','spacious']), effectIntensity: new Set(['off','low','medium'])
+};
 
 const cleanString = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : undefined;
 const safeUrl = value => {
@@ -39,7 +45,7 @@ function validateProfileUpdate(body) {
       if (key.endsWith('Color')) { if (typeof value !== 'string' || !HEX.test(value)) return { error: `${key} must be a hex color` }; theme[key] = value; }
       else if (['animations','glowEffects','scanlines'].includes(key)) { if (typeof value !== 'boolean') return { error: `${key} must be boolean` }; theme[key] = value; }
       else if (URL_FIELDS.has(key)) { const url = safeUrl(value); if (url === undefined) return { error: `${key} must be an http(s) URL` }; theme[key] = url; }
-      else { const text = cleanString(value, 40); if (text === undefined) return { error: `${key} must be a string` }; theme[key] = text; }
+      else { const text = cleanString(value, 40); if (text === undefined || (THEME_ENUMS[key] && !THEME_ENUMS[key].has(text))) return { error: `${key} is not an approved choice` }; theme[key] = text; }
     } update.theme = theme;
   }
   if (body.profileLayout !== undefined) {
@@ -50,4 +56,32 @@ function validateProfileUpdate(body) {
   return { update };
 }
 
-module.exports = { validateProfileUpdate, THEME_KEYS, MODULES };
+function validateLayoutUpdate(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'Layout update must be an object' };
+  const allowed = new Set(['theme','factionStarterTheme']);
+  const unknown = Object.keys(body).filter(key => !allowed.has(key));
+  if (unknown.length) return { error: `Unsupported layout fields: ${unknown.join(', ')}` };
+  if (body.factionStarterTheme !== undefined && !['full','partial','off'].includes(body.factionStarterTheme)) return { error: 'Invalid faction influence' };
+  const validated = validateProfileUpdate({ theme: body.theme || {} });
+  if (validated.error) return validated;
+  return { update: { ...(body.theme !== undefined ? { theme: validated.update.theme } : {}), ...(body.factionStarterTheme !== undefined ? { factionStarterTheme: body.factionStarterTheme } : {}) } };
+}
+
+const MODULE_CONFIG = {
+  identity: { tagline: ['string', 120] }, bio: { text: ['string', 500] }, faction: {}, top_friends: {}, posts: {},
+  media: { limit: ['number', 12] }, links: {}, creator_summary: { heading: ['string', 100], description: ['string', 300] }
+};
+function validateModuleConfig(type, config = {}) {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return { error: 'Module config must be an object' };
+  const contract = MODULE_CONFIG[type];
+  if (!contract || Object.keys(config).some(key => !contract[key])) return { error: `Unsupported ${type} module configuration` };
+  const update = {};
+  for (const [key, value] of Object.entries(config)) {
+    const [kind, max] = contract[key];
+    if (kind === 'string') { if (typeof value !== 'string') return { error: `${type}.${key} must be a string` }; update[key] = value.trim().slice(0, max); }
+    if (kind === 'number') { if (!Number.isInteger(value) || value < 1 || value > max) return { error: `${type}.${key} is outside the allowed range` }; update[key] = value; }
+  }
+  return { update };
+}
+
+module.exports = { validateProfileUpdate, validateLayoutUpdate, validateModuleConfig, THEME_KEYS, MODULES };

@@ -368,7 +368,6 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
         <div className={`absolute inset-0 bg-black/40 transition-opacity duration-500 ${isHudVisible ? 'opacity-100' : 'opacity-0'}`} />
       </div>
 
-      <style>{`${localTheme.customCss || ''}`}</style>
 
       <div className={`relative z-20 w-full max-w-5xl mb-4 transition-all duration-500 ${isHudVisible ? 'opacity-100' : 'opacity-0'}`}>
         <MarqueeText text="THANKS FOR VISITING MY PROFILE! DROP A COMMENT BELOW!" user={user} />

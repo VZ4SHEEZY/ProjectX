@@ -33,3 +33,18 @@ test('creator can edit and persist the active tier catalog UI', async ({ monitor
   await page.getByRole('button', { name: 'EDIT TIERS' }).click();
   await expect(page.getByText('Browser Tier')).toBeVisible();
 });
+
+test('Profile V2 Studio exposes responsive preview, modules, access rules, and Top Friends', async ({ monitoredPage: page }) => {
+  await login(page);
+  await page.getByLabel('Open Profile V2 Studio').click();
+  await expect(page.getByTestId('profile-v2-studio')).toBeVisible();
+  await expect(page.getByText(/Live desktop preview/i)).toBeVisible();
+  await page.getByRole('button', { name: 'modules', exact: true }).click();
+  await expect(page.getByText('Identity / Hero').first()).toBeVisible();
+  await page.getByRole('button', { name: 'access', exact: true }).click();
+  await expect(page.getByText('Human-readable module access')).toBeVisible();
+  await page.getByRole('button', { name: 'friends', exact: true }).click();
+  await expect(page.getByText('Your Top Friends')).toBeVisible();
+  await page.getByLabel('Switch preview device').click();
+  await expect(page.getByText(/Live mobile preview/i)).toBeVisible();
+});
