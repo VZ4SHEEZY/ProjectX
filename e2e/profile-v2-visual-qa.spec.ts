@@ -33,7 +33,11 @@ test('real QA records produce all faction and desktop certification captures', a
   await login(page);
   const data = await cert();
   for (const [index, profile] of data.factionProfiles.entries()) await capturePublic(page, profile.username, `faction-${String(index + 1).padStart(2, '0')}-${slug(profile.faction)}`);
-  for (const [index, profile] of data.individualityProfiles.entries()) await capturePublic(page, profile.username, `same-faction-obsidian-${String.fromCharCode(97 + index)}-desktop`);
+  for (const [index, profile] of data.individualityProfiles.entries()) {
+    await capturePublic(page, profile.username, `same-faction-obsidian-${String.fromCharCode(97 + index)}-desktop`);
+    await capturePublic(page, profile.username, `faction-influence-${profile.influence}-desktop`);
+  }
+  await capturePublic(page, data.unaffiliated.username, 'unaffiliated-profile-desktop');
   await capturePublic(page, data.topFriendsOwner.username, 'top-friends-public-desktop');
   await capturePublic(page, data.creator.username, 'creator-profile-desktop');
   await capturePublic(page, data.access.username, 'access-locked-preview-desktop');
@@ -84,10 +88,15 @@ test('real Studio records show design, modules, access rules, and Top Friends ed
   await loginAs(page, data.access.username);
   await page.getByLabel('Open Profile Studio').click();
   await page.getByRole('button', { name: 'access', exact: true }).click();
-  await expect(page.locator('input[value="Verified AND subscriber"]')).toBeVisible();
-  await page.screenshot({ path: `${out}/access-hidden-studio.png`, fullPage: true });
-  await page.screenshot({ path: `${out}/access-rule-and-studio.png`, fullPage: true });
-  await page.screenshot({ path: `${out}/access-rule-or-studio.png`, fullPage: true });
+  const hidden = page.locator('input[value="Hidden subscribers"]').locator('xpath=../..');
+  const andRule = page.locator('input[value="Verified AND subscriber"]').locator('xpath=../..');
+  const orRule = page.locator('input[value="Friend OR subscriber"]').locator('xpath=../..');
+  await expect(hidden).toBeVisible();
+  await expect(andRule).toBeVisible();
+  await expect(orRule).toBeVisible();
+  await hidden.screenshot({ path: `${out}/access-hidden-studio.png` });
+  await andRule.screenshot({ path: `${out}/access-rule-and-studio.png` });
+  await orRule.screenshot({ path: `${out}/access-rule-or-studio.png` });
 });
 
 test('mobile Studio navigation, logout, controls, and safe areas remain reachable', async ({ monitoredPage:page }, testInfo) => {

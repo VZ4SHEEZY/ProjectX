@@ -158,6 +158,31 @@ router.post('/seed', async (req, res) => {
     factionProfiles.push({ username: entry.user.username, faction: factionName, id: entry.user._id.toString() });
   }
 
+  const unaffiliatedUser = await makeUser('unaffiliated', { displayName: 'Independent Signal' });
+  const unaffiliatedProfile = await Profile.create({
+    user: unaffiliatedUser._id,
+    displayName: unaffiliatedUser.displayName,
+    bio: 'A disposable unaffiliated profile proving that personal customization works without faction membership.',
+    avatar: unaffiliatedUser.avatar,
+    banner: `https://picsum.photos/seed/${runId}-unaffiliated-banner/1400/440`,
+    locationLabel: 'Independent relay',
+    website: 'https://example.com',
+    privacy: 'public', source: 'native'
+  });
+  await ProfileLayout.create({
+    profile: unaffiliatedProfile._id,
+    factionStarterTheme: 'off',
+    theme: {
+      primaryColor: '#39ff14', secondaryColor: '#123d18', accentColor: '#d9ffd5',
+      backgroundColor: '#030603', fontFamily: 'mono', fontSize: 'medium',
+      layoutStyle: 'sidebar-right', borderStyle: 'minimal', borderRadius: 'medium',
+      spacing: 'comfortable', glowEffects: true, scanlines: false,
+      effectIntensity: 'low', backgroundImage: ''
+    }
+  });
+  await ProfileModule.insertMany(commonModules(unaffiliatedProfile));
+  await seedPosts(unaffiliatedUser, 'Unaffiliated', 5);
+
   const individuality = [
     { slug: 'obsidian_a', displayName: 'Velvet Hex', theme: { primaryColor: '#ff4f9a', secondaryColor: '#7d245f', accentColor: '#ffd2e8', backgroundColor: '#170516', fontFamily: 'serif', fontSize: 'large', layoutStyle: 'single', borderStyle: 'double', borderRadius: 'large', spacing: 'spacious', glowEffects: false, scanlines: false, effectIntensity: 'off', backgroundImage: `https://picsum.photos/seed/${runId}-velvet-bg/1800/1200` }, influence: 'off', order: ['identity','bio','media','top_friends','posts','faction','links'] },
     { slug: 'obsidian_b', displayName: 'Null Architect', theme: { primaryColor: '#62ffe5', secondaryColor: '#2850ff', accentColor: '#d4fff9', backgroundColor: '#020b13', fontFamily: 'mono', fontSize: 'small', layoutStyle: 'masonry', borderStyle: 'minimal', borderRadius: 'none', spacing: 'compact', glowEffects: true, scanlines: true, effectIntensity: 'medium', backgroundImage: '' }, influence: 'partial', order: ['identity','faction','links','media','posts','bio','top_friends'] },
@@ -215,6 +240,7 @@ router.post('/seed', async (req, res) => {
     id: user._id.toString(), role: user.username.split('_').at(-1), username: user.username, email: user.email
   })), postId: post._id.toString(), certification: {
     factionProfiles, individualityProfiles,
+    unaffiliated: { username: unaffiliatedUser.username, id: unaffiliatedUser._id.toString() },
     creator: { username: creatorEntry.user.username, id: creatorEntry.user._id.toString() },
     access: { username: accessEntry.user.username, id: accessEntry.user._id.toString(), ruleIds: { hidden: hiddenRule._id.toString(), and: andRule._id.toString(), or: orRule._id.toString() } },
     topFriendsOwner: individualityProfiles[0],
