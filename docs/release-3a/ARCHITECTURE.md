@@ -6,6 +6,14 @@ Release 3A.1 remains a design and synthetic simulation release. It does not conn
 
 Blueprint V4 was reviewed. No standalone completed Release 3 discovery/audit artifact was found in the repository or nearby workspace. Existing Release 1/2 controls were therefore treated as mandatory audit inputs: raw content views and aggregate engagement signals remain progression-ineligible; transaction authority comes from finalized payment state; platform roles and faction membership remain separate protected domains.
 
+Implementation classification:
+
+- **IMPLEMENTED:** in-memory immutable event/decision contracts, duplicate collision checks, correction-graph resolution, deterministic synthetic qualification/projection, redaction boundary, typed fixture evidence, policy artifacts, and regression tests.
+- **CONTRACT-DEFINED ONLY:** persistence schemas, producer natural keys, economic lifecycle, event-time faction snapshots, watermark/generation activation, qualified-history materialization, private allegiance allocation, policy registry, and public explanation mapping.
+- **REQUIRES NEW INSTRUMENTATION:** trustworthy reach/audience deduplication, moderation outcomes, fraud/trust graphs, economic finality, faction-membership snapshots at source, and evidence lineage/digests.
+- **FUTURE INFRASTRUCTURE:** transactional outbox, append-only database ledger, evidence store, immutable policy registry, checkpoints, atomic projection generations, replay tooling, and audited role-scoped access.
+- **UNRESOLVED PRODUCT DECISION:** economic contribution owner (supporter, creator/recipient, both, or neither), level curve, caps, taxonomy details, retention, appeals, and future seasonal behavior.
+
 ## Architecture
 
 ```text
@@ -55,7 +63,7 @@ Corrections are immutable raw facts with a target event ID, type, authority, eff
 
 Before contribution aggregation, projection deterministically resolves the correction graph ordered by target, sequence, effective time, and event ID. Reversal/refund/chargeback/moderation facts deactivate the target contribution. Supersession/amendment deactivate the target and leave the independently qualified replacement eligible. Correction facts never earn contribution themselves. Missing targets/replacements and conflicting sequences fail closed. The original event and its original decision remain append-only and auditable.
 
-The visible primary projection is Level 1–100 with Initiation, Established, Influential, Elite, Legendary, and Apex bands. Specialty projections cover creation, social, influence, community, exploration, creator, economy, builder/AI, and faction; production UI should turn these into named ranks/unlocks rather than nine dominant counters. Level thresholds and specialty rank names remain configurable.
+The simulator displays Level 1–100 with provisional named bands solely to make fixture differences readable. **SIMULATION ONLY / NOT PRODUCTION:** this is not a finalized mathematical curve, API guarantee, or UI contract. Specialty diagnostics cover creation, social, influence, community, exploration, creator, economy, builder/AI, and faction; thresholds, names, unlocks, and display remain unresolved.
 
 ## Qualification interface
 
@@ -85,7 +93,7 @@ Every projection row is keyed by beneficiary plus projection generation and poli
 
 ## Economic lifecycle
 
-The immutable lifecycle can represent intent, pending, confirmed, finalized, failed, refund, chargeback, chain reorganization, and reversal facts. Only a finalized fact from an authoritative producer with an economic-finality evidence reference can qualify. Pending/failed facts contribute zero. Refund, chargeback, reorganization, or reversal facts compensate/deactivate earlier eligible contribution through the correction graph without deleting the original settlement fact. No production payment integration exists.
+The immutable lifecycle can represent intent, pending, confirmed, finalized, failed, refund, chargeback, chain reorganization, and reversal facts. Only a finalized fact from an authoritative producer with an economic-finality evidence reference can qualify. Pending/failed facts contribute zero. Refund, chargeback, reorganization, or reversal facts compensate/deactivate earlier eligible contribution through the correction graph without deleting the original settlement fact. No production payment integration exists. Whether eligible economic contribution belongs to the supporter, creator/recipient, both, or neither is deliberately unresolved; the simulator's displayed recipient allocation is a test hypothesis and must not be inferred as policy.
 
 ## Policy reproducibility
 

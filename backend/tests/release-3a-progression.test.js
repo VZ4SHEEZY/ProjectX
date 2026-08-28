@@ -42,10 +42,14 @@ test('cross-faction viral reach beats a coordinated same-faction ring in faction
   assert.ok(faction.Neon.contributors.cross_faction_viral > faction.Chrome.contributors.same_faction_farmer * 3);
 });
 
-test('a whale cannot purchase top progression and supporter breadth matters', () => {
-  const { personal } = simulate().projections;
-  assert.ok(personal.economic_whale.level < 26);
-  assert.ok(personal.many_supporters.contribution > personal.huge_supporter.contribution);
+test('supporter and recipient economic scenarios remain distinct without deciding production credit ownership', () => {
+  const result = simulate();
+  const { personal } = result.projections;
+  const spenderEvent = result.events.find(event => event.actorId === 'wealthy_spender');
+  assert.equal(spenderEvent.beneficiaryId, 'wealthy-spender-recipient');
+  assert.equal(personal.wealthy_spender, undefined);
+  assert.ok(personal['wealthy-spender-recipient'].level < 26);
+  assert.ok(personal.many_supporters.contribution > personal.one_large_supporter.contribution);
   assert.equal(personal.circular_tips, undefined);
 });
 
@@ -75,6 +79,15 @@ test('duplicate raw delivery is removed before qualification and identity collis
   assert.equal(duplicate.length, 1);
   const collision = { ...event, actorId: 'different-actor' };
   assert.throws(() => appendLogicalLedger([event, collision]), /EVENT_IDENTITY_COLLISION/);
+});
+
+test('canonical identity is producer scoped for the same domain transition', () => {
+  const first = testEvent({ key: 'producer-scope', producer: 'producer-a' });
+  const second = testEvent({ key: 'producer-scope', producer: 'producer-b' });
+  assert.notEqual(first.eventId, second.eventId);
+  assert.notEqual(first.idempotencyKey, second.idempotencyKey);
+  assert.equal(appendLogicalLedger([first, second]).length, 2);
+  assert.throws(() => canonicalEvent({ ...first, eventId: 'producer-chosen-id' }), /eventId must match/);
 });
 
 test('qualification decision identity includes policy and evaluation generation', () => {
@@ -124,6 +137,37 @@ test('faction snapshots preserve event-time beneficiary state and unknown fails 
   assert.equal(affiliated.affiliations.beneficiary.factionId, 'Neon');
 });
 
+test('actor and beneficiary faction snapshots are independent and later switches do not rewrite history', () => {
+  const first = testEvent({ key: 'snapshot-before', actorAffiliation: affiliation('Chrome'), beneficiaryAffiliation: affiliation('Neon') });
+  const switched = testEvent({ key: 'snapshot-after', actorAffiliation: affiliation('Neon'), beneficiaryAffiliation: affiliation('Chrome') });
+  const before = JSON.stringify(first);
+  const result = project([switched, first], qualifyLedger([switched, first], policyV1.qualification), policyV1);
+  assert.equal(first.affiliations.actor.factionId, 'Chrome');
+  assert.equal(first.affiliations.beneficiary.factionId, 'Neon');
+  assert.equal(JSON.stringify(first), before);
+  assert.ok(result.faction.Neon.contributors.beneficiary > 0);
+  assert.ok(result.faction.Chrome.contributors.beneficiary > 0);
+});
+
+test('mixed evaluation generations fail closed', () => {
+  const first = testEvent({ key: 'mixed-a' });
+  const second = testEvent({ key: 'mixed-b' });
+  const d1 = qualifyLedger([first], policyV1.qualification, { evaluationGeneration: 'a' })[0];
+  const d2 = qualifyLedger([second], policyV1.qualification, { evaluationGeneration: 'b' })[0];
+  assert.throws(() => project([first, second], [d1, d2], policyV1), /MIXED_EVALUATION_GENERATIONS/);
+});
+
+test('delayed ingestion, cutoff, and deterministic producer tie ordering are replayable', () => {
+  const late = testEvent({ key: 'late', occurredAt: '2026-08-01T00:00:00.000Z', ingestedAt: '2026-08-03T00:00:00.000Z', producer: 'producer-b' });
+  const timely = testEvent({ key: 'timely', occurredAt: '2026-08-01T00:00:00.000Z', ingestedAt: '2026-08-01T01:00:00.000Z', producer: 'producer-a' });
+  const all = qualifyLedger([late, timely], policyV1.qualification);
+  const reversed = qualifyLedger([timely, late], policyV1.qualification);
+  assert.deepEqual(all, reversed);
+  assert.deepEqual(all.map(item => item.eventId), [timely.eventId, late.eventId]);
+  const cutoff = qualifyLedger([late, timely], policyV1.qualification, { ledgerCutoff: '2026-08-02T00:00:00.000Z' });
+  assert.deepEqual(cutoff.map(item => item.eventId), [timely.eventId]);
+});
+
 test('policy changes rebuild decisions and projections without rewriting raw events', () => {
   const { events, evidenceByRef } = buildScenarioBundle();
   const serialized = JSON.stringify(events);
@@ -151,6 +195,7 @@ test('internal qualification reasons are redacted from public projections', () =
 test('typed reach evidence rejects overlapping additive windows', () => {
   const make = (start, end, generation) => canonicalEvidence({ type: 'reach', contractVersion: '1.0.0', producer: 'test', generation, subject: { type: 'post', id: 'p1' }, observedAt: end, confidence: 1, lineage: ['test'], privacyClassification: 'internal', retentionClass: 'test', body: { windowStart: start, windowEnd: end, deduplicationMethod: 'test-v1', audienceAggregate: 'count-only', uniquePeople: 2, uniqueFactions: 1, sameFaction: 1, crossFaction: 1, unaffiliated: 0, unknownOrIneligible: 0, sourceChannel: 'test' } });
   assert.throws(() => assertNonOverlappingReach([make('2026-08-01T00:00:00.000Z', '2026-08-01T01:00:00.000Z', 'a'), make('2026-08-01T00:30:00.000Z', '2026-08-01T02:00:00.000Z', 'b')]), /OVERLAPPING_REACH_WINDOWS/);
+  assert.throws(() => canonicalEvidence({ ...make('2026-08-02T00:00:00.000Z', '2026-08-02T01:00:00.000Z', 'c'), body: { ...make('2026-08-02T00:00:00.000Z', '2026-08-02T01:00:00.000Z', 'c').body, arbitraryProducerClaim: true } }), /unsupported evidence field/);
 });
 
 test('policy artifacts freeze every replay-relevant compatibility input', () => {
@@ -164,16 +209,18 @@ function affiliation(factionId) {
   return { state: 'affiliated', factionId, membershipRef: `membership:${factionId}`, effectiveAt: '2026-08-01T00:00:00.000Z', source: 'test' };
 }
 
-function testEvent({ key, type = 'creation.published', activityClass = 'CREATE', economic = null, beneficiaryAffiliation = affiliation('Chrome'), beneficiaryId = 'beneficiary', extra = {} }) {
+function testEvent({ key, type = 'creation.published', activityClass = 'CREATE', economic = null, actorAffiliation = affiliation('Chrome'), beneficiaryAffiliation = affiliation('Chrome'), beneficiaryId = 'beneficiary', occurredAt = '2026-08-01T00:00:00.000Z', ingestedAt, producer = 'release-3a-simulator', extra = {} }) {
   return canonicalEvent({
     idempotencyKey: key,
     eventType: type,
     activityClass,
     actorId: type.startsWith('economy.') ? 'supporter' : 'beneficiary',
     beneficiaryId,
-    occurredAt: '2026-08-01T00:00:00.000Z',
+    occurredAt,
+    ingestedAt,
+    provenance: { producer, authority: 'synthetic-fixture' },
     object: { type: 'test', id: key },
-    affiliations: { actor: affiliation('Chrome'), beneficiary: beneficiaryAffiliation },
+    affiliations: { actor: actorAffiliation, beneficiary: beneficiaryAffiliation },
     economic,
     facts: {},
     ...extra

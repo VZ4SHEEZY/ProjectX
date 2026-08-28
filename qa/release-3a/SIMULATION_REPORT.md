@@ -6,43 +6,43 @@ Synthetic immutable events: 584. No database or production user was read or muta
 
 | Persona | Level | Personal | Faction | Cross-faction | Decisions | Why |
 |---|---:|---:|---:|---:|---|---|
-| normal casual user | 3 | 39.17 | 38.74 | 14.26 | diminished:5 | TRUST_ADJUSTED |
-| highly active legitimate user | 6 | 202.76 | 323.58 | 139.64 | diminished:45 | DIVERSE_CROSS_FACTION_REACH, REPEATED_ACTION_DIMINISHING, TRUST_ADJUSTED |
-| original creator | 5 | 143.89 | 110.37 | 35.32 | diminished:12 | REPEATED_ACTION_DIMINISHING, TRUST_ADJUSTED |
-| viral creator | 5 | 141.71 | 194.47 | 58.37 | diminished:4 | DIVERSE_CROSS_FACTION_REACH, TRUST_ADJUSTED |
-| viral cross-faction creator | 5 | 162.24 | 415.65 | 136.28 | diminished:4 | DIVERSE_CROSS_FACTION_REACH, TRUST_ADJUSTED |
-| same-faction engagement farmer | 1 | 3.13 | 0.96 | 0 | diminished:80 | RECIPROCAL_RING_DIMINISHING, REPEATED_ACTION_DIMINISHING, SAME_FACTION_RING_DIMINISHING |
-| spam poster | 1 | 0.89 | 0.27 | 0 | diminished:100 | LOW_VALUE_VOLUME_DIMINISHING, REPEATED_ACTION_DIMINISHING, SUSPICIOUS_VELOCITY |
-| follow/unfollow farmer | 1 | 1.82 | 2.7 | 1.14 | diminished:90 | LOW_VALUE_VOLUME_DIMINISHING, RECIPROCAL_RING_DIMINISHING, REPEATED_ACTION_DIMINISHING |
-| social/community-focused user | 5 | 181 | 338.95 | 112.6 | diminished:25 | DIVERSE_CROSS_FACTION_REACH, REPEATED_ACTION_DIMINISHING, TRUST_ADJUSTED |
-| creator with many small genuine supporters | 6 | 273.62 | 393.8 | 114.69 | diminished:20 | DIVERSE_CROSS_FACTION_REACH, REPEATED_ACTION_DIMINISHING, TRUST_ADJUSTED |
-| creator with one huge supporter | 2 | 11.42 | 5.2 | 0.9 | diminished:1 | TRUST_ADJUSTED |
-| economic whale | 2 | 12.35 | 5.49 | 0.9 | diminished:1 | TRUST_ADJUSTED |
+| normal casual user | 2 | 24.06 | 10.37 | 1.58 | qualified:5 | QUALIFIED |
+| highly active legitimate user | 3 | 71.88 | 27.75 | 3 | qualified:8, diminished:37 | QUALIFIED, REPEATED_ACTION_DIMINISHING |
+| original creator | 4 | 98.07 | 33.17 | 1.58 | qualified:8, diminished:4 | QUALIFIED, REPEATED_ACTION_DIMINISHING |
+| viral creator | 5 | 130.39 | 90.3 | 16.47 | qualified:4 | QUALIFIED |
+| viral cross-faction creator | 5 | 146.56 | 229.52 | 65.87 | qualified:4 | QUALIFIED |
+| same-faction engagement farmer | 1 | 1.77 | 0.54 | 0 | diminished:80 | RECIPROCAL_RING_DIMINISHING, REPEATED_ACTION_DIMINISHING, SAME_FACTION_RING_DIMINISHING |
+| spam poster | 1 | 0.83 | 0.26 | 0 | diminished:100 | LOW_VALUE_VOLUME_DIMINISHING, REPEATED_ACTION_DIMINISHING, SUSPICIOUS_VELOCITY |
+| follow/unfollow farmer | 1 | 0.71 | 0.27 | 0.03 | diminished:90 | LOW_VALUE_VOLUME_DIMINISHING, RECIPROCAL_RING_DIMINISHING, REPEATED_ACTION_DIMINISHING |
+| social/community-focused user | 3 | 70.31 | 37.08 | 4 | qualified:8, diminished:17 | QUALIFIED, REPEATED_ACTION_DIMINISHING |
+| creator with many independent legitimate supporters | 4 | 100.62 | 53.18 | 5 | qualified:8, diminished:12 | QUALIFIED, REPEATED_ACTION_DIMINISHING |
+| creator with one very large legitimate supporter | 2 | 12.69 | 5.78 | 1 | qualified:1 | QUALIFIED |
+| wealthy spender attempting to purchase personal progression | 1 | 0 | 0 | 0 | none |  |
 | suspected circular tip network | 1 | 0 | 0 | 0 | rejected:12 | CIRCULAR_ECONOMIC_ACTIVITY |
-| cross-faction social butterfly | 6 | 206.94 | 485.32 | 203.82 | diminished:30 | DIVERSE_CROSS_FACTION_REACH, REPEATED_ACTION_DIMINISHING, TRUST_ADJUSTED |
-| strongly faction-oriented user | 5 | 149.32 | 180.97 | 55.9 | diminished:30 | DIVERSE_CROSS_FACTION_REACH, REPEATED_ACTION_DIMINISHING, TRUST_ADJUSTED |
-| Unaffiliated power user | 7 | 308.67 | 0 | 250.38 | diminished:50 | DIVERSE_CROSS_FACTION_REACH, REPEATED_ACTION_DIMINISHING, TRUST_ADJUSTED |
-| future AI/bot builder persona | 6 | 277.37 | 401.36 | 168.94 | diminished:15 | DIVERSE_CROSS_FACTION_REACH, REPEATED_ACTION_DIMINISHING, TRUST_ADJUSTED |
+| cross-faction social butterfly | 4 | 76.33 | 54.12 | 8.65 | qualified:8, diminished:22 | QUALIFIED, REPEATED_ACTION_DIMINISHING |
+| strongly faction-oriented user | 3 | 62.15 | 21.97 | 1 | qualified:8, diminished:22 | QUALIFIED, REPEATED_ACTION_DIMINISHING |
+| Unaffiliated power user | 4 | 104.47 | 0 | 8 | qualified:8, diminished:42 | QUALIFIED, REPEATED_ACTION_DIMINISHING |
+| future AI/bot builder persona | 5 | 182.25 | 89.79 | 18 | qualified:8, diminished:7 | QUALIFIED, REPEATED_ACTION_DIMINISHING |
 | suspicious Sybil/engagement-ring cluster | 1 | 0 | 0 | 0 | rejected:60 | HIGH_SYBIL_CONFIDENCE |
 
-## Required comparisons
+## Interpretation
 
-- The viral creator strongly exceeds the spammer (141.71 versus 0.89 personal contribution).
-- The cross-faction viral creator generates far more simulated faction value than the same-faction ring (415.65 versus 0.96).
-- A $1,000 economic whale remains Level 2; amount alone cannot buy a top level.
-- Many independent $10 supporters produce more authentic economic contribution than one $200 supporter, while circular tips are rejected.
-- The Unaffiliated power user reaches Level 7 with no faction contribution and no faction assignment.
-- The high-volume legitimate persona is diminished by neutral repeat decay but is never classified as spam, Sybil, or a ring.
-- Identical ledger/policy replay is byte-for-byte deterministic; V2 rebuilds different decisions without mutating raw events.
-- Contract tests separately prove that later moderation reversals and economic reversal/refund/chargeback facts remove prior contribution without mutating the original event.
+- SIMULATION ONLY / NOT PRODUCTION: scores, named bands, and thresholds are diagnostics, not a finalized mathematical curve or promised balance.
+- Economic rows currently display the recipient-allocation hypothesis solely as a simulator diagnostic. Whether credit belongs to supporter, recipient, both, or neither is unresolved.
+- Qualification reason codes explain outcomes without revealing private allegiance inputs or a future scoring formula.
+- High-volume legitimate activity can diminish through neutral repeat caps without being labeled abuse.
+- Unaffiliated activity receives personal progression and no faction projection.
+- Policy V2 exists only to verify that the same raw ledger can be replayed into new projections.
 
-## Weaknesses exposed
+## Scenario outcomes
 
-- `trustConfidence: 0.9` marks otherwise ordinary events as `diminished`, making the state label noisy. Production design should separate confidence weighting from an adverse decision state or define a neutral tolerance band.
-- The synthetic generator attaches scenario-level reach to each event. A production projector must deduplicate people and factions within explicit windows rather than summing repeated aggregate claims.
-- The Level curve keeps every scenario in early progression. That is useful for safety but cannot validate the Level 26–100 economy, long-term seasons, or time-to-Apex.
-- The social butterfly creates more faction value than the faction-oriented user under these assumptions. This may be consistent with cross-faction strategic reach, but allegiance allocation and internal cohesion need explicit product decisions before production use.
-- Binary high-confidence Sybil/circular rejection is intentionally fail-closed in the harness. Production needs evidence provenance, quarantine, appeals, false-positive measurement, and reversals.
-- The report explains policy categories but does not yet provide per-event evidence traces or counterfactual analysis; operational review tooling will need both.
+- Wealthy-spender attempt: the supporter receives no personal credit under the displayed recipient-allocation hypothesis; the synthetic recipient receives 13.72. This does not decide production ownership.
+- One large legitimate supporter: the creator receives 12.69 simulated contribution.
+- Many independent legitimate supporters: the creator receives 100.62 simulated contribution. Breadth is represented by distinct finalized events, not copied onto each payment.
 
-These observations were retained rather than hidden with scoring changes. Scores and thresholds are simulator diagnostics, not a production formula or promised balance.
+## Known limitations
+
+- Reach totals are distributed into disjoint per-event fixture windows; they are not copied wholesale onto every event. Production still requires deduplicated reach instrumentation.
+- Trust confidence of 1 is neutral in ordinary fixtures. Adverse trust states require explicit synthetic evidence.
+- The simulator does not decide supporter-versus-recipient economic credit, validate upper-level pacing, or implement seasons, allegiance, detectors, payments, or production progression.
+- Internal reason codes appear in this restricted QA artifact for auditability; public projections expose only public-safe categories.

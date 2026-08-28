@@ -25,7 +25,7 @@ The simulator has intentionally limited detectors. It models extension points; i
 - Which outcomes represent quality for each media/action type, including legitimate dislikes and controversy.
 - Treatment of deleted content versus policy-violating content and retroactive reversals.
 - Unique-person/faction windows, repeat decay, audience-size normalization, and new-creator fairness.
-- Economic caps, supported value bands, subscription retention windows, currency conversion, and creator-versus-supporter credit.
+- Economic caps, supported value bands, subscription retention windows, currency conversion, and whether progression credit belongs to the supporter, creator/recipient, both, or neither. The simulator is not evidence for this decision.
 - Private allegiance inputs, allocation limits, governance access, retention, and explainability requirements.
 - Faction contribution seasons, inactivity handling, faction changes, lineage, and event-time snapshot rules.
 - Bot/AI disclosure policy and how builder adoption is independently verified.

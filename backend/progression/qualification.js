@@ -17,8 +17,10 @@ function qualificationDecision(input) {
   if (!QUALIFICATION_STATES.includes(input.state)) throw new TypeError(`unsupported qualification state: ${input.state}`);
   if (!input.policyArtifactDigest || !input.evaluatedAt) throw new TypeError('qualification decision requires policyArtifactDigest and evaluatedAt');
   const factor = clamp(input.factor ?? (input.state === 'qualified' ? 1 : 0), 0, 1);
+  const derivedDecisionId = stableId(stableJson(identity));
+  if (input.decisionId && input.decisionId !== derivedDecisionId) throw new TypeError('decisionId must match event, policy, and evaluation generation identity');
   return deepFreeze({
-    decisionId: input.decisionId || stableId(stableJson(identity)),
+    decisionId: derivedDecisionId,
     ...identity,
     state: input.state,
     factor,
@@ -33,7 +35,11 @@ function qualificationDecision(input) {
 
 function qualifyLedger(events, policy, context = {}) {
   const generation = context.evaluationGeneration || 'simulation-generation-1';
-  const ordered = appendLogicalLedger(events).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.eventId.localeCompare(b.eventId));
+  const ledger = appendLogicalLedger(events);
+  const participating = ledger.filter(event => !context.ledgerCutoff || event.ingestedAt <= context.ledgerCutoff);
+  const inactive = new Set(participating.filter(event => event.correction).map(event => event.correction.targetEventId));
+  const ordered = participating
+    .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.provenance.producer.localeCompare(b.provenance.producer) || a.eventId.localeCompare(b.eventId));
   const priorQualified = [];
   return ordered.map(event => {
     const evidence = (event.evidenceRefs || []).map(ref => context.evidenceByRef?.[ref]).filter(Boolean);
@@ -50,7 +56,7 @@ function qualifyLedger(events, policy, context = {}) {
       ...result,
       signals: Object.assign({}, ...evidence.map(item => item.body.signals || item.body))
     });
-    if (decision.factor > 0) priorQualified.push(Object.freeze({ eventId: event.eventId, eventType: event.eventType, occurredAt: event.occurredAt, factor: decision.factor }));
+    if (decision.factor > 0 && !inactive.has(event.eventId)) priorQualified.push(Object.freeze({ eventId: event.eventId, eventType: event.eventType, occurredAt: event.occurredAt, factor: decision.factor }));
     return decision;
   });
 }

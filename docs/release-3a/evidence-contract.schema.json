@@ -19,6 +19,45 @@
     "supersedesEvidenceId": { "type": ["string", "null"] },
     "privacyClassification": { "enum": ["public_aggregate", "internal", "restricted", "highly_restricted"] },
     "retentionClass": { "type": "string", "minLength": 1 },
-    "body": { "type": "object" }
+    "body": {
+      "oneOf": [
+        { "$ref": "#/$defs/reachBody" },
+        { "$ref": "#/$defs/moderationBody" },
+        { "$ref": "#/$defs/fraudTrustBody" },
+        { "$ref": "#/$defs/economicFinalityBody" }
+      ]
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "type": { "const": "reach" } }, "required": ["type"] }, "then": { "properties": { "body": { "$ref": "#/$defs/reachBody" } } } },
+    { "if": { "properties": { "type": { "const": "moderation" } }, "required": ["type"] }, "then": { "properties": { "body": { "$ref": "#/$defs/moderationBody" } } } },
+    { "if": { "properties": { "type": { "const": "fraud_trust" } }, "required": ["type"] }, "then": { "properties": { "body": { "$ref": "#/$defs/fraudTrustBody" } } } },
+    { "if": { "properties": { "type": { "const": "economic_finality" } }, "required": ["type"] }, "then": { "properties": { "body": { "$ref": "#/$defs/economicFinalityBody" } } } }
+  ],
+  "$defs": {
+    "reachBody": {
+      "type": "object", "additionalProperties": false,
+      "required": ["windowStart", "windowEnd", "deduplicationMethod", "audienceAggregate", "uniquePeople", "uniqueFactions", "sameFaction", "crossFaction", "unaffiliated", "unknownOrIneligible", "sourceChannel"],
+      "properties": {
+        "windowStart": { "type": "string", "format": "date-time" }, "windowEnd": { "type": "string", "format": "date-time" },
+        "deduplicationMethod": { "type": "string", "minLength": 1 }, "audienceAggregate": { "type": "string", "minLength": 1 },
+        "uniquePeople": { "type": "integer", "minimum": 0 }, "uniqueFactions": { "type": "integer", "minimum": 0 },
+        "sameFaction": { "type": "integer", "minimum": 0 }, "crossFaction": { "type": "integer", "minimum": 0 },
+        "unaffiliated": { "type": "integer", "minimum": 0 }, "unknownOrIneligible": { "type": "integer", "minimum": 0 },
+        "sourceChannel": { "type": "string", "minLength": 1 }, "actorAffiliationRef": { "type": "string" }, "beneficiaryAffiliationRef": { "type": "string" }
+      }
+    },
+    "moderationBody": {
+      "type": "object", "additionalProperties": false, "required": ["outcome", "authorityRef", "caseRef"],
+      "properties": { "outcome": { "type": "string", "minLength": 1 }, "authorityRef": { "type": "string", "minLength": 1 }, "caseRef": { "type": "string", "minLength": 1 } }
+    },
+    "fraudTrustBody": {
+      "type": "object", "additionalProperties": false, "required": ["detectorVersion", "signals"],
+      "properties": { "detectorVersion": { "type": "string", "minLength": 1 }, "signals": { "type": "object", "description": "Versioned detector output; internal and access-controlled, never raw producer attributes." } }
+    },
+    "economicFinalityBody": {
+      "type": "object", "additionalProperties": false, "required": ["state", "authorityRef", "transactionRef"],
+      "properties": { "state": { "enum": ["intent", "pending", "confirmed", "finalized", "failed", "refund", "chargeback", "chain_reorganization", "reversed"] }, "authorityRef": { "type": "string", "minLength": 1 }, "transactionRef": { "type": "string", "minLength": 1 }, "blockRef": { "type": "string" }, "confirmationDepth": { "type": "integer", "minimum": 0 } }
+    }
   }
 }

@@ -16,8 +16,8 @@
     "subject": { "$ref": "#/$defs/nullableEntityRef" },
     "object": { "$ref": "#/$defs/nullableEntityRef" },
     "beneficiaryId": { "type": "string", "minLength": 1 },
-    "occurredAt": { "type": "string", "format": "date-time" },
-    "ingestedAt": { "type": "string", "format": "date-time" },
+    "occurredAt": { "type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
+    "ingestedAt": { "type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
     "affiliations": {
       "type": "object", "additionalProperties": false, "required": ["actor", "beneficiary"],
       "properties": { "actor": { "$ref": "#/$defs/affiliation" }, "beneficiary": { "$ref": "#/$defs/affiliation" } }
@@ -34,7 +34,7 @@
     "economic": {
       "type": ["object", "null"], "additionalProperties": false, "required": ["amountMinor", "currency", "state"],
       "properties": { "amountMinor": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" }, "currency": { "type": "string", "pattern": "^[A-Z]{3,8}$" }, "state": { "enum": ["intent", "pending", "confirmed", "finalized", "failed", "refund", "chargeback", "chain_reorganization", "reversed"] }, "finalityEvidenceRef": { "type": "string", "minLength": 1 } },
-      "allOf": [{ "if": { "properties": { "state": { "const": "finalized" } }, "required": ["state"] }, "then": { "required": ["finalityEvidenceRef"] } }]
+      "allOf": [{ "if": { "properties": { "state": { "const": "finalized" } }, "required": ["state"] }, "then": { "properties": { "finalityEvidenceRef": { "type": "string", "minLength": 1 } }, "required": ["finalityEvidenceRef"] } }]
     },
     "correction": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/correction" }] },
     "facts": { "type": "object", "additionalProperties": false, "description": "Closed event-type fact payload. Release 3A.1 defines no optional common facts; derived signals belong in typed evidence." }
@@ -62,7 +62,7 @@
         "replacementEventId": { "type": "string" },
         "compensatingEventId": { "type": "string" }
       },
-      "allOf": [{ "if": { "properties": { "type": { "enum": ["supersession", "amendment"] } }, "required": ["type"] }, "then": { "required": ["replacementEventId"] } }]
+      "allOf": [{ "if": { "properties": { "type": { "enum": ["supersession", "amendment"] } }, "required": ["type"] }, "then": { "properties": { "replacementEventId": { "type": "string", "minLength": 1 } }, "required": ["replacementEventId"] } }]
     }
   }
 }

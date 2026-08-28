@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const { deepFreeze, isCanonicalTimestamp, stableId, stableJson } = require('./contracts');
 
 const EVIDENCE_TYPES = Object.freeze(['reach', 'moderation', 'fraud_trust', 'economic_finality']);
@@ -15,7 +16,7 @@ function canonicalEvidence(input) {
   if (typeof input.confidence !== 'number' || input.confidence < 0 || input.confidence > 1) throw new TypeError('evidence confidence must be between zero and one');
   const body = validateBody(input.type, input.body);
   const identity = { type: input.type, subject: input.subject, producer: input.producer, generation: input.generation, contractVersion: input.contractVersion, body };
-  const digest = `sha256:${stableId(stableJson(identity))}`;
+  const digest = `sha256:${crypto.createHash('sha256').update(stableJson(identity)).digest('hex')}`;
   if (input.evidenceDigest && input.evidenceDigest !== digest) throw new TypeError('evidence digest mismatch');
   return deepFreeze({ evidenceId: input.evidenceId || stableId(stableJson(identity)), ...identity, observedAt: input.observedAt, confidence: input.confidence, lineage: [...input.lineage], evidenceDigest: digest, supersedesEvidenceId: input.supersedesEvidenceId || null, privacyClassification: input.privacyClassification, retentionClass: input.retentionClass });
 }
@@ -25,11 +26,19 @@ function validateBody(type, body) {
   if (type === 'reach') {
     const required = ['windowStart', 'windowEnd', 'deduplicationMethod', 'audienceAggregate', 'uniquePeople', 'uniqueFactions', 'sameFaction', 'crossFaction', 'unaffiliated', 'unknownOrIneligible', 'sourceChannel'];
     requireFields(body, required);
+    requireOnly(body, required.concat(['actorAffiliationRef', 'beneficiaryAffiliationRef']));
     if (!isCanonicalTimestamp(body.windowStart) || !isCanonicalTimestamp(body.windowEnd) || body.windowStart >= body.windowEnd) throw new TypeError('reach evidence requires a valid half-open observation window');
     for (const key of ['uniquePeople', 'uniqueFactions', 'sameFaction', 'crossFaction', 'unaffiliated', 'unknownOrIneligible']) if (!Number.isInteger(body[key]) || body[key] < 0) throw new TypeError(`reach ${key} must be a non-negative integer`);
-  } else if (type === 'moderation') requireFields(body, ['outcome', 'authorityRef', 'caseRef']);
-  else if (type === 'fraud_trust') requireFields(body, ['detectorVersion', 'signals']);
-  else requireFields(body, ['state', 'authorityRef', 'transactionRef']);
+  } else if (type === 'moderation') {
+    requireFields(body, ['outcome', 'authorityRef', 'caseRef']);
+    requireOnly(body, ['outcome', 'authorityRef', 'caseRef']);
+  } else if (type === 'fraud_trust') {
+    requireFields(body, ['detectorVersion', 'signals']);
+    requireOnly(body, ['detectorVersion', 'signals']);
+  } else {
+    requireFields(body, ['state', 'authorityRef', 'transactionRef']);
+    requireOnly(body, ['state', 'authorityRef', 'transactionRef', 'blockRef', 'confirmationDepth']);
+  }
   return { ...body };
 }
 
@@ -39,5 +48,6 @@ function assertNonOverlappingReach(evidence) {
 }
 
 function requireFields(body, fields) { for (const field of fields) if (body[field] == null) throw new TypeError(`${field} is required`); }
+function requireOnly(body, fields) { for (const field of Object.keys(body)) if (!fields.includes(field)) throw new TypeError(`unsupported evidence field: ${field}`); }
 
 module.exports = { EVIDENCE_TYPES, PRIVACY_CLASSES, canonicalEvidence, assertNonOverlappingReach };

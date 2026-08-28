@@ -34,7 +34,8 @@ function report(result) {
   ];
   for (const persona of PERSONAS) {
     const p = result.projections.personal[persona.id] || { level: 1, contribution: 0, crossFactionInfluence: 0, reasonCodes: [] };
-    const factionName = persona.id === 'unaffiliated_power' ? null : (['cross_faction_viral', 'viral_creator', 'original_creator', 'many_supporters', 'huge_supporter', 'ai_builder'].includes(persona.id) ? 'Neon' : 'Chrome');
+    const factionNames = [...new Set(result.events.filter(event => event.beneficiaryId === persona.id && event.affiliations.beneficiary.state === 'affiliated').map(event => event.affiliations.beneficiary.factionId))];
+    const factionName = factionNames.length === 1 ? factionNames[0] : null;
     const factionValue = factionName ? result.projections.faction[factionName]?.contributors[persona.id] || 0 : 0;
     const d = decisionByUser.get(persona.id) || {};
     const counts = ['qualified', 'diminished', 'rejected', 'quarantined'].filter(key => d[key]).map(key => `${key}:${d[key]}`).join(', ') || 'none';
@@ -42,11 +43,21 @@ function report(result) {
     lines.push(`| ${persona.label} | ${p.level} | ${p.contribution} | ${factionValue} | ${p.crossFactionInfluence} | ${counts} | ${why} |`);
   }
   lines.push('', '## Interpretation', '',
-    '- Scores and thresholds are simulator diagnostics, not a production formula or promised balance.',
+    '- SIMULATION ONLY / NOT PRODUCTION: scores, named bands, and thresholds are diagnostics, not a finalized mathematical curve or promised balance.',
+    '- Economic rows currently display the recipient-allocation hypothesis solely as a simulator diagnostic. Whether credit belongs to supporter, recipient, both, or neither is unresolved.',
     '- Qualification reason codes explain outcomes without revealing private allegiance inputs or a future scoring formula.',
     '- High-volume legitimate activity can diminish through neutral repeat caps without being labeled abuse.',
     '- Unaffiliated activity receives personal progression and no faction projection.',
-    '- Policy V2 exists only to verify that the same raw ledger can be replayed into new projections.');
+    '- Policy V2 exists only to verify that the same raw ledger can be replayed into new projections.', '',
+    '## Scenario outcomes', '',
+    `- Wealthy-spender attempt: the supporter receives no personal credit under the displayed recipient-allocation hypothesis; the synthetic recipient receives ${result.projections.personal['wealthy-spender-recipient']?.contribution || 0}. This does not decide production ownership.`,
+    `- One large legitimate supporter: the creator receives ${result.projections.personal.one_large_supporter?.contribution || 0} simulated contribution.`,
+    `- Many independent legitimate supporters: the creator receives ${result.projections.personal.many_supporters?.contribution || 0} simulated contribution. Breadth is represented by distinct finalized events, not copied onto each payment.`, '',
+    '## Known limitations', '',
+    '- Reach totals are distributed into disjoint per-event fixture windows; they are not copied wholesale onto every event. Production still requires deduplicated reach instrumentation.',
+    '- Trust confidence of 1 is neutral in ordinary fixtures. Adverse trust states require explicit synthetic evidence.',
+    '- The simulator does not decide supporter-versus-recipient economic credit, validate upper-level pacing, or implement seasons, allegiance, detectors, payments, or production progression.',
+    '- Internal reason codes appear in this restricted QA artifact for auditability; public projections expose only public-safe categories.');
   return `${lines.join('\n')}\n`;
 }
 

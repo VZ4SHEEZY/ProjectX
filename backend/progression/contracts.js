@@ -36,8 +36,10 @@ function canonicalEvent(input) {
   for (const forbidden of ['qualification', 'policyVersion', 'attributes', 'hiddenAllegianceWeight']) if (forbidden in input) throw new TypeError(`raw activity event input cannot contain ${forbidden}`);
   const identity = canonicalIdentity(input);
   const canonicalKey = stableJson(identity);
+  const derivedEventId = stableId(canonicalKey);
+  if (input.eventId && input.eventId !== derivedEventId) throw new TypeError('eventId must match the canonical producer-scoped identity');
   const event = {
-    eventId: input.eventId || stableId(canonicalKey),
+    eventId: derivedEventId,
     idempotencyKey: canonicalKey,
     schemaVersion: input.schemaVersion || '1.2.0',
     eventType: input.eventType,
