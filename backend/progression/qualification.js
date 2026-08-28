@@ -34,18 +34,24 @@ function qualificationDecision(input) {
 function qualifyLedger(events, policy, context = {}) {
   const generation = context.evaluationGeneration || 'simulation-generation-1';
   const ordered = appendLogicalLedger(events).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.eventId.localeCompare(b.eventId));
-  return ordered.map((event, index) => {
+  const priorQualified = [];
+  return ordered.map(event => {
+    const evidence = (event.evidenceRefs || []).map(ref => context.evidenceByRef?.[ref]).filter(Boolean);
+    if (!event.correction && evidence.length !== event.evidenceRefs.length) throw new Error(`EVIDENCE_NOT_FOUND:${event.eventId}`);
     const result = event.correction
       ? { state: 'rejected', factor: 0, reasonCodes: ['CORRECTION_FACT_NOT_CONTRIBUTION'], evidenceRefs: event.correction.evidenceRefs }
-      : policy.evaluate(event, { ...context, priorEvents: ordered.slice(0, index) });
-    return qualificationDecision({
+      : policy.evaluate(event, { evidence, priorQualified: Object.freeze([...priorQualified]), cutoff: context.cutoff || null });
+    const decision = qualificationDecision({
       eventId: event.eventId,
       policyVersion: policy.version,
       evaluationGeneration: generation,
       evaluatedAt: context.evaluatedAt || '2026-08-28T00:00:00.000Z',
       policyArtifactDigest: policy.artifactDigest,
-      ...result
+      ...result,
+      signals: Object.assign({}, ...evidence.map(item => item.body.signals || item.body))
     });
+    if (decision.factor > 0) priorQualified.push(Object.freeze({ eventId: event.eventId, eventType: event.eventType, occurredAt: event.occurredAt, factor: decision.factor }));
+    return decision;
   });
 }
 

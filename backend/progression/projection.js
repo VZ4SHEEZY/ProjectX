@@ -62,7 +62,7 @@ function project(events, decisions, policy) {
     user.total += contribution.personal;
     for (const [specialty, value] of Object.entries(contribution.specialties || {})) user.specialties[specialty] += value;
     user.crossFactionInfluence += contribution.crossFactionInfluence || 0;
-    user.reasons.push(...decision.reasonCodes, ...(contribution.reasonCodes || []));
+    user.reasons.push(...(contribution.publicExplanationCategories || []));
 
     const beneficiaryAffiliation = event.affiliations.beneficiary;
     if (beneficiaryAffiliation.state === 'affiliated' && contribution.faction > 0) {
@@ -81,7 +81,7 @@ function project(events, decisions, policy) {
     contribution: round(value.total),
     specialties: Object.fromEntries(Object.entries(value.specialties).map(([key, score]) => [key, round(score)])),
     crossFactionInfluence: round(value.crossFactionInfluence),
-    reasonCodes: [...new Set(value.reasons)].sort()
+    publicExplanationCategories: [...new Set(value.reasons)].sort()
   }]));
   const faction = Object.fromEntries([...factions].sort().map(([id, value]) => [id, { total: round(value.total), contributors: mapRound(value.contributors) }]));
   return { policyVersion: policy.version, evaluationGeneration: generation, inactiveEventIds, personal, faction };

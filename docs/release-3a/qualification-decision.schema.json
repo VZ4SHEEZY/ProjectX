@@ -13,10 +13,10 @@
     "state": { "enum": ["quarantined", "qualified", "diminished", "rejected"] },
     "factor": { "type": "number", "minimum": 0, "maximum": 1 },
     "contributionResult": { "type": "object", "additionalProperties": true, "required": ["factor"], "properties": { "factor": { "type": "number", "minimum": 0, "maximum": 1 } } },
-    "reasonCodes": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+    "reasonCodes": { "type": "array", "uniqueItems": true, "items": { "type": "string" }, "description": "Internal-only qualification reasons. Never expose directly through public projection APIs." },
     "evidenceRefs": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
     "evaluatedAt": { "type": "string", "format": "date-time" },
     "policyArtifactDigest": { "type": "string", "minLength": 1 },
-    "signals": { "type": "object", "description": "Internal, access-controlled derived signals; never copied into the raw event." }
+    "signals": { "type": "object", "additionalProperties": true, "description": "Internal, access-controlled derived signals; never copied into raw events or public projections." }
   }
 }

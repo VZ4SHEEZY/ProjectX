@@ -6,6 +6,7 @@ const ACTIVITY_CLASSES = Object.freeze(['CREATE', 'ENGAGE', 'ACHIEVE', 'TRANSACT
 const QUALIFICATION_STATES = Object.freeze(['quarantined', 'qualified', 'diminished', 'rejected']);
 const AFFILIATION_STATES = Object.freeze(['affiliated', 'unaffiliated', 'unknown']);
 const CORRECTION_TYPES = Object.freeze(['moderation_reversal', 'reversal', 'refund', 'chargeback', 'supersession', 'amendment']);
+const ECONOMIC_STATES = Object.freeze(['intent', 'pending', 'confirmed', 'finalized', 'failed', 'refund', 'chargeback', 'chain_reorganization', 'reversed']);
 const SPECIALTIES = Object.freeze(['creation', 'social', 'influence', 'community', 'exploration', 'creator', 'economy', 'builder_ai', 'faction']);
 
 function stableId(input) {
@@ -19,44 +20,44 @@ function stableJson(value) {
 }
 
 function canonicalIdentity(input) {
-  const provenance = input.provenance || { service: 'release-3a-simulator' };
+  const provenance = input.provenance || { producer: 'release-3a-simulator', authority: 'synthetic-fixture' };
   const source = input.sourceIdentity || {
     objectType: input.object?.type || input.subject?.type || 'synthetic_activity',
     objectId: input.object?.id || input.subject?.id || input.idempotencyKey,
     transition: input.eventType,
     version: input.sourceVersion || '1'
   };
-  if (input.idempotencyKey && !input.sourceIdentity) source.legacyKey = input.idempotencyKey;
-  const identity = { producer: provenance.service, activityClass: input.activityClass, eventType: input.eventType, source, schemaVersion: input.schemaVersion || '1.1.0' };
+  const identity = { producer: provenance.producer, activityClass: input.activityClass, eventType: input.eventType, source, schemaVersion: input.schemaVersion || '1.2.0' };
   validateIdentity(identity);
   return identity;
 }
 
 function canonicalEvent(input) {
+  for (const forbidden of ['qualification', 'policyVersion', 'attributes', 'hiddenAllegianceWeight']) if (forbidden in input) throw new TypeError(`raw activity event input cannot contain ${forbidden}`);
   const identity = canonicalIdentity(input);
   const canonicalKey = stableJson(identity);
   const event = {
     eventId: input.eventId || stableId(canonicalKey),
     idempotencyKey: canonicalKey,
-    schemaVersion: input.schemaVersion || '1.1.0',
+    schemaVersion: input.schemaVersion || '1.2.0',
     eventType: input.eventType,
     activityClass: input.activityClass,
     actorId: input.actorId,
     subject: input.subject || null,
     object: input.object || null,
-    beneficiaryId: input.beneficiaryId || input.actorId,
+    beneficiaryId: input.beneficiaryId,
     occurredAt: input.occurredAt,
     ingestedAt: input.ingestedAt || input.occurredAt,
     affiliations: {
       actor: canonicalAffiliation(input.affiliations?.actor || input.actorAffiliation),
       beneficiary: canonicalAffiliation(input.affiliations?.beneficiary || input.beneficiaryAffiliation)
     },
-    provenance: input.provenance || { service: 'release-3a-simulator' },
+    provenance: input.provenance || { producer: 'release-3a-simulator', authority: 'synthetic-fixture' },
     sourceIdentity: identity.source,
     evidenceRefs: uniqueStrings(input.evidenceRefs || []),
     economic: input.economic || null,
     correction: input.correction || null,
-    attributes: input.attributes || {}
+    facts: input.facts || {}
   };
   validateEvent(event);
   return deepFreeze(event);
@@ -68,6 +69,8 @@ function canonicalAffiliation(value) {
   if (affiliation.state === 'affiliated') {
     for (const field of ['factionId', 'effectiveAt', 'source']) if (typeof affiliation[field] !== 'string' || !affiliation[field]) throw new TypeError(`affiliated snapshot requires ${field}`);
   } else if (affiliation.factionId != null) throw new TypeError(`${affiliation.state} snapshot cannot contain factionId`);
+  if (affiliation.effectiveAt && !isCanonicalTimestamp(affiliation.effectiveAt)) throw new TypeError('affiliation effectiveAt must be canonical UTC ISO-8601');
+  if (!exactKeys(affiliation, ['state', 'factionId', 'membershipRef', 'effectiveAt', 'source'])) throw new TypeError('affiliation snapshot contains unsupported fields');
   return { ...affiliation };
 }
 
@@ -80,12 +83,15 @@ function validateEvent(event) {
   const requiredStrings = ['eventId', 'idempotencyKey', 'schemaVersion', 'eventType', 'activityClass', 'actorId', 'beneficiaryId', 'occurredAt', 'ingestedAt'];
   for (const field of requiredStrings) if (typeof event[field] !== 'string' || !event[field]) throw new TypeError(`activity event ${field} must be a non-empty string`);
   if (!ACTIVITY_CLASSES.includes(event.activityClass)) throw new TypeError(`unsupported activityClass: ${event.activityClass}`);
-  if (Number.isNaN(Date.parse(event.occurredAt)) || Number.isNaN(Date.parse(event.ingestedAt))) throw new TypeError('activity timestamps must be ISO-8601 compatible');
+  if (!isCanonicalTimestamp(event.occurredAt) || !isCanonicalTimestamp(event.ingestedAt)) throw new TypeError('activity timestamps must be canonical UTC ISO-8601');
+  if (!event.provenance || !exactKeys(event.provenance, ['producer', 'authority', 'sourceEventId']) || !event.provenance.producer || !event.provenance.authority) throw new TypeError('provenance requires a producer and authority and forbids arbitrary fields');
+  if (!event.sourceIdentity || !exactKeys(event.sourceIdentity, ['objectType', 'objectId', 'transition', 'version', 'actorId']) ) throw new TypeError('sourceIdentity contains unsupported fields');
   canonicalAffiliation(event.affiliations.actor);
   canonicalAffiliation(event.affiliations.beneficiary);
-  if (event.economic && (!event.economic.currency || event.economic.amountMinor == null || !event.economic.status)) throw new TypeError('economic metadata requires currency, amountMinor, and status');
+  if (event.economic) validateEconomic(event.economic);
+  if (!event.facts || Object.keys(event.facts).length) throw new TypeError('raw event facts are closed in 3A.1; derived reach/trust/fraud inputs must be evidence references');
   if (event.correction) validateCorrection(event.correction, event.eventId);
-  if ('qualification' in event || 'policyVersion' in event) throw new TypeError('raw activity events cannot contain policy interpretation');
+  for (const forbidden of ['qualification', 'policyVersion', 'attributes', 'hiddenAllegianceWeight']) if (forbidden in event) throw new TypeError(`raw activity events cannot contain ${forbidden}`);
   return true;
 }
 
@@ -94,7 +100,7 @@ function validateCorrection(correction, ownEventId) {
   for (const field of ['targetEventId', 'authority', 'effectiveAt']) if (typeof correction[field] !== 'string' || !correction[field]) throw new TypeError(`correction requires ${field}`);
   if (correction.targetEventId === ownEventId) throw new TypeError('correction cannot target itself');
   if (!Number.isInteger(correction.sequence) || correction.sequence < 1) throw new TypeError('correction sequence must be a positive integer');
-  if (Number.isNaN(Date.parse(correction.effectiveAt))) throw new TypeError('correction effectiveAt must be ISO-8601 compatible');
+  if (!isCanonicalTimestamp(correction.effectiveAt)) throw new TypeError('correction effectiveAt must be canonical UTC ISO-8601');
   if (!Array.isArray(correction.evidenceRefs) || correction.evidenceRefs.length === 0) throw new TypeError('correction requires evidenceRefs');
   if (['supersession', 'amendment'].includes(correction.type) && !correction.replacementEventId) throw new TypeError(`${correction.type} requires replacementEventId`);
 }
@@ -119,6 +125,17 @@ function appendLogicalLedger(events) {
 }
 
 function uniqueStrings(values) { return [...new Set(values)].sort(); }
+function isCanonicalTimestamp(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) && new Date(value).toISOString() === value;
+}
+function exactKeys(value, allowed) { return value && typeof value === 'object' && Object.keys(value).every(key => allowed.includes(key)); }
+function validateEconomic(value) {
+  if (!exactKeys(value, ['amountMinor', 'currency', 'state', 'finalityEvidenceRef'])) throw new TypeError('economic fact contains unsupported fields');
+  if (!/^(0|[1-9]\d*)$/.test(value.amountMinor || '')) throw new TypeError('economic amountMinor must be a canonical non-negative integer string');
+  if (!/^[A-Z]{3,8}$/.test(value.currency || '')) throw new TypeError('economic currency must be an uppercase currency/asset code');
+  if (!ECONOMIC_STATES.includes(value.state)) throw new TypeError(`unsupported economic state: ${value.state}`);
+  if (value.state === 'finalized' && !value.finalityEvidenceRef) throw new TypeError('finalized economic facts require finalityEvidenceRef');
+}
 function deepFreeze(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
   Object.freeze(value);
@@ -126,4 +143,4 @@ function deepFreeze(value) {
   return value;
 }
 
-module.exports = { ACTIVITY_CLASSES, QUALIFICATION_STATES, AFFILIATION_STATES, CORRECTION_TYPES, SPECIALTIES, stableId, stableJson, canonicalIdentity, canonicalEvent, canonicalAffiliation, validateEvent, appendLogicalLedger, deepFreeze };
+module.exports = { ACTIVITY_CLASSES, QUALIFICATION_STATES, AFFILIATION_STATES, CORRECTION_TYPES, ECONOMIC_STATES, SPECIALTIES, stableId, stableJson, canonicalIdentity, canonicalEvent, canonicalAffiliation, validateEvent, appendLogicalLedger, deepFreeze, isCanonicalTimestamp };

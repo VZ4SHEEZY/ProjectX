@@ -1,6 +1,7 @@
 'use strict';
 
 const { canonicalEvent } = require('../contracts');
+const { canonicalEvidence } = require('../evidence');
 const { PERSONAS } = require('./personas');
 
 const start = Date.parse('2026-08-01T00:00:00.000Z');
@@ -13,12 +14,40 @@ const affiliationFor = (id, effectiveAt) => {
 };
 
 function buildScenario() {
+  return buildScenarioBundle().events;
+}
+
+function buildScenarioBundle() {
   const events = [];
+  const evidenceByRef = {};
   for (const [personaIndex, persona] of PERSONAS.entries()) {
     const spec = specification(persona.id);
     for (let i = 0; i < spec.count; i++) {
       const occurredAt = new Date(start + personaIndex * 86400000 + i * spec.spacingMinutes * 60000).toISOString();
       const actorId = spec.externalActors ? `${persona.id}-supporter-${i % spec.externalActors}` : persona.id;
+      const objectId = `${persona.id}-${i}`;
+      const reach = canonicalEvidence({
+        type: 'reach', contractVersion: '1.0.0', producer: 'release-3a-simulator', generation: 'fixture-1',
+        subject: { type: spec.objectType || 'synthetic_activity', id: objectId }, observedAt: occurredAt, confidence: 1,
+        lineage: ['synthetic-fixture'], privacyClassification: 'internal', retentionClass: 'synthetic',
+        body: { windowStart: occurredAt, windowEnd: new Date(Date.parse(occurredAt) + 60000).toISOString(), deduplicationMethod: 'synthetic-distinct-persona-ids-v1', audienceAggregate: 'count-only', uniquePeople: spec.attributes.uniquePeople || 0, uniqueFactions: spec.attributes.uniqueFactions || 0, sameFaction: spec.attributes.sameFactionDensity ? spec.attributes.uniquePeople || 0 : 0, crossFaction: spec.attributes.uniqueFactions || 0, unaffiliated: 0, unknownOrIneligible: 0, sourceChannel: 'synthetic' }
+      });
+      const trust = canonicalEvidence({
+        type: 'fraud_trust', contractVersion: '1.0.0', producer: 'release-3a-simulator', generation: 'fixture-1',
+        subject: { type: 'synthetic_persona', id: persona.id }, observedAt: occurredAt, confidence: 1,
+        lineage: ['synthetic-fixture'], privacyClassification: 'restricted', retentionClass: 'synthetic',
+        body: { detectorVersion: 'synthetic-ground-truth-v1', signals: { ...spec.attributes, repeatOrdinal: i + 1, uniqueSupporters: spec.externalActors || spec.attributes.uniqueSupporters } }
+      });
+      evidenceByRef[reach.evidenceId] = reach;
+      evidenceByRef[trust.evidenceId] = trust;
+      const finality = spec.amountMinor ? canonicalEvidence({
+        type: 'economic_finality', contractVersion: '1.0.0', producer: 'release-3a-simulator', generation: 'fixture-1',
+        subject: { type: 'synthetic_transaction', id: objectId }, observedAt: occurredAt, confidence: 1,
+        lineage: ['synthetic-fixture'], privacyClassification: 'restricted', retentionClass: 'synthetic',
+        body: { state: spec.economicState || 'finalized', authorityRef: 'synthetic-settlement-authority', transactionRef: objectId }
+      }) : null;
+      if (finality) evidenceByRef[finality.evidenceId] = finality;
+      const economic = spec.amountMinor ? { amountMinor: String(spec.amountMinor), currency: 'USD', state: spec.economicState || 'finalized', finalityEvidenceRef: finality.evidenceId } : null;
       events.push(canonicalEvent({
         idempotencyKey: `r3a:${persona.id}:${i}`,
         eventType: spec.type,
@@ -31,13 +60,14 @@ function buildScenario() {
           beneficiary: affiliationFor(persona.id, occurredAt)
         },
         subject: { type: 'synthetic_persona', id: persona.id },
-        object: { type: spec.objectType || 'synthetic_activity', id: `${persona.id}-${i}` },
-        economic: spec.amountMinor ? { amountMinor: String(spec.amountMinor), currency: 'USD', status: spec.economicStatus || 'final', providerReference: `synthetic-${persona.id}-${i}` } : null,
-        attributes: { ...spec.attributes, repeatOrdinal: i + 1, uniqueSupporters: spec.externalActors || spec.attributes.uniqueSupporters }
+        object: { type: spec.objectType || 'synthetic_activity', id: objectId },
+        evidenceRefs: [reach.evidenceId, trust.evidenceId, ...(finality ? [finality.evidenceId] : [])],
+        economic,
+        facts: {}
       }));
     }
   }
-  return events;
+  return { events, evidenceByRef };
 }
 
 function specification(id) {
@@ -56,8 +86,8 @@ function specification(id) {
     huge_supporter: { ...common, count: 1, type: 'economy.support.final', activityClass: 'TRANSACT', externalActors: 1, amountMinor: 20000, attributes: { ...common.attributes, uniquePeople: 1, uniqueFactions: 1, uniqueSupporters: 1, valueSignal: .8 } },
     economic_whale: { ...common, count: 1, type: 'economy.support.final', activityClass: 'TRANSACT', externalActors: 1, amountMinor: 100000, attributes: { ...common.attributes, uniquePeople: 1, uniqueFactions: 1, valueSignal: .7 } },
     circular_tips: { ...common, count: 12, type: 'economy.support.final', activityClass: 'TRANSACT', externalActors: 3, amountMinor: 10000, attributes: { ...common.attributes, circularTransfer: true, uniqueSupporters: 3 } },
-    social_butterfly: { ...common, count: 30, externalActors: 30, attributes: { ...common.attributes, uniquePeople: 30, uniqueFactions: 10, engagementDiversity: 1, valueSignal: .65, hiddenAllegianceWeight: .8 } },
-    faction_oriented: { ...common, count: 30, externalActors: 25, attributes: { ...common.attributes, uniquePeople: 25, uniqueFactions: 1, engagementDiversity: .65, valueSignal: .7, hiddenAllegianceWeight: 1.15 } },
+    social_butterfly: { ...common, count: 30, externalActors: 30, attributes: { ...common.attributes, uniquePeople: 30, uniqueFactions: 10, engagementDiversity: 1, valueSignal: .65 } },
+    faction_oriented: { ...common, count: 30, externalActors: 25, attributes: { ...common.attributes, uniquePeople: 25, uniqueFactions: 1, engagementDiversity: .65, valueSignal: .7 } },
     unaffiliated_power: { ...common, count: 50, externalActors: 40, attributes: { ...common.attributes, uniquePeople: 40, uniqueFactions: 8, engagementDiversity: 1, valueSignal: .85 } },
     ai_builder: { ...common, count: 15, type: 'builder.adopted', activityClass: 'ACHIEVE', externalActors: 15, attributes: { ...common.attributes, uniquePeople: 100, uniqueFactions: 6, valueSignal: .9, botGenerated: true, botDisclosure: true } },
     sybil_cluster: { ...common, count: 60, spacingMinutes: 1, externalActors: 5, attributes: { ...common.attributes, sybilConfidence: .95, reciprocalDensity: .98, uniquePeople: 5, valueSignal: .2 } }
@@ -65,4 +95,4 @@ function specification(id) {
   return specs[id];
 }
 
-module.exports = { buildScenario };
+module.exports = { buildScenario, buildScenarioBundle };

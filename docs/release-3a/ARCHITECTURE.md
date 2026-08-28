@@ -18,7 +18,9 @@ domain action -> transactional outbox (future) -> immutable raw activity_event
 
 Events record facts and evidence references, never rewards or policy interpretation. The raw contract contains no qualification state, policy version, qualification reason, or mutable policy result. Qualification produces a separate append-only decision identified by event, policy version, and evaluation generation, with a stable decision ID, result/factor, internal reason codes, evidence references, evaluation time, and immutable policy artifact digest. Projectors accept exactly one policy artifact and one decision generation. Rebuilds replace projection generations atomically; they never rewrite the event ledger.
 
-Personal and faction projectors are separate. Every event snapshots actor and beneficiary affiliation independently as `affiliated`, `unaffiliated`, or `unknown`. An affiliated snapshot includes faction ID, event-time effective timestamp, authoritative provenance, and a membership reference when available. Unknown and Unaffiliated both fail closed for faction contribution; neither affects personal value, and neither can default to a founding faction. A later membership change cannot alter an immutable snapshot. Hidden allegiance is a private faction allocation input only and must never suppress legitimate personal progression or Discover distribution.
+Personal and faction projectors are separate. Every event snapshots actor and beneficiary affiliation independently as `affiliated`, `unaffiliated`, or `unknown`. An affiliated snapshot includes faction ID, event-time effective timestamp, authoritative provenance, and a membership reference when available. Normalized `FactionMembership` at event time is authoritative; legacy `User.faction` and current membership are not. Unknown and Unaffiliated both fail closed for faction contribution; neither affects personal value, and neither can default to a founding faction. A later membership change cannot alter or reconstruct an immutable snapshot.
+
+Hidden allegiance is not a raw-event field or producer input. Any future allegiance artifact is private, derived, versioned, access-controlled strategic state, and may only allocate faction contribution that has already qualified. It cannot affect personal progression, content distribution, or become a public loyalty percentage. No allegiance formula is implemented here.
 
 ## Event identity and duplicate contract
 
@@ -61,9 +63,35 @@ The visible primary projection is Level 1–100 with Initiation, Established, In
 
 Expensive graph/fraud detectors should publish signed/versioned evidence consumed by policy evaluation. Cross-faction relationships are normal; only patterns with independent evidence should diminish. High volume alone is insufficient to label abuse. Confirmed economic activity is bounded and logarithmic, with breadth represented separately from amount.
 
+Policy evaluation receives referenced evidence and a deterministic summary of earlier *qualified* decisions only. It never receives unrestricted prior raw events. Invalid duplicates, rejected facts, and facts made ineffective by the correction graph must be excluded from history materialization before a stateful production policy runs.
+
+## Evidence contracts
+
+Reach, moderation, fraud/trust, and economic-finality evidence use a typed, versioned envelope with stable subject, producer, generation, confidence, lineage, digest, supersession reference, privacy class, and retention class. Reach additionally requires a half-open observation window, deduplication method, pseudonymous/count-only audience aggregate, unique people/factions, same-faction, cross-faction, Unaffiliated, unknown/ineligible buckets, and source channel. Actor/beneficiary faction context is referenced from immutable event snapshots. Overlapping windows for the same subject are not independently additive; they must be deduplicated or superseded.
+
+These contracts are ports for future instrumentation, not assertions that ProjectX currently has trustworthy reach, moderation, Sybil, relationship-graph, trust, or economic detectors. Producers can submit evidence references; arbitrary raw attributes cannot become trusted facts.
+
 ## Projection and privacy
 
-Every projection row is keyed by beneficiary plus projection generation and policy version. Public views may expose level, band, named specialties, achievements, and summarized reason categories. They must not expose exact weights, hidden allegiance, fraud features, linked-account evidence, or individual faction-intelligence details. Faction contribution is qualified strategic value, never raw likes, spending, member count, or personal XP.
+Every projection row is keyed by beneficiary plus projection generation and policy version. Qualification `reasonCodes` and `signals` are internal-only. Public views may expose only explicitly mapped `publicExplanationCategories`, level, band, named specialties, and achievements. They must not expose exact weights, hidden allegiance, fraud features, linked-account evidence, or individual faction-intelligence details. Faction contribution is qualified strategic value, never raw likes, spending, member count, or personal XP.
+
+## Time, cutoff, and generation contract
+
+- `occurredAt` is the authoritative domain-effective time; `ingestedAt` is first durable ledger acceptance. Both are canonical UTC timestamps. Producer authority decides whether a historical timestamp is admissible; clock-skew limits are producer-versioned policy, never wall-clock guesses during replay.
+- Total event order is `(occurredAt, producer namespace, eventId)`. Correction order is `(targetEventId, sequence, effectiveAt, eventId)`.
+- A projection generation records an immutable ledger watermark/cutoff, policy artifact digest, evidence generation/digests, and evaluation generation. Only records at or below that cutoff participate.
+- A late arrival below an already closed watermark creates a new generation under an explicit `exclude`, `reopen`, or `next-window` policy; it never silently mutates an active generation. Historical imports require their own producer namespace and import manifest.
+- Correction `effectiveAt` controls the first generation/window in which the correction is effective. Future seasonal assignment uses occurrence time plus a versioned season-boundary artifact. Reopening creates a new generation. Seasons themselves are not implemented.
+
+## Economic lifecycle
+
+The immutable lifecycle can represent intent, pending, confirmed, finalized, failed, refund, chargeback, chain reorganization, and reversal facts. Only a finalized fact from an authoritative producer with an economic-finality evidence reference can qualify. Pending/failed facts contribute zero. Refund, chargeback, reorganization, or reversal facts compensate/deactivate earlier eligible contribution through the correction graph without deleting the original settlement fact. No production payment integration exists.
+
+## Policy reproducibility
+
+The immutable policy artifact contains policy ID/version, code and configuration digests, detector versions, evidence-contract versions, taxonomy version, numeric and rounding rules, runtime compatibility, canonical serialization, and the resulting artifact digest. Replays must pin that artifact, evidence digests, generation, and ledger cutoff; mutable environment variables or current source constants are not historical inputs.
+
+`same immutable ledger + same immutable evidence + same policy artifact + same generation/cutoff = same projection`.
 
 Extension ports are reserved for privacy-preserving location evidence, builder/agent adoption, seasons, prestige, leadership eligibility, faction lineage, government, diplomacy, battles, territory, and intelligence. These systems are not implemented. Government remains a prerequisite for future war capability.
 

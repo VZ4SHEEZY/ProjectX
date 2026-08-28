@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cyberdope.example/schemas/progression-policy-artifact/1.0.0",
+  "title": "Immutable progression policy artifact metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policyId", "version", "codeDigest", "configDigest", "detectorVersions", "evidenceContractVersions", "taxonomyVersion", "numericRules", "roundingRules", "runtimeCompatibility", "serialization", "artifactDigest"],
+  "properties": {
+    "policyId": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 },
+    "codeDigest": { "type": "string", "minLength": 1 }, "configDigest": { "type": "string", "minLength": 1 },
+    "detectorVersions": { "type": "object" }, "evidenceContractVersions": { "type": "object" },
+    "taxonomyVersion": { "type": "string", "minLength": 1 }, "numericRules": { "type": "object" },
+    "roundingRules": { "type": "object" }, "runtimeCompatibility": { "type": "object" },
+    "serialization": { "const": "RFC8785-compatible-stable-json-v1" }, "artifactDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

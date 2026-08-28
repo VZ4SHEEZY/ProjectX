@@ -7,11 +7,13 @@ const { qualifyLedger } = require('../progression/qualification');
 const { project } = require('../progression/projection');
 const policyV1 = require('../progression/policies/simulation-v1');
 const policyV2 = require('../progression/policies/simulation-v2');
-const { buildScenario } = require('../progression/simulator/scenarios');
+const { buildScenario, buildScenarioBundle } = require('../progression/simulator/scenarios');
+const { canonicalEvidence, assertNonOverlappingReach } = require('../progression/evidence');
+const { canonicalPolicyArtifact } = require('../progression/policy-artifact');
 const { simulate, report } = require('../progression/simulator/run');
 
 test('canonical activity events are immutable and require ledger fields', () => {
-  const event = canonicalEvent({ idempotencyKey: 'immutable:1', eventType: 'creation.published', activityClass: 'CREATE', actorId: 'a', occurredAt: '2026-08-01T00:00:00Z' });
+  const event = canonicalEvent({ idempotencyKey: 'immutable:1', eventType: 'creation.published', activityClass: 'CREATE', actorId: 'a', beneficiaryId: 'a', occurredAt: '2026-08-01T00:00:00.000Z' });
   assert.equal(Object.isFrozen(event), true);
   assert.equal('qualification' in event, false);
   assert.equal('policyVersion' in event, false);
@@ -30,7 +32,9 @@ test('viral creator strongly outperforms spam without tuning persona order', () 
   const { personal } = simulate().projections;
   assert.ok(personal.viral_creator.contribution > personal.spam_poster.contribution * 3);
   assert.ok(personal.viral_creator.level > personal.spam_poster.level);
-  assert.ok(personal.spam_poster.reasonCodes.includes('SUSPICIOUS_VELOCITY'));
+  const result = simulate();
+  const spamIds = new Set(result.events.filter(event => event.beneficiaryId === 'spam_poster').map(event => event.eventId));
+  assert.ok(result.decisions.some(decision => spamIds.has(decision.eventId) && decision.reasonCodes.includes('SUSPICIOUS_VELOCITY')));
 });
 
 test('cross-faction viral reach beats a coordinated same-faction ring in faction value', () => {
@@ -65,17 +69,19 @@ test('duplicate raw delivery is removed before qualification and identity collis
   const rejected = result.decisions.filter(item => item.state === 'rejected').flatMap(item => item.reasonCodes);
   assert.ok(rejected.includes('CIRCULAR_ECONOMIC_ACTIVITY'));
   assert.ok(rejected.includes('HIGH_SYBIL_CONFIDENCE'));
-  const event = buildScenario()[0];
-  const duplicate = qualifyLedger([event, event], policyV1.qualification);
+  const { events, evidenceByRef } = buildScenarioBundle();
+  const event = events[0];
+  const duplicate = qualifyLedger([event, event], policyV1.qualification, { evidenceByRef });
   assert.equal(duplicate.length, 1);
   const collision = { ...event, actorId: 'different-actor' };
   assert.throws(() => appendLogicalLedger([event, collision]), /EVENT_IDENTITY_COLLISION/);
 });
 
 test('qualification decision identity includes policy and evaluation generation', () => {
-  const event = buildScenario()[0];
-  const first = qualifyLedger([event], policyV1.qualification, { evaluationGeneration: 'generation-a' })[0];
-  const second = qualifyLedger([event], policyV1.qualification, { evaluationGeneration: 'generation-b' })[0];
+  const { events, evidenceByRef } = buildScenarioBundle();
+  const event = events[0];
+  const first = qualifyLedger([event], policyV1.qualification, { evaluationGeneration: 'generation-a', evidenceByRef })[0];
+  const second = qualifyLedger([event], policyV1.qualification, { evaluationGeneration: 'generation-b', evidenceByRef })[0];
   assert.notEqual(first.decisionId, second.decisionId);
   assert.equal(first.policyArtifactDigest, policyV1.artifactDigest);
   assert.ok(Array.isArray(first.evidenceRefs));
@@ -96,7 +102,7 @@ test('later moderation reversal removes the original contribution without mutati
 
 test('economic reversal, refund, and chargeback compensate finalized contribution deterministically', () => {
   for (const type of ['reversal', 'refund', 'chargeback']) {
-    const original = testEvent({ key: `tip-final:${type}`, type: 'economy.support.final', activityClass: 'TRANSACT', economic: { amountMinor: '2500', currency: 'USD', status: 'final' } });
+    const original = testEvent({ key: `tip-final:${type}`, type: 'economy.support.final', activityClass: 'TRANSACT', economic: { amountMinor: '2500', currency: 'USD', state: 'finalized', finalityEvidenceRef: 'evidence:finality' } });
     const correction = correctionEvent(original, type, 1);
     const ledger = [correction, original];
     const first = project(ledger, qualifyLedger(ledger, policyV1.qualification), policyV1);
@@ -109,7 +115,7 @@ test('economic reversal, refund, and chargeback compensate finalized contributio
 test('faction snapshots preserve event-time beneficiary state and unknown fails closed', () => {
   const affiliated = testEvent({ key: 'affiliated', beneficiaryAffiliation: affiliation('Neon') });
   const unknown = testEvent({ key: 'unknown', beneficiaryAffiliation: { state: 'unknown' } });
-  const unaffiliated = testEvent({ key: 'unaffiliated', beneficiaryAffiliation: { state: 'unaffiliated', effectiveAt: '2026-08-01T00:00:00Z', source: 'test' } });
+  const unaffiliated = testEvent({ key: 'unaffiliated', beneficiaryAffiliation: { state: 'unaffiliated', effectiveAt: '2026-08-01T00:00:00.000Z', source: 'test' } });
   const events = [affiliated, unknown, unaffiliated];
   const result = project(events, qualifyLedger(events, policyV1.qualification), policyV1);
   assert.ok(result.personal.beneficiary.contribution > 0);
@@ -119,10 +125,10 @@ test('faction snapshots preserve event-time beneficiary state and unknown fails 
 });
 
 test('policy changes rebuild decisions and projections without rewriting raw events', () => {
-  const events = buildScenario();
+  const { events, evidenceByRef } = buildScenarioBundle();
   const serialized = JSON.stringify(events);
-  const d1 = qualifyLedger(events, policyV1.qualification);
-  const d2 = qualifyLedger(events, policyV2.qualification);
+  const d1 = qualifyLedger(events, policyV1.qualification, { evidenceByRef });
+  const d2 = qualifyLedger(events, policyV2.qualification, { evidenceByRef });
   const p1 = project(events, d1, policyV1);
   const p2 = project(events, d2, policyV2);
   assert.equal(JSON.stringify(events), serialized);
@@ -130,22 +136,47 @@ test('policy changes rebuild decisions and projections without rewriting raw eve
   assert.notDeepEqual(p1, p2);
 });
 
+test('raw events reject producer-controlled policy and hidden allegiance inputs', () => {
+  assert.throws(() => testEvent({ key: 'bad-attributes', extra: { attributes: { hiddenAllegianceWeight: 1.2 } } }), /attributes/);
+  assert.throws(() => canonicalEvent({ idempotencyKey: 'implicit-beneficiary', eventType: 'creation.published', activityClass: 'CREATE', actorId: 'actor', occurredAt: '2026-08-01T00:00:00.000Z' }), /beneficiaryId/);
+});
+
+test('internal qualification reasons are redacted from public projections', () => {
+  const result = simulate();
+  assert.ok(result.decisions.some(decision => decision.reasonCodes.includes('HIGH_SYBIL_CONFIDENCE')));
+  assert.equal(JSON.stringify(result.projections).includes('HIGH_SYBIL_CONFIDENCE'), false);
+  assert.equal(JSON.stringify(result.projections).includes('SUSPICIOUS_VELOCITY'), false);
+});
+
+test('typed reach evidence rejects overlapping additive windows', () => {
+  const make = (start, end, generation) => canonicalEvidence({ type: 'reach', contractVersion: '1.0.0', producer: 'test', generation, subject: { type: 'post', id: 'p1' }, observedAt: end, confidence: 1, lineage: ['test'], privacyClassification: 'internal', retentionClass: 'test', body: { windowStart: start, windowEnd: end, deduplicationMethod: 'test-v1', audienceAggregate: 'count-only', uniquePeople: 2, uniqueFactions: 1, sameFaction: 1, crossFaction: 1, unaffiliated: 0, unknownOrIneligible: 0, sourceChannel: 'test' } });
+  assert.throws(() => assertNonOverlappingReach([make('2026-08-01T00:00:00.000Z', '2026-08-01T01:00:00.000Z', 'a'), make('2026-08-01T00:30:00.000Z', '2026-08-01T02:00:00.000Z', 'b')]), /OVERLAPPING_REACH_WINDOWS/);
+});
+
+test('policy artifacts freeze every replay-relevant compatibility input', () => {
+  const artifact = canonicalPolicyArtifact({ policyId: 'sim', version: '1', codeDigest: 'sha256:code', configDigest: 'sha256:config', detectorVersions: { trust: '1' }, evidenceContractVersions: { reach: '1.0.0' }, taxonomyVersion: '1', numericRules: { integer: 'decimal-string' }, roundingRules: { contribution: 'half-away-zero-2dp' }, runtimeCompatibility: { node: '22' }, serialization: 'RFC8785-compatible-stable-json-v1' });
+  assert.match(artifact.artifactDigest, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(Object.isFrozen(artifact), true);
+  assert.throws(() => canonicalPolicyArtifact({ policyId: 'incomplete' }), /requires version/);
+});
+
 function affiliation(factionId) {
-  return { state: 'affiliated', factionId, membershipRef: `membership:${factionId}`, effectiveAt: '2026-08-01T00:00:00Z', source: 'test' };
+  return { state: 'affiliated', factionId, membershipRef: `membership:${factionId}`, effectiveAt: '2026-08-01T00:00:00.000Z', source: 'test' };
 }
 
-function testEvent({ key, type = 'creation.published', activityClass = 'CREATE', economic = null, beneficiaryAffiliation = affiliation('Chrome') }) {
+function testEvent({ key, type = 'creation.published', activityClass = 'CREATE', economic = null, beneficiaryAffiliation = affiliation('Chrome'), beneficiaryId = 'beneficiary', extra = {} }) {
   return canonicalEvent({
     idempotencyKey: key,
     eventType: type,
     activityClass,
     actorId: type.startsWith('economy.') ? 'supporter' : 'beneficiary',
-    beneficiaryId: 'beneficiary',
-    occurredAt: '2026-08-01T00:00:00Z',
+    beneficiaryId,
+    occurredAt: '2026-08-01T00:00:00.000Z',
     object: { type: 'test', id: key },
     affiliations: { actor: affiliation('Chrome'), beneficiary: beneficiaryAffiliation },
     economic,
-    attributes: { trustConfidence: 1, valueSignal: 0.8 }
+    facts: {},
+    ...extra
   });
 }
 
@@ -156,10 +187,10 @@ function correctionEvent(target, type, sequence) {
     activityClass: target.activityClass,
     actorId: 'correction-authority',
     beneficiaryId: target.beneficiaryId,
-    occurredAt: '2026-08-02T00:00:00Z',
+    occurredAt: '2026-08-02T00:00:00.000Z',
     object: { type: 'activity_event', id: target.eventId },
     affiliations: { actor: { state: 'unknown' }, beneficiary: target.affiliations.beneficiary },
-    correction: { targetEventId: target.eventId, type, authority: 'moderation:test', effectiveAt: '2026-08-02T00:00:00Z', evidenceRefs: [`evidence:${type}`], sequence },
+    correction: { targetEventId: target.eventId, type, authority: 'moderation:test', effectiveAt: '2026-08-02T00:00:00.000Z', evidenceRefs: [`evidence:${type}`], sequence },
     evidenceRefs: [`evidence:${type}`]
   });
 }

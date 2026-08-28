@@ -10,11 +10,11 @@ const artifactDigest = 'sha256:1e225066ae00ba617bc8d347dbe21d71dbac98574f237d9ff
 const qualification = new QualificationPolicy({
   version,
   artifactDigest,
-  evaluate(event) {
-    const a = event.attributes;
+  evaluate(event, context) {
+    const a = Object.assign({}, ...context.evidence.map(item => item.body.signals || item.body));
     const reasons = [];
     if (event.actorId === event.beneficiaryId && event.activityClass !== 'CREATE') return reject('SELF_INTERACTION');
-    if (event.activityClass === 'TRANSACT' && event.economic?.status !== 'final') return quarantine('ECONOMIC_NOT_FINAL');
+    if (event.activityClass === 'TRANSACT' && event.economic?.state !== 'finalized') return quarantine('ECONOMIC_NOT_FINAL');
     if (a.moderated || a.abusive || a.reportManipulation) return reject('MODERATED_OR_ABUSIVE');
     if (a.linkedAccount || a.linkedWallet) return reject('RELATED_ACCOUNT_ACTIVITY');
     if (a.circularTransfer) return reject('CIRCULAR_ECONOMIC_ACTIVITY');
@@ -33,7 +33,7 @@ const qualification = new QualificationPolicy({
 });
 
 function contribution(event, decision) {
-  const a = event.attributes;
+  const a = decision.signals;
   const factor = decision.factor;
   const outcome = Math.log2(1 + Math.max(0, a.uniquePeople || 0)) + 1.4 * Math.log2(1 + Math.max(0, a.uniqueFactions || 0));
   const quality = 0.5 + 1.5 * clamp(a.valueSignal ?? 0.5, 0, 1);
@@ -58,9 +58,8 @@ function contribution(event, decision) {
 
   const cross = Math.log2(1 + Math.max(0, a.uniqueFactions || 0)) * Math.log2(1 + Math.max(0, a.uniquePeople || 0)) * factor;
   const diversity = clamp(a.engagementDiversity ?? 0.5, 0, 1);
-  const allegiance = clamp(a.hiddenAllegianceWeight ?? 1, 0.25, 1.25); // private simulator input, never emitted
-  const faction = event.affiliations.beneficiary.state === 'affiliated' ? (personal * 0.28 + cross * 1.7) * (0.5 + diversity) * allegiance : 0;
-  return { personal, specialties, crossFactionInfluence: cross, faction, reasonCodes: cross > 4 ? ['DIVERSE_CROSS_FACTION_REACH'] : [] };
+  const faction = event.affiliations.beneficiary.state === 'affiliated' ? (personal * 0.28 + cross * 1.7) * (0.5 + diversity) : 0;
+  return { personal, specialties, crossFactionInfluence: cross, faction, publicExplanationCategories: cross > 4 ? ['CROSS_COMMUNITY_REACH'] : [] };
 }
 
 function reject(reason) { return { state: 'rejected', factor: 0, reasonCodes: [reason] }; }

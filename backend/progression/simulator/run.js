@@ -7,11 +7,11 @@ const { project } = require('../projection');
 const policyV1 = require('../policies/simulation-v1');
 const policyV2 = require('../policies/simulation-v2');
 const { PERSONAS } = require('./personas');
-const { buildScenario } = require('./scenarios');
+const { buildScenarioBundle } = require('./scenarios');
 
 function simulate(policy = policyV1) {
-  const events = buildScenario();
-  const decisions = qualifyLedger(events, policy.qualification);
+  const { events, evidenceByRef } = buildScenarioBundle();
+  const decisions = qualifyLedger(events, policy.qualification, { evidenceByRef });
   const projections = project(events, decisions, policy);
   return { generatedAt: '2026-08-28T00:00:00.000Z', syntheticOnly: true, policyVersion: policy.version, eventCount: events.length, events, decisions, projections };
 }
