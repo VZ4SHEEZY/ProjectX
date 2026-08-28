@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cyberdope.example/schemas/qualification-decision/1.0.0",
+  "title": "CyberDope append-only qualification decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decisionId", "eventId", "policyVersion", "evaluationGeneration", "state", "factor", "contributionResult", "reasonCodes", "evidenceRefs", "evaluatedAt", "policyArtifactDigest", "signals"],
+  "properties": {
+    "decisionId": { "type": "string", "minLength": 1 },
+    "eventId": { "type": "string", "minLength": 1 },
+    "policyVersion": { "type": "string", "minLength": 1 },
+    "evaluationGeneration": { "type": "string", "minLength": 1 },
+    "state": { "enum": ["quarantined", "qualified", "diminished", "rejected"] },
+    "factor": { "type": "number", "minimum": 0, "maximum": 1 },
+    "contributionResult": { "type": "object", "additionalProperties": true, "required": ["factor"], "properties": { "factor": { "type": "number", "minimum": 0, "maximum": 1 } } },
+    "reasonCodes": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+    "evidenceRefs": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+    "evaluatedAt": { "type": "string", "format": "date-time" },
+    "policyArtifactDigest": { "type": "string", "minLength": 1 },
+    "signals": { "type": "object", "description": "Internal, access-controlled derived signals; never copied into the raw event." }
+  }
+}

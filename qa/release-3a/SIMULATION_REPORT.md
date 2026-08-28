@@ -1,4 +1,4 @@
-# Release 3A deterministic simulation report
+# Release 3A.1 deterministic simulation report
 
 Policy: `sim-2026-08-v1`
 
@@ -34,6 +34,7 @@ Synthetic immutable events: 584. No database or production user was read or muta
 - The Unaffiliated power user reaches Level 7 with no faction contribution and no faction assignment.
 - The high-volume legitimate persona is diminished by neutral repeat decay but is never classified as spam, Sybil, or a ring.
 - Identical ledger/policy replay is byte-for-byte deterministic; V2 rebuilds different decisions without mutating raw events.
+- Contract tests separately prove that later moderation reversals and economic reversal/refund/chargeback facts remove prior contribution without mutating the original event.
 
 ## Weaknesses exposed
 

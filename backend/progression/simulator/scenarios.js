@@ -5,6 +5,12 @@ const { PERSONAS } = require('./personas');
 
 const start = Date.parse('2026-08-01T00:00:00.000Z');
 const factionFor = id => id === 'unaffiliated_power' ? null : (['cross_faction_viral', 'viral_creator', 'original_creator', 'many_supporters', 'huge_supporter', 'ai_builder'].includes(id) ? 'Neon' : 'Chrome');
+const affiliationFor = (id, effectiveAt) => {
+  const factionId = factionFor(id);
+  return factionId
+    ? { state: 'affiliated', factionId, membershipRef: `synthetic-membership:${id}`, effectiveAt, source: 'release-3a-simulator' }
+    : { state: 'unaffiliated', effectiveAt, source: 'release-3a-simulator' };
+};
 
 function buildScenario() {
   const events = [];
@@ -20,7 +26,10 @@ function buildScenario() {
         actorId,
         beneficiaryId: persona.id,
         occurredAt,
-        factionAtEvent: factionFor(persona.id),
+        affiliations: {
+          actor: affiliationFor(actorId, occurredAt),
+          beneficiary: affiliationFor(persona.id, occurredAt)
+        },
         subject: { type: 'synthetic_persona', id: persona.id },
         object: { type: spec.objectType || 'synthetic_activity', id: `${persona.id}-${i}` },
         economic: spec.amountMinor ? { amountMinor: String(spec.amountMinor), currency: 'USD', status: spec.economicStatus || 'final', providerReference: `synthetic-${persona.id}-${i}` } : null,

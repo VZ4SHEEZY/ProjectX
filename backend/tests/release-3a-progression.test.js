@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { canonicalEvent } = require('../progression/contracts');
+const { canonicalEvent, appendLogicalLedger } = require('../progression/contracts');
 const { qualifyLedger } = require('../progression/qualification');
 const { project } = require('../progression/projection');
 const policyV1 = require('../progression/policies/simulation-v1');
@@ -13,8 +13,10 @@ const { simulate, report } = require('../progression/simulator/run');
 test('canonical activity events are immutable and require ledger fields', () => {
   const event = canonicalEvent({ idempotencyKey: 'immutable:1', eventType: 'creation.published', activityClass: 'CREATE', actorId: 'a', occurredAt: '2026-08-01T00:00:00Z' });
   assert.equal(Object.isFrozen(event), true);
-  assert.equal(Object.isFrozen(event.qualification), true);
-  assert.throws(() => canonicalEvent({}), /idempotencyKey/);
+  assert.equal('qualification' in event, false);
+  assert.equal('policyVersion' in event, false);
+  assert.equal(Object.isFrozen(event.affiliations), true);
+  assert.throws(() => canonicalEvent({}), /event identity/);
 });
 
 test('replaying identical events and policy is deterministic', () => {
@@ -47,7 +49,7 @@ test('Unaffiliated power user progresses normally without faction assignment', (
   const result = simulate();
   assert.ok(result.projections.personal.unaffiliated_power.level > result.projections.personal.casual.level);
   for (const faction of Object.values(result.projections.faction)) assert.equal(faction.contributors.unaffiliated_power, undefined);
-  assert.ok(result.events.filter(event => event.beneficiaryId === 'unaffiliated_power').every(event => event.factionAtEvent === null));
+  assert.ok(result.events.filter(event => event.beneficiaryId === 'unaffiliated_power').every(event => event.affiliations.beneficiary.state === 'unaffiliated'));
 });
 
 test('high-volume legitimate activity is diminished but not classified as abuse', () => {
@@ -58,14 +60,62 @@ test('high-volume legitimate activity is diminished but not classified as abuse'
   assert.ok(decisions.every(decision => !decision.reasonCodes.some(code => /ABUSE|SYBIL|RING|SPAM/.test(code))));
 });
 
-test('duplicate, reversal, moderation, Sybil, and circular hooks fail closed', () => {
+test('duplicate raw delivery is removed before qualification and identity collisions fail closed', () => {
   const result = simulate();
   const rejected = result.decisions.filter(item => item.state === 'rejected').flatMap(item => item.reasonCodes);
   assert.ok(rejected.includes('CIRCULAR_ECONOMIC_ACTIVITY'));
   assert.ok(rejected.includes('HIGH_SYBIL_CONFIDENCE'));
   const event = buildScenario()[0];
   const duplicate = qualifyLedger([event, event], policyV1.qualification);
-  assert.equal(duplicate[1].reasonCodes[0], 'DUPLICATE_EVENT');
+  assert.equal(duplicate.length, 1);
+  const collision = { ...event, actorId: 'different-actor' };
+  assert.throws(() => appendLogicalLedger([event, collision]), /EVENT_IDENTITY_COLLISION/);
+});
+
+test('qualification decision identity includes policy and evaluation generation', () => {
+  const event = buildScenario()[0];
+  const first = qualifyLedger([event], policyV1.qualification, { evaluationGeneration: 'generation-a' })[0];
+  const second = qualifyLedger([event], policyV1.qualification, { evaluationGeneration: 'generation-b' })[0];
+  assert.notEqual(first.decisionId, second.decisionId);
+  assert.equal(first.policyArtifactDigest, policyV1.artifactDigest);
+  assert.ok(Array.isArray(first.evidenceRefs));
+});
+
+test('later moderation reversal removes the original contribution without mutating it', () => {
+  const original = testEvent({ key: 'moderated-original', type: 'creation.published', activityClass: 'CREATE' });
+  const before = project([original], qualifyLedger([original], policyV1.qualification), policyV1);
+  const reversal = correctionEvent(original, 'moderation_reversal', 1);
+  const ledger = [original, reversal];
+  const serialized = JSON.stringify(original);
+  const after = project(ledger, qualifyLedger(ledger, policyV1.qualification), policyV1);
+  assert.ok(before.personal.beneficiary.contribution > 0);
+  assert.equal(after.personal.beneficiary, undefined);
+  assert.deepEqual(after.inactiveEventIds, [original.eventId]);
+  assert.equal(JSON.stringify(original), serialized);
+});
+
+test('economic reversal, refund, and chargeback compensate finalized contribution deterministically', () => {
+  for (const type of ['reversal', 'refund', 'chargeback']) {
+    const original = testEvent({ key: `tip-final:${type}`, type: 'economy.support.final', activityClass: 'TRANSACT', economic: { amountMinor: '2500', currency: 'USD', status: 'final' } });
+    const correction = correctionEvent(original, type, 1);
+    const ledger = [correction, original];
+    const first = project(ledger, qualifyLedger(ledger, policyV1.qualification), policyV1);
+    const second = project([...ledger].reverse(), qualifyLedger([...ledger].reverse(), policyV1.qualification), policyV1);
+    assert.equal(first.personal.beneficiary, undefined);
+    assert.deepEqual(first, second);
+  }
+});
+
+test('faction snapshots preserve event-time beneficiary state and unknown fails closed', () => {
+  const affiliated = testEvent({ key: 'affiliated', beneficiaryAffiliation: affiliation('Neon') });
+  const unknown = testEvent({ key: 'unknown', beneficiaryAffiliation: { state: 'unknown' } });
+  const unaffiliated = testEvent({ key: 'unaffiliated', beneficiaryAffiliation: { state: 'unaffiliated', effectiveAt: '2026-08-01T00:00:00Z', source: 'test' } });
+  const events = [affiliated, unknown, unaffiliated];
+  const result = project(events, qualifyLedger(events, policyV1.qualification), policyV1);
+  assert.ok(result.personal.beneficiary.contribution > 0);
+  assert.ok(result.faction.Neon.contributors.beneficiary > 0);
+  assert.equal(Object.keys(result.faction).length, 1);
+  assert.equal(affiliated.affiliations.beneficiary.factionId, 'Neon');
 });
 
 test('policy changes rebuild decisions and projections without rewriting raw events', () => {
@@ -79,3 +129,37 @@ test('policy changes rebuild decisions and projections without rewriting raw eve
   assert.notDeepEqual(d1, d2);
   assert.notDeepEqual(p1, p2);
 });
+
+function affiliation(factionId) {
+  return { state: 'affiliated', factionId, membershipRef: `membership:${factionId}`, effectiveAt: '2026-08-01T00:00:00Z', source: 'test' };
+}
+
+function testEvent({ key, type = 'creation.published', activityClass = 'CREATE', economic = null, beneficiaryAffiliation = affiliation('Chrome') }) {
+  return canonicalEvent({
+    idempotencyKey: key,
+    eventType: type,
+    activityClass,
+    actorId: type.startsWith('economy.') ? 'supporter' : 'beneficiary',
+    beneficiaryId: 'beneficiary',
+    occurredAt: '2026-08-01T00:00:00Z',
+    object: { type: 'test', id: key },
+    affiliations: { actor: affiliation('Chrome'), beneficiary: beneficiaryAffiliation },
+    economic,
+    attributes: { trustConfidence: 1, valueSignal: 0.8 }
+  });
+}
+
+function correctionEvent(target, type, sequence) {
+  return canonicalEvent({
+    idempotencyKey: `${target.eventId}:${type}:${sequence}`,
+    eventType: `correction.${type}`,
+    activityClass: target.activityClass,
+    actorId: 'correction-authority',
+    beneficiaryId: target.beneficiaryId,
+    occurredAt: '2026-08-02T00:00:00Z',
+    object: { type: 'activity_event', id: target.eventId },
+    affiliations: { actor: { state: 'unknown' }, beneficiary: target.affiliations.beneficiary },
+    correction: { targetEventId: target.eventId, type, authority: 'moderation:test', effectiveAt: '2026-08-02T00:00:00Z', evidenceRefs: [`evidence:${type}`], sequence },
+    evidenceRefs: [`evidence:${type}`]
+  });
+}

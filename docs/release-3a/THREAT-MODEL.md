@@ -2,12 +2,12 @@
 
 ## Threats and controls
 
-- Replay/duplicate delivery: stable producer idempotency keys, unique indexes, deterministic rejection, consumer checkpoints.
+- Replay/duplicate delivery: canonical producer-scoped natural keys, unique event/key indexes, pre-qualification retry collapse, collision rejection, consumer checkpoints. Socket.IO is non-authoritative.
 - Self-dealing and related accounts: identity/link evidence hooks; never trust actor-supplied relationship flags.
 - Spam and low-value volume: outcome-sensitive qualification, time windows, repeat decay, quarantine; high volume alone is not abuse.
 - Engagement rings and circular reciprocity: graph evidence, unique-person/faction diversity, rapid repeated-pair decay. Normal cross-faction friendships are not violations.
 - Sybil clusters and bots: confidence evidence, quarantine/appeal path, explicit bot provenance. Legitimate builder adoption is supported.
-- Economic manipulation: authoritative finality, linked-wallet/self-payment checks, circular-flow analysis, logarithmic bands, rolling caps, reversal events. Dollars never map directly to XP.
+- Economic manipulation: authoritative finality, linked-wallet/self-payment checks, circular-flow analysis, logarithmic bands, rolling caps, and immutable refund/reversal/chargeback facts that deactivate prior eligible contribution during graph resolution. Dollars never map directly to XP.
 - Moderation/report abuse: reports alone do not produce Influence; verified moderation outcomes can reverse prior qualification. Malicious reporting cannot earn progression.
 - Policy tampering: immutable registry entries, code/config digest, dual approval, reproducible replay, generation comparison, rollback.
 - Insider/privacy risk: hidden allegiance and fraud evidence are private, role-scoped, audited, and omitted from public APIs/reports.
@@ -20,7 +20,7 @@ The simulator has intentionally limited detectors. It models extension points; i
 
 - Exact Level 1–100 curve, seasonal treatment, decay, and Prestige transition.
 - Specialty rank names, thresholds, unlock catalog, and whether specialty values are ever shown numerically.
-- Event taxonomy ownership, retention, correction semantics, and late-event windows.
+- Event taxonomy ownership, retention, and late-event windows. The correction graph contract is fixed in 3A.1; production authority namespaces and retention still require approval.
 - Qualification appeal process, quarantine duration, confidence thresholds, and human-review authority.
 - Which outcomes represent quality for each media/action type, including legitimate dislikes and controversy.
 - Treatment of deleted content versus policy-violating content and retroactive reversals.

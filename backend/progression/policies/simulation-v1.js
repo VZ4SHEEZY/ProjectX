@@ -3,13 +3,16 @@
 const { QualificationPolicy } = require('../qualification');
 
 const version = 'sim-2026-08-v1';
+// SHA-256 of the immutable simulator artifact identifier
+// `sim-2026-08-v1:qualification+contribution-contract-v1`.
+const artifactDigest = 'sha256:1e225066ae00ba617bc8d347dbe21d71dbac98574f237d9ffa4b746554afda42';
 
 const qualification = new QualificationPolicy({
   version,
+  artifactDigest,
   evaluate(event) {
     const a = event.attributes;
     const reasons = [];
-    if (event.correctionOfEventId || event.eventType.endsWith('.reversed') || event.economic?.status === 'reversed') return reject('REVERSAL_OR_REFUND');
     if (event.actorId === event.beneficiaryId && event.activityClass !== 'CREATE') return reject('SELF_INTERACTION');
     if (event.activityClass === 'TRANSACT' && event.economic?.status !== 'final') return quarantine('ECONOMIC_NOT_FINAL');
     if (a.moderated || a.abusive || a.reportManipulation) return reject('MODERATED_OR_ABUSIVE');
@@ -56,7 +59,7 @@ function contribution(event, decision) {
   const cross = Math.log2(1 + Math.max(0, a.uniqueFactions || 0)) * Math.log2(1 + Math.max(0, a.uniquePeople || 0)) * factor;
   const diversity = clamp(a.engagementDiversity ?? 0.5, 0, 1);
   const allegiance = clamp(a.hiddenAllegianceWeight ?? 1, 0.25, 1.25); // private simulator input, never emitted
-  const faction = event.factionAtEvent ? (personal * 0.28 + cross * 1.7) * (0.5 + diversity) * allegiance : 0;
+  const faction = event.affiliations.beneficiary.state === 'affiliated' ? (personal * 0.28 + cross * 1.7) * (0.5 + diversity) * allegiance : 0;
   return { personal, specialties, crossFactionInfluence: cross, faction, reasonCodes: cross > 4 ? ['DIVERSE_CROSS_FACTION_REACH'] : [] };
 }
 
@@ -64,4 +67,4 @@ function reject(reason) { return { state: 'rejected', factor: 0, reasonCodes: [r
 function quarantine(reason) { return { state: 'quarantined', factor: 0, reasonCodes: [reason] }; }
 function clamp(value, min, max) { return Math.min(max, Math.max(min, Number(value))); }
 
-module.exports = { version, qualification, contribution };
+module.exports = { version, artifactDigest, qualification, contribution };

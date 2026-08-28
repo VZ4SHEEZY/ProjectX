@@ -1,29 +1,63 @@
-# Release 3A — event and progression architecture
+# Release 3A.1 — contract-hardened event and progression architecture
 
 ## Status and boundaries
 
-Release 3A is a design and synthetic simulation release. It does not connect controllers to the event ledger, add API routes, read production users, write MongoDB, award XP, change faction membership, change authorization, or deploy anything. All numeric weights in `simulation-v1.js` are diagnostic hypotheses, not a final or public scoring formula.
+Release 3A.1 remains a design and synthetic simulation release. It does not connect controllers to the event ledger, add API routes, read production users, write MongoDB, award XP, change faction membership, change authorization, or deploy anything. All numeric weights in `simulation-v1.js` are diagnostic hypotheses, not a final or public scoring formula.
 
 Blueprint V4 was reviewed. No standalone completed Release 3 discovery/audit artifact was found in the repository or nearby workspace. Existing Release 1/2 controls were therefore treated as mandatory audit inputs: raw content views and aggregate engagement signals remain progression-ineligible; transaction authority comes from finalized payment state; platform roles and faction membership remain separate protected domains.
 
 ## Architecture
 
 ```text
-domain action -> transactional outbox (future) -> immutable activity_event
-  -> versioned qualification decision -> qualified contribution
+domain action -> transactional outbox (future) -> immutable raw activity_event
+  -> append-only versioned qualification_decision -> qualified contribution
+  -> immutable correction graph resolution
   -> personal projection -> level band + specialty ranks + unlock eligibility
   -> faction projection (members only) -> private allegiance weighting -> aggregate state (future)
 ```
 
-Events record claims about actions, not rewards. A consumer validates and appends a canonical event with a unique idempotency key. Qualification produces a separate, versioned decision containing state, factor, internal reason codes, and evidence references. Projectors consume raw events plus a chosen decision set. Rebuilds replace projection generations atomically; they never rewrite the event ledger.
+Events record facts and evidence references, never rewards or policy interpretation. The raw contract contains no qualification state, policy version, qualification reason, or mutable policy result. Qualification produces a separate append-only decision identified by event, policy version, and evaluation generation, with a stable decision ID, result/factor, internal reason codes, evidence references, evaluation time, and immutable policy artifact digest. Projectors accept exactly one policy artifact and one decision generation. Rebuilds replace projection generations atomically; they never rewrite the event ledger.
 
-Personal and faction projectors are separate. Personal progression is calculated before and independently of faction projection. `factionAtEvent: null` never changes personal value and never assigns a faction. Hidden allegiance is a private faction allocation input only and must never suppress legitimate personal progression or Discover distribution.
+Personal and faction projectors are separate. Every event snapshots actor and beneficiary affiliation independently as `affiliated`, `unaffiliated`, or `unknown`. An affiliated snapshot includes faction ID, event-time effective timestamp, authoritative provenance, and a membership reference when available. Unknown and Unaffiliated both fail closed for faction contribution; neither affects personal value, and neither can default to a founding faction. A later membership change cannot alter an immutable snapshot. Hidden allegiance is a private faction allocation input only and must never suppress legitimate personal progression or Discover distribution.
+
+## Event identity and duplicate contract
+
+The canonical logical identity is the stable serialization of:
+
+`producer namespace + event type/class + immutable domain object identity + transition/version + schema version`
+
+`eventId` is derived from that tuple and `idempotencyKey` stores its canonical serialization. The ledger enforces uniqueness on both. Byte-identical retry deliveries collapse before qualification; the same identity with different facts is an integrity collision and fails closed. Socket.IO/realtime messages are delivery notifications only and are never authoritative producers.
+
+Natural keys for initial producers:
+
+| Domain fact | Immutable source identity and transition |
+|---|---|
+| Post creation | post ID + `created` + post version |
+| Comment/reply | comment ID + `created`; parent ID is a fact, not identity |
+| Like/unlike | target ID + actor ID + reaction edge version + `liked`/`unliked` transition |
+| Comment reaction | comment ID + actor ID + reaction edge version + reaction transition |
+| Follow/unfollow | follower ID + followed ID + edge version + `followed`/`unfollowed` |
+| Friendship | canonical sorted user pair + relationship version + requested/accepted/removed/blocked transition |
+| Tip intent | internal tip ID + `intent-created` version; provider retries use verified provider event ID as provenance |
+| Finalized tip | internal tip ID + authoritative settlement transaction/version + `finalized` |
+| Subscription | subscription ID + provider lifecycle event/version + transition |
+| Moderation outcome | moderation case/outcome ID + outcome version + final transition |
+| Correction/reversal | target event ID + authority namespace + correction sequence/type |
+| Reach evidence | subject/campaign ID + non-overlapping observation window + evidence generation/digest |
+
+API, worker, outbox, webhook, and replay retries must reproduce the same tuple. A later domain transition must produce a new tuple and event, never overwrite the prior fact.
+
+## Corrections, reversals, and supersession
+
+Corrections are immutable raw facts with a target event ID, type, authority, effective time, evidence references, positive monotonic target sequence, and optional replacement/compensating relationship. Supported types are moderation reversal, reversal, refund, chargeback, supersession, and amendment. Supersession/amendment require a replacement event.
+
+Before contribution aggregation, projection deterministically resolves the correction graph ordered by target, sequence, effective time, and event ID. Reversal/refund/chargeback/moderation facts deactivate the target contribution. Supersession/amendment deactivate the target and leave the independently qualified replacement eligible. Correction facts never earn contribution themselves. Missing targets/replacements and conflicting sequences fail closed. The original event and its original decision remain append-only and auditable.
 
 The visible primary projection is Level 1–100 with Initiation, Established, Influential, Elite, Legendary, and Apex bands. Specialty projections cover creation, social, influence, community, exploration, creator, economy, builder/AI, and faction; production UI should turn these into named ranks/unlocks rather than nine dominant counters. Level thresholds and specialty rank names remain configurable.
 
 ## Qualification interface
 
-`QualificationPolicy` requires a stable `version` and a pure `evaluate(event, context)` function. It returns `qualified`, `diminished`, `quarantined`, `rejected`, or `reversed`, a bounded factor, and internal reason codes. The simulator implements hooks for duplicates, self-interaction, moderation, trust, velocity, repetition, reciprocal/same-faction rings, Sybil confidence, disclosed bots, linked accounts/wallets, circular transfers, payment finality, refunds, quarantine, and replay. These are interfaces and illustrative rules—not claims that production detectors exist.
+`QualificationPolicy` requires a stable version, immutable artifact digest, and pure `evaluate(event, context)` function. It returns `qualified`, `diminished`, `quarantined`, or `rejected`, a bounded factor, internal reason codes, and evidence references. Reversal is a correction fact, not a qualification state. The simulator implements illustrative hooks for self-interaction, moderation, trust, velocity, repetition, reciprocal/same-faction rings, Sybil confidence, disclosed bots, linked accounts/wallets, circular transfers, payment finality, quarantine, and replay. These are interfaces—not claims that production detectors exist.
 
 Expensive graph/fraud detectors should publish signed/versioned evidence consumed by policy evaluation. Cross-faction relationships are normal; only patterns with independent evidence should diminish. High volume alone is insufficient to label abuse. Confirmed economic activity is bounded and logarithmic, with breadth represented separately from amount.
 
@@ -37,12 +71,12 @@ Extension ports are reserved for privacy-preserving location evidence, builder/a
 
 No database migration is included in 3A. For 3B, add new collections rather than modifying `User`, `FactionMembership`, or role records:
 
-- `activity_events`: immutable documents; unique `eventId`, unique `(provenance.service,idempotencyKey)`, indexes on occurrence time, actor, beneficiary, type, faction snapshot, correction reference. Application and database roles deny update/delete.
-- `qualification_decisions`: append-only decisions keyed by `(eventId,policyVersion,evaluationGeneration)` with state, reason codes, factor, evidence references, and timestamps.
+- `activity_events`: immutable documents; unique `eventId`, unique canonical `idempotencyKey`, indexes on occurrence time, actor, beneficiary, type, affiliation snapshots, and correction target. Application and database roles deny update/delete.
+- `qualification_decisions`: append-only decisions uniquely keyed by `decisionId` and `(eventId,policyVersion,evaluationGeneration)` with result, factor, internal reason codes, evidence references, timestamp, and artifact digest.
 - `personal_progression_projections`: rebuildable generation keyed by `(beneficiaryId,policyVersion,generation)`.
 - `faction_contribution_projections`: private rebuildable generation keyed by faction/member/policy/generation with stricter access controls.
 - `projection_checkpoints`: consumer offsets and atomic active-generation pointer.
-- `policy_registry`: immutable policy metadata, code/config digest, activation status, approver, and rollback reference.
+- `policy_registry`: immutable policy artifact and schema/config/code digests, runtime version, qualification/contribution implementation IDs, effective window, evidence-contract versions, activation/approval records, and rollback reference. Historical replay never reads mutable environment variables or current constants in place of this artifact.
 
 Rollout: create empty collections and indexes; deploy a disabled shadow writer behind an allowlist; verify idempotency and outbox recovery; backfill only explicitly approved non-production fixtures; run shadow qualification; compare generations; require security/product review before any production consumer or user-visible projection is enabled. Never derive historical faction snapshots from current membership.
 

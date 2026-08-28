@@ -26,7 +26,7 @@ function report(result) {
     decisionByUser.set(event.beneficiaryId, bucket);
   }
   const lines = [
-    '# Release 3A deterministic simulation report', '',
+    '# Release 3A.1 deterministic simulation report', '',
     `Policy: \`${result.policyVersion}\``, '',
     `Synthetic immutable events: ${result.eventCount}. No database or production user was read or mutated.`, '',
     '| Persona | Level | Personal | Faction | Cross-faction | Decisions | Why |',
