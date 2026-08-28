@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cyberdope.example/schemas/activity-event/1.0.0",
+  "title": "CyberDope canonical immutable activity event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "idempotencyKey", "schemaVersion", "eventType", "activityClass", "actorId", "beneficiaryId", "occurredAt", "ingestedAt", "provenance", "qualification", "attributes"],
+  "properties": {
+    "eventId": { "type": "string", "minLength": 1 },
+    "idempotencyKey": { "type": "string", "minLength": 1 },
+    "schemaVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "eventType": { "type": "string", "minLength": 1 },
+    "activityClass": { "enum": ["CREATE", "ENGAGE", "ACHIEVE", "TRANSACT"] },
+    "actorId": { "type": "string", "minLength": 1 },
+    "subject": { "$ref": "#/$defs/entityRef" },
+    "object": { "$ref": "#/$defs/entityRef" },
+    "beneficiaryId": { "type": "string", "minLength": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "ingestedAt": { "type": "string", "format": "date-time" },
+    "factionAtEvent": { "type": ["string", "null"] },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["service"],
+      "properties": { "service": { "type": "string" }, "sourceEventId": { "type": "string" }, "traceId": { "type": "string" } }
+    },
+    "economic": {
+      "type": ["object", "null"],
+      "required": ["amountMinor", "currency", "status"],
+      "properties": {
+        "amountMinor": { "type": "string", "pattern": "^[0-9]+$" },
+        "currency": { "type": "string" },
+        "status": { "enum": ["pending", "final", "reversed"] },
+        "providerReference": { "type": "string" }
+      }
+    },
+    "location": {
+      "type": ["object", "null"],
+      "description": "Future privacy-preserving location reference; raw coordinates are not required.",
+      "additionalProperties": true
+    },
+    "correctionOfEventId": { "type": ["string", "null"] },
+    "qualification": {
+      "type": "object",
+      "required": ["state", "policyVersion", "reasonCodes"],
+      "properties": {
+        "state": { "enum": ["pending", "quarantined", "qualified", "diminished", "rejected", "reversed"] },
+        "policyVersion": { "type": ["string", "null"] },
+        "reasonCodes": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "attributes": { "type": "object", "description": "Versioned evidence references and simulator signals; secrets do not belong in the ledger." }
+  },
+  "$defs": {
+    "entityRef": {
+      "type": ["object", "null"],
+      "required": ["type", "id"],
+      "properties": { "type": { "type": "string" }, "id": { "type": "string" } }
+    }
+  }
+}
