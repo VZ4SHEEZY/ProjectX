@@ -3,11 +3,12 @@
 const v1 = require('./simulation-v1');
 const { QualificationPolicy } = require('../qualification');
 const { canonicalPolicyArtifact } = require('../policy-artifact');
+const fs = require('node:fs');
 
 // Deliberately small alternative policy used to prove replay/rebuild boundaries.
 const version = 'sim-2026-08-v2-experimental';
-const { artifactDigest: ignoredDigest, ...baseArtifact } = v1.artifact;
-const artifact = canonicalPolicyArtifact({ ...baseArtifact, version, codeDigest: 'sha256:2ca4d42edcd2c0b70a24185479d0f1944261246ecb59cbe7fca9d4d9d729b47e' });
+const { artifactDigest: ignoredDigest, codeDigest: ignoredCodeDigest, configDigest: ignoredConfigDigest, ...baseArtifact } = v1.artifact;
+const artifact = canonicalPolicyArtifact({ ...baseArtifact, version, code: fs.readFileSync(__filename, 'utf8'), config: { ...baseArtifact.config, profile: 'simulation-v2-experimental' } });
 const artifactDigest = artifact.artifactDigest;
 const qualification = new QualificationPolicy({
   artifact,

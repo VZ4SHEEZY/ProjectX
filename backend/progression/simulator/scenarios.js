@@ -30,13 +30,13 @@ function buildScenarioBundle() {
       const uniquePeople = distributedCount(spec.attributes.uniquePeople || 0, spec.count, i);
       const uniqueFactions = distributedCount(spec.attributes.uniqueFactions || 0, spec.count, i);
       const reach = canonicalEvidence({
-        type: 'reach', contractVersion: '1.0.0', producer: 'release-3a-simulator', generation: 'fixture-1',
+        type: 'reach', contractVersion: '1.0.0', producer: 'release-3a-simulator', generation: '1',
         subject: { type: spec.objectType || 'synthetic_activity', id: objectId }, observedAt: occurredAt, confidence: 1,
         lineage: ['synthetic-fixture'], privacyClassification: 'internal', retentionClass: 'synthetic',
         body: { windowStart: occurredAt, windowEnd: new Date(Date.parse(occurredAt) + 60000).toISOString(), deduplicationMethod: 'synthetic-disjoint-event-windows-v2', audienceAggregate: 'count-only', uniquePeople, uniqueFactions, sameFaction: spec.attributes.sameFactionDensity ? uniquePeople : 0, crossFaction: uniqueFactions, unaffiliated: 0, unknownOrIneligible: 0, sourceChannel: 'synthetic' }
       });
       const trust = canonicalEvidence({
-        type: 'fraud_trust', contractVersion: '1.0.0', producer: 'release-3a-simulator', generation: 'fixture-1',
+        type: 'fraud_trust', contractVersion: '1.0.0', producer: 'release-3a-simulator', generation: '1',
         subject: { type: 'synthetic_persona', id: persona.id }, observedAt: occurredAt, confidence: 1,
         lineage: ['synthetic-fixture'], privacyClassification: 'restricted', retentionClass: 'synthetic',
         body: { detectorVersion: 'synthetic-fixture-signals-v2', signals: fraudSignals({ ...spec.attributes, repeatOrdinal: i + 1, uniqueSupporters: spec.amountMinor ? 1 : undefined }) }
@@ -44,7 +44,7 @@ function buildScenarioBundle() {
       evidenceByRef[reach.evidenceId] = reach;
       evidenceByRef[trust.evidenceId] = trust;
       const finality = spec.amountMinor ? canonicalEvidence({
-        type: 'economic_finality', contractVersion: '1.0.0', producer: 'release-3a-simulator', generation: 'fixture-1',
+        type: 'economic_finality', contractVersion: '1.0.0', producer: 'release-3a-simulator', generation: '1',
         subject: { type: spec.objectType || 'synthetic_activity', id: objectId }, observedAt: occurredAt, confidence: 1,
         lineage: ['synthetic-fixture'], privacyClassification: 'restricted', retentionClass: 'synthetic',
         body: { state: spec.economicState || 'finalized', authorityRef: 'synthetic-settlement-authority', transactionRef: objectId }

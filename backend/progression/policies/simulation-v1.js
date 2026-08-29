@@ -2,14 +2,24 @@
 
 const { QualificationPolicy } = require('../qualification');
 const { canonicalPolicyArtifact } = require('../policy-artifact');
+const fs = require('node:fs');
 
 const version = 'sim-2026-08-v1';
-const artifact = canonicalPolicyArtifact({ policyId: 'release-3a-simulator', version, codeDigest: 'sha256:3eed3e53ef6f20cb8bd485adce923f34f18beaf40cb3257f8098b241c4501679', configDigest: 'sha256:9d3ad8ee84f752c40e51b36a0384e121c86eeb4a9eac519409fbf804939af48e', detectorVersions: { fraud_trust: 'synthetic-fixture-signals-v2' }, evidenceContractVersions: { reach: '1.0.0', fraud_trust: '1.0.0', economic_finality: '1.0.0', moderation: '1.0.0' }, taxonomyVersion: 'release-3a-1.2.0', numericRules: { values: 'finite-number', money: 'decimal-minor-unit-string' }, roundingRules: { projection: 'nearest-cent' }, runtimeCompatibility: { node: '22' }, serialization: 'RFC8785-compatible-stable-json-v1' });
+const evidenceEligibility = Object.freeze(Object.fromEntries([
+  ['creation.published', ['reach', 'fraud_trust']], ['engagement.received', ['reach', 'fraud_trust']], ['relationship.formed', ['reach', 'fraud_trust']],
+  ['achievement.reached', ['reach', 'fraud_trust']], ['builder.adopted', ['reach', 'fraud_trust']], ['economy.support.final', ['reach', 'fraud_trust', 'economic_finality']]
+].map(([eventType, permittedTypes]) => [eventType, { permittedTypes, requiredTypes: eventType === 'economy.support.final' ? ['economic_finality'] : [], authorities: Object.fromEntries(permittedTypes.map(type => [type, type === 'economic_finality' ? ['release-3a-simulator', 'payment-service'] : ['release-3a-simulator']])) }])));
+const policyConfig = Object.freeze({ profile: 'simulation-v1', weightsStatus: 'SIMULATION ONLY / NOT PRODUCTION' });
+const policyCode = fs.readFileSync(__filename, 'utf8');
+const artifact = canonicalPolicyArtifact({ policyId: 'release-3a-simulator', version, code: policyCode, config: policyConfig, detectorVersions: { fraud_trust: 'synthetic-fixture-signals-v2' }, evidenceContractVersions: { reach: '1.0.0', fraud_trust: '1.0.0', economic_finality: '1.0.0', moderation: '1.0.0' }, evidenceEligibility, taxonomyVersion: 'release-3a-1.2.0', numericRules: { values: 'finite-number', money: 'decimal-minor-unit-string' }, roundingRules: { projection: 'nearest-cent' }, runtimeCompatibility: { node: '22' }, serialization: 'RFC8785-compatible-stable-json-v1' });
 const artifactDigest = artifact.artifactDigest;
 
 const qualification = new QualificationPolicy({
   artifact,
-  evaluate(event, context) {
+  evaluate: qualificationEvaluator
+});
+
+function qualificationEvaluator(event, context) {
     const a = Object.assign({}, ...context.evidence.map(item => item.body.signals || item.body));
     const reasons = [];
     if (event.actorId === event.beneficiaryId && event.activityClass !== 'CREATE') return reject('SELF_INTERACTION');
@@ -28,8 +38,7 @@ const qualification = new QualificationPolicy({
     if ((a.trustConfidence ?? 1) < 0.35) return quarantine('LOW_ACCOUNT_CONFIDENCE');
     if (factor < 0.98) return { state: 'diminished', factor, reasonCodes: reasons.length ? reasons : ['TRUST_ADJUSTED'] };
     return { state: 'qualified', factor, reasonCodes: ['QUALIFIED'] };
-  }
-});
+}
 
 function contribution(event, decision) {
   const a = decision.signals;

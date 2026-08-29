@@ -1,8 +1,10 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { SPECIALTIES, appendLogicalLedger, isCanonicalTimestamp, stableJson } = require('./contracts');
+const { SPECIALTIES, appendLogicalLedger, isCanonicalTimestamp, stableId, stableJson, qualificationDecisionIdentity } = require('./contracts');
 const { resolveEffectiveEvidence } = require('./evidence');
+const { canonicalGeneration } = require('./generation');
+const { projectionContext, ORDERING_VERSION } = require('./context');
 
 const BANDS = Object.freeze([[100, 'Apex'], [76, 'Legendary'], [51, 'Elite'], [26, 'Influential'], [11, 'Established'], [1, 'Initiation']]);
 const NEGATING = new Set(['moderation_reversal', 'reversal', 'refund', 'chargeback', 'chain_reorganization', 'supersession', 'amendment', 'compensation']);
@@ -13,6 +15,8 @@ function levelFromContribution(total) { return Math.min(100, Math.max(1, Math.fl
 function resolveEffectiveEventGraph(events, options = {}) {
   const cutoff = options.cutoff || '9999-12-31T23:59:59.999Z';
   const watermark = options.watermark || cutoff;
+  const correctionGraphGeneration = canonicalGeneration(options.correctionGraphGeneration || '1', 'correctionGraphGeneration');
+  const evidenceGeneration = canonicalGeneration(options.evidenceGeneration || '1', 'evidenceGeneration');
   if (!isCanonicalTimestamp(cutoff) || !isCanonicalTimestamp(watermark)) throw new TypeError('graph cutoff/watermark must be canonical UTC ISO-8601');
   const ledger = appendLogicalLedger(events).filter(event => event.ingestedAt <= watermark);
   const byId = new Map(ledger.map(event => [event.eventId, event]));
@@ -27,14 +31,19 @@ function resolveEffectiveEventGraph(events, options = {}) {
     if (target.correction) throw new Error('CORRECTION_ON_CORRECTION_UNAUTHORIZED');
     const evidence = correction.evidenceRefs.map(ref => evidenceState.byId.get(ref));
     if (evidence.some(item => !item)) throw new Error(`CORRECTION_EVIDENCE_NOT_FOUND:${event.eventId}`);
+    if (evidence.some(item => item.generation !== evidenceGeneration)) throw new Error(`CORRECTION_EVIDENCE_GENERATION_MISMATCH:${event.eventId}`);
     if (evidence.some(item => item.subject.type !== 'activity_event' || item.subject.id !== target.eventId)) throw new Error('CORRECTION_EVIDENCE_SUBJECT_MISMATCH');
     if (!options.authorization) throw new Error('CORRECTION_AUTHORIZATION_REQUIRED');
-    const rule = options.authorization.authorize(event, target, evidence);
+    if (typeof options.authenticatedProducer !== 'function') throw new Error('CORRECTION_AUTHENTICATED_PRODUCER_REQUIRED');
+    const authenticatedProducer = options.authenticatedProducer(event);
+    if (typeof authenticatedProducer !== 'string' || !authenticatedProducer) throw new Error('CORRECTION_AUTHENTICATED_PRODUCER_REQUIRED');
+    const rule = options.authorization.authorize(event, target, evidence, authenticatedProducer);
     const replacementId = correction.replacementEventId || correction.compensatingEventId;
     const replacement = replacementId ? byId.get(replacementId) : null;
     if (replacementId && !replacement) throw new Error(`CORRECTION_REPLACEMENT_NOT_FOUND:${replacementId}`);
     if (replacement) {
       if (replacement.correction || replacement.eventType !== target.eventType || replacement.activityClass !== target.activityClass || replacement.occurredAt > correction.effectiveAt) throw new Error('CORRECTION_REPLACEMENT_INVALID');
+      if (['amendment', 'supersession'].includes(correction.type) && (replacement.sourceIdentity.objectType !== target.sourceIdentity.objectType || replacement.sourceIdentity.objectId !== target.sourceIdentity.objectId || evidence.some(item => item.type === 'moderation' && item.body.replacementVersion !== replacement.sourceIdentity.version))) throw new Error('CORRECTION_REPLACEMENT_INVALID');
       if (correction.type === 'compensation' && replacement.economic?.state === 'finalized') throw new Error('COMPENSATION_EVENT_INVALID');
     }
     return { event, correction, target, rule };
@@ -59,15 +68,17 @@ function resolveEffectiveEventGraph(events, options = {}) {
   const inactive = new Set(winners.filter(item => NEGATING.has(item.correction.type)).map(item => item.target.eventId));
   const corrections = winners.map(item => item.event).sort((a, b) => a.eventId.localeCompare(b.eventId));
   const digest = sha256(stableJson(corrections.map(event => ({ eventId: event.eventId, correction: event.correction }))));
-  return { effectiveEvents: ledger.filter(event => !event.correction && !inactive.has(event.eventId)), inactiveEventIds: [...inactive].sort(), corrections, correctionGraphDigest: digest, evidenceSetDigest: evidenceState.digest, cutoff, watermark };
+  return { effectiveEvents: ledger.filter(event => !event.correction && !inactive.has(event.eventId)), inactiveEventIds: [...inactive].sort(), corrections, correctionGraphDigest: digest, correctionGraphGeneration, evidenceSetDigest: evidenceState.digest, cutoff, watermark };
 }
 
 function compareCorrections(a, b) { return a.rule.precedence - b.rule.precedence || a.correction.sequence - b.correction.sequence || a.correction.effectiveAt.localeCompare(b.correction.effectiveAt) || a.event.eventId.localeCompare(b.event.eventId); }
 
-function selectDecisions(decisions, policy) {
+function selectDecisions(decisions, policy, expectedContext) {
   const selected = new Map(); let generation = null;
   for (const decision of decisions) {
+    if (decision.decisionId !== stableId(stableJson(qualificationDecisionIdentity(decision)))) throw new Error('DECISION_IDENTITY_INVALID');
     if (decision.policyVersion !== policy.version || decision.policyArtifactDigest !== policy.artifactDigest) throw new Error('DECISION_POLICY_MISMATCH');
+    if (decision.projectionContextId !== expectedContext.projectionContextId) throw new Error('DECISION_PROJECTION_CONTEXT_MISMATCH');
     generation ||= decision.evaluationGeneration;
     if (generation !== decision.evaluationGeneration) throw new Error('MIXED_EVALUATION_GENERATIONS');
     if (selected.has(decision.eventId)) throw new Error(`DUPLICATE_DECISION_IDENTITY:${decision.eventId}`);
@@ -78,7 +89,9 @@ function selectDecisions(decisions, policy) {
 
 function project(events, decisions, policy, options = {}) {
   const graph = resolveEffectiveEventGraph(events, options);
-  const { byEventId, generation } = selectDecisions(decisions, policy);
+  const first = decisions[0];
+  const expectedContext = projectionContext({ ledgerCutoff: graph.cutoff, watermark: graph.watermark, evaluationGeneration: options.evaluationGeneration || first?.evaluationGeneration || '1', evidenceGeneration: options.evidenceGeneration || first?.evidenceGeneration || '1', correctionGraphGeneration: options.correctionGraphGeneration || '1', policyId: policy.artifact.policyId, policyVersion: policy.version, policyArtifactDigest: policy.artifactDigest, evidenceContextDigest: graph.evidenceSetDigest, correctionGraphDigest: graph.correctionGraphDigest, orderingVersion: options.orderingVersion || ORDERING_VERSION });
+  const { byEventId, generation } = selectDecisions(decisions, policy, expectedContext);
   const users = new Map(); const factions = new Map();
   for (const event of graph.effectiveEvents) {
     const decision = byEventId.get(event.eventId); if (!decision || decision.factor <= 0) continue;
@@ -92,7 +105,7 @@ function project(events, decisions, policy, options = {}) {
   }
   const personal = Object.fromEntries([...users].sort().map(([id, value]) => [id, { level: levelFromContribution(value.total), band: BANDS.find(([minimum]) => levelFromContribution(value.total) >= minimum)[1], contribution: round(value.total), specialties: mapRound(value.specialties), crossFactionInfluence: round(value.crossFactionInfluence), publicExplanationCategories: [...new Set(value.reasons)].sort() }]));
   const faction = Object.fromEntries([...factions].sort().map(([id, value]) => [id, { total: round(value.total), contributors: mapRound(value.contributors) }]));
-  return { policyVersion: policy.version, evaluationGeneration: generation, generationMetadata: { ledgerCutoff: graph.cutoff, watermark: graph.watermark, correctionGraphDigest: graph.correctionGraphDigest, effectiveEvidenceSetDigest: graph.evidenceSetDigest, policyArtifactDigest: policy.artifactDigest, evaluationGeneration: generation, canonicalOrderingVersion: 'event-time-producer-event-id-v1' }, inactiveEventIds: graph.inactiveEventIds, personal, faction };
+  return { policyVersion: policy.version, evaluationGeneration: generation, projectionContext: expectedContext, generationMetadata: { ledgerCutoff: graph.cutoff, watermark: graph.watermark, correctionGraphDigest: graph.correctionGraphDigest, correctionGraphGeneration: expectedContext.correctionGraphGeneration, effectiveEvidenceSetDigest: graph.evidenceSetDigest, evidenceGeneration: expectedContext.evidenceGeneration, policyArtifactDigest: policy.artifactDigest, evaluationGeneration: generation, canonicalOrderingVersion: expectedContext.orderingVersion, projectionContextId: expectedContext.projectionContextId }, inactiveEventIds: graph.inactiveEventIds, personal, faction };
 }
 
 function getUser(users, id) { if (!users.has(id)) users.set(id, { total: 0, specialties: Object.fromEntries(SPECIALTIES.map(key => [key, 0])), crossFactionInfluence: 0, reasons: [] }); return users.get(id); }

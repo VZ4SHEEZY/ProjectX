@@ -4,12 +4,13 @@
   "title": "Immutable progression policy artifact metadata",
   "type": "object",
   "additionalProperties": false,
-  "required": ["policyId", "version", "codeDigest", "configDigest", "detectorVersions", "evidenceContractVersions", "taxonomyVersion", "numericRules", "roundingRules", "runtimeCompatibility", "serialization", "artifactDigest"],
+  "required": ["policyId", "version", "code", "config", "codeDigest", "configDigest", "detectorVersions", "evidenceContractVersions", "evidenceEligibility", "taxonomyVersion", "numericRules", "roundingRules", "runtimeCompatibility", "serialization", "artifactDigest"],
   "properties": {
-    "policyId": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 },
-    "codeDigest": { "type": "string", "minLength": 1 }, "configDigest": { "type": "string", "minLength": 1 },
-    "detectorVersions": { "type": "object" }, "evidenceContractVersions": { "type": "object" },
-    "taxonomyVersion": { "type": "string", "minLength": 1 }, "numericRules": { "type": "object" },
+    "policyId": { "type": "string", "minLength": 1, "maxLength": 256 }, "version": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "code": { "type": "string", "minLength": 1, "maxLength": 262144 }, "config": { "type": "object", "maxProperties": 256 },
+    "codeDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }, "configDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "detectorVersions": { "type": "object", "maxProperties": 256 }, "evidenceContractVersions": { "type": "object", "maxProperties": 256 }, "evidenceEligibility": { "type": "object", "maxProperties": 256 },
+    "taxonomyVersion": { "type": "string", "minLength": 1, "maxLength": 256 }, "numericRules": { "type": "object", "maxProperties": 256 },
     "roundingRules": { "type": "object" }, "runtimeCompatibility": { "type": "object" },
     "serialization": { "const": "RFC8785-compatible-stable-json-v1" }, "artifactDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
   }

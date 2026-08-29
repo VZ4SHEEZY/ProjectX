@@ -29,8 +29,9 @@ function correctionAuthorizationContract(entries) {
     byProducer.set(entry.producer, deepFreeze({ ...entry, correctionTypes: [...entry.correctionTypes], eventTypePatterns: [...entry.eventTypePatterns], evidenceProducers: [...entry.evidenceProducers] }));
   }
   return deepFreeze({
-    authorize(correctionEvent, target, evidence) {
-      const producer = correctionEvent.provenance.producer;
+    authorize(correctionEvent, target, evidence, authenticatedProducer) {
+      if (authenticatedProducer !== correctionEvent.provenance.producer) throw new Error('CORRECTION_PRODUCER_ASSERTION_MISMATCH');
+      const producer = authenticatedProducer;
       const authority = byProducer.get(producer);
       const rule = TYPE_RULES[correctionEvent.correction.type];
       if (!authority || !rule) throw new Error(`CORRECTION_PRODUCER_UNAUTHORIZED:${producer}`);
@@ -41,11 +42,31 @@ function correctionAuthorizationContract(entries) {
       if (correctionEvent.correction.authorityVersion !== authority.version) throw new Error('CORRECTION_AUTHORITY_VERSION_MISMATCH');
       if (!evidence.some(item => item.type === rule.evidenceType && authority.evidenceProducers.includes(item.producer))) throw new Error('CORRECTION_EVIDENCE_AUTHORITY_MISMATCH');
       if (evidence.some(item => item.type === rule.evidenceType && authority.evidenceContractVersions[item.type] !== item.contractVersion)) throw new Error('CORRECTION_EVIDENCE_VERSION_MISMATCH');
+      if (evidence.some(item => item.type === rule.evidenceType && item.body.authorityRef !== item.producer)) throw new Error('CORRECTION_EVIDENCE_AUTHORITY_REFERENCE_MISMATCH');
       if (evidence.some(item => item.observedAt > correctionEvent.correction.effectiveAt)) throw new Error('CORRECTION_EVIDENCE_NOT_EFFECTIVE');
+      validateCorrectionSemantics(correctionEvent, target, evidence, rule);
       return { ...rule, precedence: AUTHORITY_PRECEDENCE[authority.authorityClass] };
     }
   });
 }
+
+function validateCorrectionSemantics(correctionEvent, target, evidence, rule) {
+  const type = correctionEvent.correction.type;
+  const item = evidence.find(value => value.type === rule.evidenceType);
+  if (!item) throw new Error('CORRECTION_EVIDENCE_SEMANTICS_INVALID');
+  if (type === 'moderation_reversal') {
+    if (!['reversed', 'removed', 'invalidated'].includes(item.body.outcome) || item.body.targetEventId !== target.eventId || !sameRef(item.body.targetObject, target.object || target.subject)) throw new Error('CORRECTION_EVIDENCE_SEMANTICS_INVALID');
+  } else if (['refund', 'chargeback', 'reversal', 'chain_reorganization', 'compensation'].includes(type)) {
+    const expected = { refund: 'refund', chargeback: 'chargeback', reversal: 'reversed', chain_reorganization: 'chain_reorganization', compensation: 'reversed' }[type];
+    if (item.body.transactionRef !== target.object?.id || item.body.state !== expected) throw new Error('CORRECTION_EVIDENCE_SEMANTICS_INVALID');
+    if (type === 'chain_reorganization' && !item.body.blockRef) throw new Error('CORRECTION_EVIDENCE_SEMANTICS_INVALID');
+  } else if (['amendment', 'supersession'].includes(type)) {
+    const replacementId = correctionEvent.correction.replacementEventId;
+    if (item.body.outcome !== (type === 'amendment' ? 'amended' : 'superseded') || item.body.targetEventId !== target.eventId || item.body.replacementEventId !== replacementId || !sameRef(item.body.targetObject, target.object || target.subject) || item.body.priorVersion !== target.sourceIdentity.version || !item.body.replacementVersion) throw new Error('CORRECTION_EVIDENCE_SEMANTICS_INVALID');
+  }
+}
+
+function sameRef(left, right) { return !!left && !!right && left.type === right.type && left.id === right.id; }
 
 function matches(pattern, value) { return pattern.endsWith('*') ? value.startsWith(pattern.slice(0, -1)) : pattern === value; }
 function requireString(value, name) { if (typeof value !== 'string' || !value) throw new TypeError(`authority requires ${name}`); }

@@ -8,14 +8,14 @@
   "required": ["eventId", "idempotencyKey", "schemaVersion", "eventType", "activityClass", "actorId", "beneficiaryId", "occurredAt", "ingestedAt", "affiliations", "provenance", "sourceIdentity", "evidenceRefs", "facts"],
   "properties": {
     "eventId": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
-    "idempotencyKey": { "type": "string", "minLength": 1 },
+    "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 4096 },
     "schemaVersion": { "const": "1.2.0" },
-    "eventType": { "type": "string", "minLength": 1 },
+    "eventType": { "type": "string", "minLength": 1, "maxLength": 256 },
     "activityClass": { "enum": ["CREATE", "ENGAGE", "ACHIEVE", "TRANSACT"] },
-    "actorId": { "type": "string", "minLength": 1 },
+    "actorId": { "type": "string", "minLength": 1, "maxLength": 256 },
     "subject": { "$ref": "#/$defs/nullableEntityRef" },
     "object": { "$ref": "#/$defs/nullableEntityRef" },
-    "beneficiaryId": { "type": "string", "minLength": 1 },
+    "beneficiaryId": { "type": "string", "minLength": 1, "maxLength": 256 },
     "occurredAt": { "type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
     "ingestedAt": { "type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
     "affiliations": {
@@ -24,16 +24,16 @@
     },
     "provenance": {
       "type": "object", "additionalProperties": false, "required": ["producer", "authority"],
-      "properties": { "producer": { "type": "string", "minLength": 1 }, "authority": { "type": "string", "minLength": 1 }, "sourceEventId": { "type": "string" } }
+      "properties": { "producer": { "type": "string", "minLength": 1, "maxLength": 256 }, "authority": { "type": "string", "minLength": 1, "maxLength": 256 }, "sourceEventId": { "type": "string", "maxLength": 256 } }
     },
     "sourceIdentity": {
       "type": "object", "additionalProperties": false, "required": ["objectType", "objectId", "transition", "version"],
-      "properties": { "objectType": { "type": "string", "minLength": 1 }, "objectId": { "type": "string", "minLength": 1 }, "transition": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 }, "actorId": { "type": "string", "minLength": 1 } }
+      "properties": { "objectType": { "type": "string", "minLength": 1, "maxLength": 256 }, "objectId": { "type": "string", "minLength": 1, "maxLength": 256 }, "transition": { "type": "string", "minLength": 1, "maxLength": 256 }, "version": { "type": "string", "minLength": 1, "maxLength": 256 }, "actorId": { "type": "string", "minLength": 1, "maxLength": 256 } }
     },
     "evidenceRefs": { "type": "array", "maxItems": 64, "items": { "type": "string", "pattern": "^[a-f0-9]{32}$" }, "uniqueItems": true },
     "economic": {
       "type": ["object", "null"], "additionalProperties": false, "required": ["amountMinor", "currency", "state"],
-      "properties": { "amountMinor": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" }, "currency": { "type": "string", "pattern": "^[A-Z]{3,8}$" }, "state": { "enum": ["intent", "pending", "confirmed", "finalized", "failed", "refund", "chargeback", "chain_reorganization", "reversed"] }, "finalityEvidenceRef": { "type": "string", "minLength": 1 } },
+      "properties": { "amountMinor": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,77})$" }, "currency": { "type": "string", "pattern": "^[A-Z]{3,8}$" }, "state": { "enum": ["intent", "pending", "confirmed", "finalized", "failed", "refund", "chargeback", "chain_reorganization", "reversed"] }, "finalityEvidenceRef": { "type": "string", "pattern": "^[a-f0-9]{32}$" } },
       "allOf": [{ "if": { "properties": { "state": { "const": "finalized" } }, "required": ["state"] }, "then": { "properties": { "finalityEvidenceRef": { "type": "string", "minLength": 1 } }, "required": ["finalityEvidenceRef"] } }]
     },
     "correction": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/correction" }] },
@@ -41,7 +41,7 @@
   },
   "$defs": {
     "nullableEntityRef": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/entityRef" }] },
-    "entityRef": { "type": "object", "additionalProperties": false, "required": ["type", "id"], "properties": { "type": { "type": "string" }, "id": { "type": "string" } } },
+    "entityRef": { "type": "object", "additionalProperties": false, "required": ["type", "id"], "properties": { "type": { "type": "string", "minLength": 1, "maxLength": 256 }, "id": { "type": "string", "minLength": 1, "maxLength": 256 } } },
     "affiliation": {
       "oneOf": [
         { "type": "object", "additionalProperties": false, "required": ["state", "factionId", "effectiveAt", "source"], "properties": { "state": { "const": "affiliated" }, "factionId": { "type": "string", "minLength": 1 }, "membershipRef": { "type": "string" }, "effectiveAt": { "type": "string", "format": "date-time" }, "source": { "type": "string", "minLength": 1 } } },
@@ -58,7 +58,7 @@
         "authorityVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
         "effectiveAt": { "type": "string", "format": "date-time" },
         "evidenceRefs": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-f0-9]{32}$" } },
-        "sequence": { "type": "integer", "minimum": 1 },
+        "sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
         "replacementEventId": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
         "compensatingEventId": { "type": "string", "pattern": "^[a-f0-9]{32}$" }
       },

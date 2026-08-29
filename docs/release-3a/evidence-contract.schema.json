@@ -8,17 +8,17 @@
   "properties": {
     "evidenceId": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
     "type": { "enum": ["reach", "moderation", "fraud_trust", "economic_finality"] },
-    "contractVersion": { "type": "string", "minLength": 1 },
-    "subject": { "type": "object", "additionalProperties": false, "required": ["type", "id"], "properties": { "type": { "type": "string" }, "id": { "type": "string" } } },
-    "producer": { "type": "string", "minLength": 1 },
-    "generation": { "type": "string", "minLength": 1 },
-    "observedAt": { "type": "string", "format": "date-time" },
+    "contractVersion": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "subject": { "type": "object", "additionalProperties": false, "required": ["type", "id"], "properties": { "type": { "type": "string", "minLength": 1, "maxLength": 256 }, "id": { "type": "string", "minLength": 1, "maxLength": 256 } } },
+    "producer": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "generation": { "type": "string", "pattern": "^[1-9][0-9]{0,15}$" },
+    "observedAt": { "type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
     "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
-    "lineage": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "type": "string", "maxLength": 256 } },
+    "lineage": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 256 } },
     "evidenceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "supersedesEvidenceId": { "oneOf": [{ "type": "null" }, { "type": "string", "pattern": "^[a-f0-9]{32}$" }] },
     "privacyClassification": { "enum": ["public_aggregate", "internal", "restricted", "highly_restricted"] },
-    "retentionClass": { "type": "string", "minLength": 1 },
+    "retentionClass": { "type": "string", "minLength": 1, "maxLength": 256 },
     "body": {
       "oneOf": [
         { "$ref": "#/$defs/reachBody" },
@@ -48,8 +48,12 @@
       }
     },
     "moderationBody": {
-      "type": "object", "additionalProperties": false, "required": ["outcome", "authorityRef", "caseRef"],
-      "properties": { "outcome": { "type": "string", "minLength": 1 }, "authorityRef": { "type": "string", "minLength": 1 }, "caseRef": { "type": "string", "minLength": 1 } }
+      "type": "object", "additionalProperties": false, "required": ["outcome", "authorityRef", "caseRef", "targetEventId"],
+      "properties": {
+        "outcome": { "type": "string", "minLength": 1, "maxLength": 256 }, "authorityRef": { "type": "string", "minLength": 1, "maxLength": 256 }, "caseRef": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "targetEventId": { "type": "string", "pattern": "^[a-f0-9]{32}$" }, "targetObject": { "$ref": "#/$defs/entityRef" }, "replacementEventId": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
+        "priorVersion": { "type": "string", "minLength": 1, "maxLength": 256 }, "replacementVersion": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
     },
     "fraudTrustBody": {
       "type": "object", "additionalProperties": false, "required": ["detectorVersion", "signals"],
@@ -57,7 +61,8 @@
     },
     "economicFinalityBody": {
       "type": "object", "additionalProperties": false, "required": ["state", "authorityRef", "transactionRef"],
-      "properties": { "state": { "enum": ["intent", "pending", "confirmed", "finalized", "failed", "refund", "chargeback", "chain_reorganization", "reversed"] }, "authorityRef": { "type": "string", "minLength": 1 }, "transactionRef": { "type": "string", "minLength": 1 }, "blockRef": { "type": "string" }, "confirmationDepth": { "type": "integer", "minimum": 0 } }
-    }
+      "properties": { "state": { "enum": ["intent", "pending", "confirmed", "finalized", "failed", "refund", "chargeback", "chain_reorganization", "reversed"] }, "authorityRef": { "type": "string", "minLength": 1, "maxLength": 256 }, "transactionRef": { "type": "string", "minLength": 1, "maxLength": 256 }, "blockRef": { "type": "string", "minLength": 1, "maxLength": 256 }, "confirmationDepth": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 } }
+    },
+    "entityRef": { "type": "object", "additionalProperties": false, "required": ["type", "id"], "properties": { "type": { "type": "string", "minLength": 1, "maxLength": 256 }, "id": { "type": "string", "minLength": 1, "maxLength": 256 } } }
   }
 }
