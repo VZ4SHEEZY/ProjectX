@@ -1,15 +1,14 @@
 'use strict';
 
 const { QualificationPolicy } = require('../qualification');
+const { canonicalPolicyArtifact } = require('../policy-artifact');
 
 const version = 'sim-2026-08-v1';
-// SHA-256 of the immutable simulator artifact identifier
-// `sim-2026-08-v1:qualification+contribution-contract-v1`.
-const artifactDigest = 'sha256:1e225066ae00ba617bc8d347dbe21d71dbac98574f237d9ffa4b746554afda42';
+const artifact = canonicalPolicyArtifact({ policyId: 'release-3a-simulator', version, codeDigest: 'sha256:3eed3e53ef6f20cb8bd485adce923f34f18beaf40cb3257f8098b241c4501679', configDigest: 'sha256:9d3ad8ee84f752c40e51b36a0384e121c86eeb4a9eac519409fbf804939af48e', detectorVersions: { fraud_trust: 'synthetic-fixture-signals-v2' }, evidenceContractVersions: { reach: '1.0.0', fraud_trust: '1.0.0', economic_finality: '1.0.0', moderation: '1.0.0' }, taxonomyVersion: 'release-3a-1.2.0', numericRules: { values: 'finite-number', money: 'decimal-minor-unit-string' }, roundingRules: { projection: 'nearest-cent' }, runtimeCompatibility: { node: '22' }, serialization: 'RFC8785-compatible-stable-json-v1' });
+const artifactDigest = artifact.artifactDigest;
 
 const qualification = new QualificationPolicy({
-  version,
-  artifactDigest,
+  artifact,
   evaluate(event, context) {
     const a = Object.assign({}, ...context.evidence.map(item => item.body.signals || item.body));
     const reasons = [];
@@ -66,4 +65,4 @@ function reject(reason) { return { state: 'rejected', factor: 0, reasonCodes: [r
 function quarantine(reason) { return { state: 'quarantined', factor: 0, reasonCodes: [reason] }; }
 function clamp(value, min, max) { return Math.min(max, Math.max(min, Number(value))); }
 
-module.exports = { version, artifactDigest, qualification, contribution };
+module.exports = { version, artifact, artifactDigest, qualification, contribution };

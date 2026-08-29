@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const ACTIVITY_CLASSES = Object.freeze(['CREATE', 'ENGAGE', 'ACHIEVE', 'TRANSACT']);
 const QUALIFICATION_STATES = Object.freeze(['quarantined', 'qualified', 'diminished', 'rejected']);
 const AFFILIATION_STATES = Object.freeze(['affiliated', 'unaffiliated', 'unknown']);
-const CORRECTION_TYPES = Object.freeze(['moderation_reversal', 'reversal', 'refund', 'chargeback', 'supersession', 'amendment']);
+const CORRECTION_TYPES = Object.freeze(['moderation_reversal', 'reversal', 'refund', 'chargeback', 'chain_reorganization', 'supersession', 'amendment', 'compensation']);
 const ECONOMIC_STATES = Object.freeze(['intent', 'pending', 'confirmed', 'finalized', 'failed', 'refund', 'chargeback', 'chain_reorganization', 'reversed']);
 const SPECIALTIES = Object.freeze(['creation', 'social', 'influence', 'community', 'exploration', 'creator', 'economy', 'builder_ai', 'faction']);
 
@@ -21,18 +21,25 @@ function stableJson(value) {
 
 function canonicalIdentity(input) {
   const provenance = input.provenance || { producer: 'release-3a-simulator', authority: 'synthetic-fixture' };
-  const source = input.sourceIdentity || {
+  const source = input.sourceIdentity || (input.correction ? {
+    objectType: 'activity_event_correction',
+    objectId: input.correction.targetEventId,
+    transition: input.correction.type,
+    version: `${input.correction.authorityVersion}:${input.correction.sequence}`
+  } : {
     objectType: input.object?.type || input.subject?.type || 'synthetic_activity',
     objectId: input.object?.id || input.subject?.id || input.idempotencyKey,
     transition: input.eventType,
     version: input.sourceVersion || '1'
-  };
+  });
   const identity = { producer: provenance.producer, activityClass: input.activityClass, eventType: input.eventType, source, schemaVersion: input.schemaVersion || '1.2.0' };
   validateIdentity(identity);
   return identity;
 }
 
 function canonicalEvent(input) {
+  const allowedInput = ['eventId', 'idempotencyKey', 'schemaVersion', 'eventType', 'activityClass', 'actorId', 'subject', 'object', 'beneficiaryId', 'occurredAt', 'ingestedAt', 'affiliations', 'actorAffiliation', 'beneficiaryAffiliation', 'provenance', 'sourceIdentity', 'sourceVersion', 'evidenceRefs', 'economic', 'correction', 'facts'];
+  if (!exactKeys(input, allowedInput)) throw new TypeError('raw activity event input contains unsupported properties');
   for (const forbidden of ['qualification', 'policyVersion', 'attributes', 'hiddenAllegianceWeight']) if (forbidden in input) throw new TypeError(`raw activity event input cannot contain ${forbidden}`);
   const identity = canonicalIdentity(input);
   const canonicalKey = stableJson(identity);
@@ -82,11 +89,14 @@ function validateIdentity(identity) {
 }
 
 function validateEvent(event) {
+  if (!exactKeys(event, ['eventId', 'idempotencyKey', 'schemaVersion', 'eventType', 'activityClass', 'actorId', 'subject', 'object', 'beneficiaryId', 'occurredAt', 'ingestedAt', 'affiliations', 'provenance', 'sourceIdentity', 'evidenceRefs', 'economic', 'correction', 'facts'])) throw new TypeError('raw activity event contains unsupported properties');
   const requiredStrings = ['eventId', 'idempotencyKey', 'schemaVersion', 'eventType', 'activityClass', 'actorId', 'beneficiaryId', 'occurredAt', 'ingestedAt'];
   for (const field of requiredStrings) if (typeof event[field] !== 'string' || !event[field]) throw new TypeError(`activity event ${field} must be a non-empty string`);
   if (!ACTIVITY_CLASSES.includes(event.activityClass)) throw new TypeError(`unsupported activityClass: ${event.activityClass}`);
   if (!isCanonicalTimestamp(event.occurredAt) || !isCanonicalTimestamp(event.ingestedAt)) throw new TypeError('activity timestamps must be canonical UTC ISO-8601');
   if (!event.provenance || !exactKeys(event.provenance, ['producer', 'authority', 'sourceEventId']) || !event.provenance.producer || !event.provenance.authority) throw new TypeError('provenance requires a producer and authority and forbids arbitrary fields');
+  validateEntityRef(event.subject, 'subject');
+  validateEntityRef(event.object, 'object');
   if (!event.sourceIdentity || !exactKeys(event.sourceIdentity, ['objectType', 'objectId', 'transition', 'version', 'actorId']) ) throw new TypeError('sourceIdentity contains unsupported fields');
   canonicalAffiliation(event.affiliations.actor);
   canonicalAffiliation(event.affiliations.beneficiary);
@@ -99,12 +109,15 @@ function validateEvent(event) {
 
 function validateCorrection(correction, ownEventId) {
   if (!CORRECTION_TYPES.includes(correction.type)) throw new TypeError(`unsupported correction type: ${correction.type}`);
-  for (const field of ['targetEventId', 'authority', 'effectiveAt']) if (typeof correction[field] !== 'string' || !correction[field]) throw new TypeError(`correction requires ${field}`);
+  if (!exactKeys(correction, ['targetEventId', 'type', 'effectiveAt', 'evidenceRefs', 'sequence', 'authorityVersion', 'replacementEventId', 'compensatingEventId'])) throw new TypeError('correction contains unsupported fields');
+  for (const field of ['targetEventId', 'effectiveAt', 'authorityVersion']) if (typeof correction[field] !== 'string' || !correction[field]) throw new TypeError(`correction requires ${field}`);
   if (correction.targetEventId === ownEventId) throw new TypeError('correction cannot target itself');
   if (!Number.isInteger(correction.sequence) || correction.sequence < 1) throw new TypeError('correction sequence must be a positive integer');
   if (!isCanonicalTimestamp(correction.effectiveAt)) throw new TypeError('correction effectiveAt must be canonical UTC ISO-8601');
   if (!Array.isArray(correction.evidenceRefs) || correction.evidenceRefs.length === 0) throw new TypeError('correction requires evidenceRefs');
   if (['supersession', 'amendment'].includes(correction.type) && !correction.replacementEventId) throw new TypeError(`${correction.type} requires replacementEventId`);
+  if (correction.type === 'compensation' && !correction.compensatingEventId) throw new TypeError('compensation requires compensatingEventId');
+  if (correction.type !== 'compensation' && correction.compensatingEventId) throw new TypeError('compensatingEventId is only valid for compensation');
 }
 
 function appendLogicalLedger(events) {
@@ -131,6 +144,10 @@ function isCanonicalTimestamp(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) && new Date(value).toISOString() === value;
 }
 function exactKeys(value, allowed) { return value && typeof value === 'object' && Object.keys(value).every(key => allowed.includes(key)); }
+function validateEntityRef(value, name) {
+  if (value == null) return;
+  if (!exactKeys(value, ['type', 'id']) || typeof value.type !== 'string' || !value.type || typeof value.id !== 'string' || !value.id) throw new TypeError(`${name} must be a closed entity reference`);
+}
 function validateEconomic(value) {
   if (!exactKeys(value, ['amountMinor', 'currency', 'state', 'finalityEvidenceRef'])) throw new TypeError('economic fact contains unsupported fields');
   if (!/^(0|[1-9]\d*)$/.test(value.amountMinor || '')) throw new TypeError('economic amountMinor must be a canonical non-negative integer string');

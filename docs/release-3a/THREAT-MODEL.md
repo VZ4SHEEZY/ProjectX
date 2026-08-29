@@ -20,7 +20,7 @@ The simulator has intentionally limited detectors. It models extension points; i
 
 - Exact Level 1–100 curve, seasonal treatment, decay, and Prestige transition.
 - Specialty rank names, thresholds, unlock catalog, and whether specialty values are ever shown numerically.
-- Event taxonomy ownership, retention, and late-event windows. The correction graph contract is fixed in 3A.1; production authority namespaces and retention still require approval.
+- Event taxonomy ownership, retention, late-event reopening, approved production authority namespaces/credentials, authority rotation, evidence retention, and appeals remain product/operational decisions. Release 3A.2 defines the disabled authorization and replay contracts but creates no production authorities or persistence.
 - Qualification appeal process, quarantine duration, confidence thresholds, and human-review authority.
 - Which outcomes represent quality for each media/action type, including legitimate dislikes and controversy.
 - Treatment of deleted content versus policy-violating content and retroactive reversals.

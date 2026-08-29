@@ -3,13 +3,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { canonicalEvent, appendLogicalLedger } = require('../progression/contracts');
-const { qualifyLedger } = require('../progression/qualification');
-const { project } = require('../progression/projection');
+const { qualifyLedger, qualificationDecision } = require('../progression/qualification');
+const { project, resolveEffectiveEventGraph } = require('../progression/projection');
 const policyV1 = require('../progression/policies/simulation-v1');
 const policyV2 = require('../progression/policies/simulation-v2');
 const { buildScenario, buildScenarioBundle } = require('../progression/simulator/scenarios');
-const { canonicalEvidence, assertNonOverlappingReach } = require('../progression/evidence');
+const { canonicalEvidence, resolveEffectiveEvidence, assertNonOverlappingReach } = require('../progression/evidence');
 const { canonicalPolicyArtifact } = require('../progression/policy-artifact');
+const { correctionAuthorizationContract } = require('../progression/authority');
 const { simulate, report } = require('../progression/simulator/run');
 
 test('canonical activity events are immutable and require ledger fields', () => {
@@ -103,10 +104,12 @@ test('qualification decision identity includes policy and evaluation generation'
 test('later moderation reversal removes the original contribution without mutating it', () => {
   const original = testEvent({ key: 'moderated-original', type: 'creation.published', activityClass: 'CREATE' });
   const before = project([original], qualifyLedger([original], policyV1.qualification), policyV1);
-  const reversal = correctionEvent(original, 'moderation_reversal', 1);
+  const evidence = correctionEvidence(original, 'moderation', 'moderation-service');
+  const reversal = correctionEvent(original, 'moderation_reversal', 1, evidence);
   const ledger = [original, reversal];
   const serialized = JSON.stringify(original);
-  const after = project(ledger, qualifyLedger(ledger, policyV1.qualification), policyV1);
+  const options = correctionOptions([evidence]);
+  const after = project(ledger, qualifyLedger(ledger, policyV1.qualification, options), policyV1, options);
   assert.ok(before.personal.beneficiary.contribution > 0);
   assert.equal(after.personal.beneficiary, undefined);
   assert.deepEqual(after.inactiveEventIds, [original.eventId]);
@@ -115,11 +118,15 @@ test('later moderation reversal removes the original contribution without mutati
 
 test('economic reversal, refund, and chargeback compensate finalized contribution deterministically', () => {
   for (const type of ['reversal', 'refund', 'chargeback']) {
-    const original = testEvent({ key: `tip-final:${type}`, type: 'economy.support.final', activityClass: 'TRANSACT', economic: { amountMinor: '2500', currency: 'USD', state: 'finalized', finalityEvidenceRef: 'evidence:finality' } });
-    const correction = correctionEvent(original, type, 1);
+    const seed = testEvent({ key: `tip-final:${type}`, type: 'economy.support.final', activityClass: 'TRANSACT' });
+    const finality = canonicalEvidence({ type: 'economic_finality', contractVersion: '1.0.0', producer: 'payment-service', generation: '0001', subject: seed.object, observedAt: '2026-08-01T00:00:00.000Z', confidence: 1, lineage: ['restricted-authority-reference'], privacyClassification: 'restricted', retentionClass: 'audit', body: { state: 'finalized', authorityRef: 'payment-service', transactionRef: seed.object.id } });
+    const original = testEvent({ key: `tip-final:${type}`, type: 'economy.support.final', activityClass: 'TRANSACT', economic: { amountMinor: '2500', currency: 'USD', state: 'finalized', finalityEvidenceRef: finality.evidenceId }, extra: { evidenceRefs: [finality.evidenceId] } });
+    const evidence = correctionEvidence(original, 'economic_finality', 'payment-service', type);
+    const correction = correctionEvent(original, type, 1, evidence, 'payment-service', 'ECONOMIC');
     const ledger = [correction, original];
-    const first = project(ledger, qualifyLedger(ledger, policyV1.qualification), policyV1);
-    const second = project([...ledger].reverse(), qualifyLedger([...ledger].reverse(), policyV1.qualification), policyV1);
+    const options = correctionOptions([finality, evidence]);
+    const first = project(ledger, qualifyLedger(ledger, policyV1.qualification, options), policyV1, options);
+    const second = project([...ledger].reverse(), qualifyLedger([...ledger].reverse(), policyV1.qualification, options), policyV1, options);
     assert.equal(first.personal.beneficiary, undefined);
     assert.deepEqual(first, second);
   }
@@ -181,7 +188,7 @@ test('policy changes rebuild decisions and projections without rewriting raw eve
 });
 
 test('raw events reject producer-controlled policy and hidden allegiance inputs', () => {
-  assert.throws(() => testEvent({ key: 'bad-attributes', extra: { attributes: { hiddenAllegianceWeight: 1.2 } } }), /attributes/);
+  assert.throws(() => testEvent({ key: 'bad-attributes', extra: { attributes: { hiddenAllegianceWeight: 1.2 } } }), /unsupported properties/);
   assert.throws(() => canonicalEvent({ idempotencyKey: 'implicit-beneficiary', eventType: 'creation.published', activityClass: 'CREATE', actorId: 'actor', occurredAt: '2026-08-01T00:00:00.000Z' }), /beneficiaryId/);
 });
 
@@ -203,6 +210,78 @@ test('policy artifacts freeze every replay-relevant compatibility input', () => 
   assert.match(artifact.artifactDigest, /^sha256:[a-f0-9]{64}$/);
   assert.equal(Object.isFrozen(artifact), true);
   assert.throws(() => canonicalPolicyArtifact({ policyId: 'incomplete' }), /requires version/);
+});
+
+test('fake correction authority and invalid correction evidence fail closed', () => {
+  const target = testEvent({ key: 'authority-target' });
+  const evidence = correctionEvidence(target, 'moderation', 'moderation-service');
+  const fake = correctionEvent(target, 'moderation_reversal', 1, evidence, 'attacker', 'self-asserted');
+  assert.throws(() => resolveEffectiveEventGraph([target, fake], correctionOptions([evidence])), /CORRECTION_PRODUCER_UNAUTHORIZED/);
+  const valid = correctionEvent(target, 'moderation_reversal', 1, evidence);
+  assert.throws(() => resolveEffectiveEventGraph([target, valid], correctionOptions([])), /CORRECTION_EVIDENCE_NOT_FOUND/);
+  const wrong = correctionEvidence(target, 'economic_finality', 'moderation-service');
+  const wrongRef = correctionEvent(target, 'moderation_reversal', 1, wrong);
+  assert.throws(() => resolveEffectiveEventGraph([target, wrongRef], correctionOptions([wrong])), /CORRECTION_EVIDENCE_AUTHORITY_MISMATCH/);
+});
+
+test('future-effective corrections obey pinned cutoff and replay deterministically', () => {
+  const target = testEvent({ key: 'future-effective', occurredAt: '2026-08-01T00:00:00.000Z' });
+  const evidence = correctionEvidence(target, 'moderation', 'moderation-service', 'reversed', { observedAt: '2026-08-02T00:00:00.000Z' });
+  const correction = correctionEvent(target, 'moderation_reversal', 1, evidence, 'moderation-service', 'MODERATION', { effectiveAt: '2026-08-05T00:00:00.000Z' });
+  const early = { ...correctionOptions([evidence]), cutoff: '2026-08-04T00:00:00.000Z', watermark: '2026-08-06T00:00:00.000Z' };
+  const late = { ...early, cutoff: '2026-08-06T00:00:00.000Z' };
+  assert.deepEqual(resolveEffectiveEventGraph([correction, target], early).inactiveEventIds, []);
+  assert.deepEqual(resolveEffectiveEventGraph([correction, target], late).inactiveEventIds, [target.eventId]);
+  assert.deepEqual(resolveEffectiveEventGraph([target, correction], late), resolveEffectiveEventGraph([correction, target], late));
+});
+
+test('correction graph rejects self-correction, correction-on-correction, duplicate and non-monotonic sequences', () => {
+  const target = testEvent({ key: 'graph-target' }); const evidence = correctionEvidence(target, 'moderation', 'moderation-service');
+  const first = correctionEvent(target, 'moderation_reversal', 1, evidence);
+  const abusiveEvidence = correctionEvidence(first, 'moderation', 'moderation-service');
+  const abusive = correctionEvent(first, 'moderation_reversal', 1, abusiveEvidence);
+  assert.throws(() => resolveEffectiveEventGraph([target, first, abusive], correctionOptions([evidence, abusiveEvidence])), /CORRECTION_ON_CORRECTION_UNAUTHORIZED/);
+  const duplicate = correctionEvent(target, 'moderation_reversal', 1, evidence, 'moderation-service', 'MODERATION', { effectiveAt: '2026-08-03T00:00:00.000Z' });
+  assert.throws(() => resolveEffectiveEventGraph([target, first, duplicate], correctionOptions([evidence])), /EVENT_IDENTITY_COLLISION|CORRECTION_SEQUENCE_CONFLICT/);
+  const third = correctionEvent(target, 'moderation_reversal', 3, evidence);
+  assert.throws(() => resolveEffectiveEventGraph([target, first, third], correctionOptions([evidence])), /CORRECTION_SEQUENCE_NON_MONOTONIC/);
+  assert.throws(() => appendLogicalLedger([{ ...target, correction: { targetEventId: target.eventId, type: 'moderation_reversal', effectiveAt: '2026-08-02T00:00:00.000Z', evidenceRefs: [evidence.evidenceId], sequence: 1, authorityVersion: '1' } }]), /cannot target itself/);
+});
+
+test('amendment and compensation relationships are fully validated', () => {
+  const target = testEvent({ key: 'replacement-target' });
+  const replacement = testEvent({ key: 'replacement-wrong-type', type: 'achievement.reached', activityClass: 'ACHIEVE' });
+  const domainEvidence = correctionEvidence(target, 'moderation', 'domain-service');
+  const amendment = correctionEvent(target, 'amendment', 1, domainEvidence, 'domain-service', 'DOMAIN', { replacementEventId: replacement.eventId });
+  assert.throws(() => resolveEffectiveEventGraph([target, replacement, amendment], correctionOptions([domainEvidence])), /CORRECTION_REPLACEMENT_INVALID/);
+  assert.throws(() => correctionEvent(target, 'compensation', 1, domainEvidence, 'payment-service', 'ECONOMIC'), /requires compensatingEventId/);
+});
+
+test('canonical evidence identity, binding, supersession, and fraud schema fail closed', () => {
+  const target = testEvent({ key: 'evidence-contract' });
+  const base = correctionEvidence(target, 'moderation', 'moderation-service', 'open', { generation: '0001' });
+  assert.throws(() => canonicalEvidence({ ...base, evidenceId: '0'.repeat(32) }), /canonical evidence identity/);
+  assert.throws(() => canonicalEvidence({ ...base, evidenceDigest: `sha256:${'0'.repeat(64)}` }), /digest mismatch/);
+  const replacement = correctionEvidence(target, 'moderation', 'moderation-service', 'closed', { generation: '0002', observedAt: '2026-08-03T00:00:00.000Z', supersedesEvidenceId: base.evidenceId });
+  const effective = resolveEffectiveEvidence([replacement, base], { cutoff: '2026-08-04T00:00:00.000Z' });
+  assert.deepEqual(effective.evidence.map(item => item.evidenceId), [replacement.evidenceId]);
+  const backwards = correctionEvidence(target, 'moderation', 'moderation-service', 'closed', { generation: '0000', supersedesEvidenceId: base.evidenceId });
+  assert.throws(() => resolveEffectiveEvidence([base, backwards]), /SUPERSESSION_ORDER_INVALID/);
+  assert.throws(() => canonicalEvidence({ type: 'fraud_trust', contractVersion: '1.0.0', producer: 'detector', generation: '1', subject: target.object, observedAt: target.occurredAt, confidence: 1, lineage: ['detector'], privacyClassification: 'restricted', retentionClass: 'audit', body: { detectorVersion: '1', signals: { hiddenAllegiance: true } } }), /unsupported evidence field/);
+});
+
+test('decision identity binds evidence and artifact and rejects invalid evaluatedAt', () => {
+  const base = { eventId: 'a'.repeat(32), policyId: 'policy', policyVersion: '1', evaluationGeneration: 'g1', cutoff: '2026-08-04T00:00:00.000Z', watermark: '2026-08-04T00:00:00.000Z', evaluatedAt: '2026-08-04T00:00:00.000Z', policyArtifactDigest: `sha256:${'1'.repeat(64)}`, evidenceSetDigest: `sha256:${'2'.repeat(64)}`, state: 'qualified', factor: 1, evidenceRefs: [] };
+  const first = qualificationDecision(base);
+  assert.notEqual(first.decisionId, qualificationDecision({ ...base, evidenceSetDigest: `sha256:${'3'.repeat(64)}` }).decisionId);
+  assert.notEqual(first.decisionId, qualificationDecision({ ...base, policyArtifactDigest: `sha256:${'4'.repeat(64)}` }).decisionId);
+  assert.throws(() => qualificationDecision({ ...base, evaluatedAt: 'tomorrow' }), /evaluatedAt/);
+});
+
+test('public explanation allowlist rejects malicious policy output', () => {
+  const event = testEvent({ key: 'public-output' }); const decisions = qualifyLedger([event], policyV1.qualification);
+  const malicious = { ...policyV1, contribution: () => ({ personal: 1, specialties: {}, faction: 0, publicExplanationCategories: ['HIGH_SYBIL_CONFIDENCE', 'wallet:secret'] }) };
+  assert.throws(() => project([event], decisions, malicious), /PUBLIC_EXPLANATION_NOT_ALLOWED/);
 });
 
 function affiliation(factionId) {
@@ -227,17 +306,33 @@ function testEvent({ key, type = 'creation.published', activityClass = 'CREATE',
   });
 }
 
-function correctionEvent(target, type, sequence) {
+function correctionEvent(target, type, sequence, evidence, producer = 'moderation-service', authority = 'MODERATION', extra = {}) {
   return canonicalEvent({
     idempotencyKey: `${target.eventId}:${type}:${sequence}`,
     eventType: `correction.${type}`,
     activityClass: target.activityClass,
-    actorId: 'correction-authority',
+    actorId: producer,
     beneficiaryId: target.beneficiaryId,
     occurredAt: '2026-08-02T00:00:00.000Z',
     object: { type: 'activity_event', id: target.eventId },
     affiliations: { actor: { state: 'unknown' }, beneficiary: target.affiliations.beneficiary },
-    correction: { targetEventId: target.eventId, type, authority: 'moderation:test', effectiveAt: '2026-08-02T00:00:00.000Z', evidenceRefs: [`evidence:${type}`], sequence },
-    evidenceRefs: [`evidence:${type}`]
+    provenance: { producer, authority },
+    correction: { targetEventId: target.eventId, type, effectiveAt: '2026-08-02T00:00:00.000Z', evidenceRefs: [evidence.evidenceId], sequence, authorityVersion: '1', ...extra },
+    evidenceRefs: [evidence.evidenceId]
   });
+}
+
+function correctionEvidence(target, type, producer, state = 'reversed', extra = {}) {
+  const body = type === 'moderation'
+    ? { outcome: state, authorityRef: producer, caseRef: `case:${target.eventId}` }
+    : { state, authorityRef: producer, transactionRef: target.object.id };
+  return canonicalEvidence({ type, contractVersion: '1.0.0', producer, generation: extra.generation || '0001', subject: { type: 'activity_event', id: target.eventId }, observedAt: extra.observedAt || '2026-08-02T00:00:00.000Z', confidence: 1, lineage: ['restricted-authority-reference'], privacyClassification: 'restricted', retentionClass: 'audit', body, ...extra });
+}
+
+function correctionOptions(evidence) {
+  return { evidenceByRef: Object.fromEntries(evidence.map(item => [item.evidenceId, item])), evidenceProducers: { reach: ['release-3a-simulator'], fraud_trust: ['release-3a-simulator'], moderation: ['moderation-service', 'domain-service'], economic_finality: ['payment-service'] }, authorization: correctionAuthorizationContract([
+    { producer: 'moderation-service', authorityClass: 'MODERATION', correctionTypes: ['moderation_reversal'], eventTypePatterns: ['*'], evidenceProducers: ['moderation-service'], evidenceContractVersions: { moderation: '1.0.0' }, version: '1' },
+    { producer: 'payment-service', authorityClass: 'ECONOMIC', correctionTypes: ['reversal', 'refund', 'chargeback', 'chain_reorganization', 'compensation'], eventTypePatterns: ['economy.*'], evidenceProducers: ['payment-service'], evidenceContractVersions: { economic_finality: '1.0.0' }, version: '1' },
+    { producer: 'domain-service', authorityClass: 'DOMAIN', correctionTypes: ['amendment', 'supersession'], eventTypePatterns: ['creation.*'], evidenceProducers: ['domain-service'], evidenceContractVersions: { moderation: '1.0.0' }, version: '1' }
+  ]) };
 }

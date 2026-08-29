@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["evidenceId", "type", "contractVersion", "subject", "producer", "generation", "observedAt", "confidence", "lineage", "evidenceDigest", "privacyClassification", "retentionClass", "body"],
   "properties": {
-    "evidenceId": { "type": "string", "minLength": 1 },
+    "evidenceId": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
     "type": { "enum": ["reach", "moderation", "fraud_trust", "economic_finality"] },
     "contractVersion": { "type": "string", "minLength": 1 },
     "subject": { "type": "object", "additionalProperties": false, "required": ["type", "id"], "properties": { "type": { "type": "string" }, "id": { "type": "string" } } },
@@ -14,9 +14,9 @@
     "generation": { "type": "string", "minLength": 1 },
     "observedAt": { "type": "string", "format": "date-time" },
     "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
-    "lineage": { "type": "array", "minItems": 1, "items": { "type": "string" } },
-    "evidenceDigest": { "type": "string", "minLength": 1 },
-    "supersedesEvidenceId": { "type": ["string", "null"] },
+    "lineage": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "type": "string", "maxLength": 256 } },
+    "evidenceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "supersedesEvidenceId": { "oneOf": [{ "type": "null" }, { "type": "string", "pattern": "^[a-f0-9]{32}$" }] },
     "privacyClassification": { "enum": ["public_aggregate", "internal", "restricted", "highly_restricted"] },
     "retentionClass": { "type": "string", "minLength": 1 },
     "body": {
@@ -53,7 +53,7 @@
     },
     "fraudTrustBody": {
       "type": "object", "additionalProperties": false, "required": ["detectorVersion", "signals"],
-      "properties": { "detectorVersion": { "type": "string", "minLength": 1 }, "signals": { "type": "object", "description": "Versioned detector output; internal and access-controlled, never raw producer attributes." } }
+      "properties": { "detectorVersion": { "type": "string", "minLength": 1, "maxLength": 256 }, "signals": { "type": "object", "additionalProperties": false, "properties": { "trustConfidence": { "type": "number" }, "valueSignal": { "type": "number" }, "engagementDiversity": { "type": "number" }, "linkedAccount": { "type": "boolean" }, "linkedWallet": { "type": "boolean" }, "circularTransfer": { "type": "boolean" }, "sybilConfidence": { "type": "number" }, "botGenerated": { "type": "boolean" }, "botDisclosure": { "type": "boolean" }, "velocityPerHour": { "type": "number" }, "repeatOrdinal": { "type": "number" }, "reciprocalDensity": { "type": "number" }, "sameFactionDensity": { "type": "number" }, "lowValueRatio": { "type": "number" }, "uniqueSupporters": { "type": "number" }, "moderated": { "type": "boolean" }, "abusive": { "type": "boolean" }, "reportManipulation": { "type": "boolean" } }, "description": "INTERNAL RESTRICTED: categorical/versioned detector output only; no raw graphs, identities, locations, allegiance, or free-form signals." } }
     },
     "economicFinalityBody": {
       "type": "object", "additionalProperties": false, "required": ["state", "authorityRef", "transactionRef"],

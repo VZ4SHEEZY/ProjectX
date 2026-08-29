@@ -39,13 +39,13 @@ function buildScenarioBundle() {
         type: 'fraud_trust', contractVersion: '1.0.0', producer: 'release-3a-simulator', generation: 'fixture-1',
         subject: { type: 'synthetic_persona', id: persona.id }, observedAt: occurredAt, confidence: 1,
         lineage: ['synthetic-fixture'], privacyClassification: 'restricted', retentionClass: 'synthetic',
-        body: { detectorVersion: 'synthetic-fixture-signals-v2', signals: { ...spec.attributes, uniquePeople, uniqueFactions, repeatOrdinal: i + 1, uniqueSupporters: spec.amountMinor ? 1 : undefined } }
+        body: { detectorVersion: 'synthetic-fixture-signals-v2', signals: fraudSignals({ ...spec.attributes, repeatOrdinal: i + 1, uniqueSupporters: spec.amountMinor ? 1 : undefined }) }
       });
       evidenceByRef[reach.evidenceId] = reach;
       evidenceByRef[trust.evidenceId] = trust;
       const finality = spec.amountMinor ? canonicalEvidence({
         type: 'economic_finality', contractVersion: '1.0.0', producer: 'release-3a-simulator', generation: 'fixture-1',
-        subject: { type: 'synthetic_transaction', id: objectId }, observedAt: occurredAt, confidence: 1,
+        subject: { type: spec.objectType || 'synthetic_activity', id: objectId }, observedAt: occurredAt, confidence: 1,
         lineage: ['synthetic-fixture'], privacyClassification: 'restricted', retentionClass: 'synthetic',
         body: { state: spec.economicState || 'finalized', authorityRef: 'synthetic-settlement-authority', transactionRef: objectId }
       }) : null;
@@ -100,6 +100,11 @@ function specification(id) {
 
 function distributedCount(total, count, index) {
   return Math.floor(total / count) + (index < total % count ? 1 : 0);
+}
+
+function fraudSignals(attributes) {
+  const allowed = new Set(['trustConfidence', 'valueSignal', 'engagementDiversity', 'linkedAccount', 'linkedWallet', 'circularTransfer', 'sybilConfidence', 'botGenerated', 'botDisclosure', 'velocityPerHour', 'repeatOrdinal', 'reciprocalDensity', 'sameFactionDensity', 'lowValueRatio', 'uniqueSupporters', 'moderated', 'abusive', 'reportManipulation']);
+  return Object.fromEntries(Object.entries(attributes).filter(([key, value]) => allowed.has(key) && value !== undefined));
 }
 
 module.exports = { buildScenario, buildScenarioBundle };

@@ -12,7 +12,7 @@ const { buildScenarioBundle } = require('./scenarios');
 function simulate(policy = policyV1) {
   const { events, evidenceByRef } = buildScenarioBundle();
   const decisions = qualifyLedger(events, policy.qualification, { evidenceByRef });
-  const projections = project(events, decisions, policy);
+  const projections = project(events, decisions, policy, { evidenceByRef });
   return { generatedAt: '2026-08-28T00:00:00.000Z', syntheticOnly: true, policyVersion: policy.version, eventCount: events.length, events, decisions, projections };
 }
 
