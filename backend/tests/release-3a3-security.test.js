@@ -79,7 +79,7 @@ test('projection rejects every cross-context decision reuse dimension', () => {
 test('projection rejects mutated decision results even when context identity is retained', () => {
   const event = canonicalEvent({ idempotencyKey: 'decision-tamper', eventType: 'creation.published', activityClass: 'CREATE', actorId: 'a', beneficiaryId: 'a', occurredAt: '2026-08-01T00:00:00.000Z' });
   const decision = qualifyLedger([event], policy.qualification)[0];
-  assert.throws(() => project([event], [{ ...decision, factor: 0.5, contributionResult: { factor: 0.5 } }], policy), /DECISION_IDENTITY_INVALID/);
+  assert.throws(() => project([event], [{ ...decision, contributionResult: { ...decision.contributionResult, personal: decision.contributionResult.personal + 1 } }], policy), /QUALIFICATION_DECISION_INVALID/);
 });
 
 test('all Draft 2020-12 schemas compile strictly and runtime rejects representative schema-invalid values', () => {

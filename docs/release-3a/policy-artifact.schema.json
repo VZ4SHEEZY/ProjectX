@@ -7,11 +7,25 @@
   "required": ["policyId", "version", "code", "config", "codeDigest", "configDigest", "detectorVersions", "evidenceContractVersions", "evidenceEligibility", "taxonomyVersion", "numericRules", "roundingRules", "runtimeCompatibility", "serialization", "artifactDigest"],
   "properties": {
     "policyId": { "type": "string", "minLength": 1, "maxLength": 256 }, "version": { "type": "string", "minLength": 1, "maxLength": 256 },
-    "code": { "type": "string", "minLength": 1, "maxLength": 262144 }, "config": { "type": "object", "maxProperties": 256 },
+    "code": { "type": "string", "minLength": 1, "maxLength": 262144 }, "config": { "$ref": "#/$defs/metadataObject" },
     "codeDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }, "configDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-    "detectorVersions": { "type": "object", "maxProperties": 256 }, "evidenceContractVersions": { "type": "object", "maxProperties": 256 }, "evidenceEligibility": { "type": "object", "maxProperties": 256 },
-    "taxonomyVersion": { "type": "string", "minLength": 1, "maxLength": 256 }, "numericRules": { "type": "object", "maxProperties": 256 },
-    "roundingRules": { "type": "object" }, "runtimeCompatibility": { "type": "object" },
+    "detectorVersions": { "$ref": "#/$defs/metadataObject" }, "evidenceContractVersions": { "$ref": "#/$defs/metadataObject" }, "evidenceEligibility": { "$ref": "#/$defs/metadataObject" },
+    "taxonomyVersion": { "type": "string", "minLength": 1, "maxLength": 256 }, "numericRules": { "$ref": "#/$defs/metadataObject" },
+    "roundingRules": { "$ref": "#/$defs/metadataObject" }, "runtimeCompatibility": { "$ref": "#/$defs/metadataObject" },
     "serialization": { "const": "RFC8785-compatible-stable-json-v1" }, "artifactDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  },
+  "$defs": {
+    "metadataObject": {
+      "type": "object", "maxProperties": 256, "propertyNames": { "minLength": 1, "maxLength": 128 },
+      "additionalProperties": { "$ref": "#/$defs/metadataValue" }
+    },
+    "metadataValue": {
+      "oneOf": [
+        { "type": "string", "maxLength": 1024 },
+        { "type": "number" }, { "type": "boolean" }, { "type": "null" },
+        { "$ref": "#/$defs/metadataObject" },
+        { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/metadataValue" } }
+      ]
+    }
   }
 }

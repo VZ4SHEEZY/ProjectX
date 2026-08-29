@@ -53,8 +53,9 @@ function validateBody(type, body) {
     requireString(body.detectorVersion, 'detectorVersion');
     for (const [key, value] of Object.entries(body.signals)) if (typeof value !== 'boolean' && (typeof value !== 'number' || !Number.isFinite(value))) throw new TypeError(`fraud/trust ${key} must be boolean or finite number`);
   } else {
-    requireFields(body, ['state', 'authorityRef', 'transactionRef']); requireOnly(body, ['state', 'authorityRef', 'transactionRef', 'blockRef', 'confirmationDepth']);
+    requireFields(body, ['state', 'authorityRef', 'transactionRef']); requireOnly(body, ['state', 'authorityRef', 'transactionRef', 'blockRef', 'confirmationDepth', 'amountMinor', 'currency', 'payerId', 'beneficiaryId', 'recipientId', 'compensatingTransactionRef']);
     for (const key of ['state', 'authorityRef', 'transactionRef']) requireString(body[key], key);
+    for (const key of ['amountMinor', 'currency', 'payerId', 'beneficiaryId', 'recipientId', 'compensatingTransactionRef']) if (body[key] != null) requireString(body[key], key);
     if (!ECONOMIC_FINALITY_STATES.includes(body.state)) throw new TypeError('unsupported economic finality state');
     if (body.blockRef != null) requireString(body.blockRef, 'blockRef');
     if (body.confirmationDepth != null && (!Number.isSafeInteger(body.confirmationDepth) || body.confirmationDepth < 0)) throw new TypeError('confirmationDepth must be a non-negative safe integer');

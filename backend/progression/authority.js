@@ -2,6 +2,8 @@
 
 const { deepFreeze } = require('./contracts');
 
+const issuedContracts = new WeakSet();
+
 const AUTHORITY_PRECEDENCE = Object.freeze({ DOMAIN: 100, ECONOMIC: 200, MODERATION: 300 });
 const TYPE_RULES = Object.freeze({
   moderation_reversal: { authorityClass: 'MODERATION', evidenceType: 'moderation' },
@@ -28,10 +30,11 @@ function correctionAuthorizationContract(entries) {
     if (byProducer.has(entry.producer)) throw new TypeError(`duplicate correction producer: ${entry.producer}`);
     byProducer.set(entry.producer, deepFreeze({ ...entry, correctionTypes: [...entry.correctionTypes], eventTypePatterns: [...entry.eventTypePatterns], evidenceProducers: [...entry.evidenceProducers] }));
   }
-  return deepFreeze({
-    authorize(correctionEvent, target, evidence, authenticatedProducer) {
-      if (authenticatedProducer !== correctionEvent.provenance.producer) throw new Error('CORRECTION_PRODUCER_ASSERTION_MISMATCH');
-      const producer = authenticatedProducer;
+  const contract = deepFreeze({
+    authorize(correctionEvent, target, evidence, authenticatedContext) {
+      if (!authenticatedContext || authenticatedContext.domain !== 'correction') throw new Error('AUTHENTICATED_PRODUCER_CONTEXT_REQUIRED');
+      if (authenticatedContext.producer !== correctionEvent.provenance.producer) throw new Error('CORRECTION_PRODUCER_ASSERTION_MISMATCH');
+      const producer = authenticatedContext.producer;
       const authority = byProducer.get(producer);
       const rule = TYPE_RULES[correctionEvent.correction.type];
       if (!authority || !rule) throw new Error(`CORRECTION_PRODUCER_UNAUTHORIZED:${producer}`);
@@ -48,6 +51,13 @@ function correctionAuthorizationContract(entries) {
       return { ...rule, precedence: AUTHORITY_PRECEDENCE[authority.authorityClass] };
     }
   });
+  issuedContracts.add(contract);
+  return contract;
+}
+
+function assertCorrectionAuthorizationContract(contract) {
+  if (!contract || !issuedContracts.has(contract)) throw new Error('TRUSTED_CORRECTION_AUTHORIZATION_REQUIRED');
+  return contract;
 }
 
 function validateCorrectionSemantics(correctionEvent, target, evidence, rule) {
@@ -59,6 +69,10 @@ function validateCorrectionSemantics(correctionEvent, target, evidence, rule) {
   } else if (['refund', 'chargeback', 'reversal', 'chain_reorganization', 'compensation'].includes(type)) {
     const expected = { refund: 'refund', chargeback: 'chargeback', reversal: 'reversed', chain_reorganization: 'chain_reorganization', compensation: 'reversed' }[type];
     if (item.body.transactionRef !== target.object?.id || item.body.state !== expected) throw new Error('CORRECTION_EVIDENCE_SEMANTICS_INVALID');
+    if (type === 'compensation') {
+      const required = ['amountMinor', 'currency', 'payerId', 'beneficiaryId', 'recipientId', 'compensatingTransactionRef'];
+      if (required.some(field => !item.body[field]) || item.body.amountMinor !== target.economic?.amountMinor || item.body.currency !== target.economic?.currency || item.body.payerId !== target.actorId || item.body.beneficiaryId !== target.beneficiaryId || item.body.recipientId !== target.beneficiaryId) throw new Error('COMPENSATION_SEMANTICS_INVALID');
+    }
     if (type === 'chain_reorganization' && !item.body.blockRef) throw new Error('CORRECTION_EVIDENCE_SEMANTICS_INVALID');
   } else if (['amendment', 'supersession'].includes(type)) {
     const replacementId = correctionEvent.correction.replacementEventId;
@@ -71,4 +85,4 @@ function sameRef(left, right) { return !!left && !!right && left.type === right.
 function matches(pattern, value) { return pattern.endsWith('*') ? value.startsWith(pattern.slice(0, -1)) : pattern === value; }
 function requireString(value, name) { if (typeof value !== 'string' || !value) throw new TypeError(`authority requires ${name}`); }
 
-module.exports = { AUTHORITY_PRECEDENCE, TYPE_RULES, correctionAuthorizationContract };
+module.exports = { AUTHORITY_PRECEDENCE, TYPE_RULES, correctionAuthorizationContract, assertCorrectionAuthorizationContract };

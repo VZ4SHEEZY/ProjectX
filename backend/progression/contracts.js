@@ -20,7 +20,7 @@ function stableJson(value) {
 }
 
 function qualificationDecisionIdentity(value) {
-  const fields = ['eventId', 'policyId', 'policyVersion', 'policyArtifactDigest', 'evaluationGeneration', 'evidenceGeneration', 'correctionGraphGeneration', 'evidenceSetDigest', 'correctionGraphDigest', 'projectionContextId', 'cutoff', 'watermark', 'state', 'factor', 'reasonCodes', 'evidenceRefs', 'evaluatedAt', 'signals'];
+  const fields = ['eventId', 'policyId', 'policyVersion', 'policyArtifactDigest', 'evaluationGeneration', 'evidenceGeneration', 'correctionGraphGeneration', 'evidenceSetDigest', 'correctionGraphDigest', 'projectionContextId', 'cutoff', 'watermark', 'state', 'factor', 'contributionResult', 'reasonCodes', 'evidenceRefs', 'evaluatedAt', 'signals'];
   return Object.fromEntries(fields.map(field => [field, value[field]]));
 }
 
