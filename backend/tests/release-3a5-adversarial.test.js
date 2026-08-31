@@ -2,12 +2,12 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { testProducerTrust } = require('./helpers/test-producer-trust');
+const { testProducerTrust, testProgression } = require('./helpers/test-producer-trust');
 const { canonicalEvent } = require('../progression/contracts');
 const { canonicalEvidence } = require('../progression/evidence');
 const { correctionAuthorizationContract } = require('../progression/authority');
 const producerApi = require('../progression/producer');
-const { resolveEffectiveEventGraph } = require('../progression/projection');
+const { resolveEffectiveEventGraph } = testProgression.projection;
 
 test('production producer API consumes trust but cannot issue trusted contexts', () => {
   assert.deepEqual(Object.keys(producerApi).sort(), ['assertProducerRegistry', 'ingestEvent', 'ingestEvidence']);

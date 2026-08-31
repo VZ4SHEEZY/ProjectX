@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { testProducerTrust } = require('./helpers/test-producer-trust');
+const { testProducerTrust, testProgression } = require('./helpers/test-producer-trust');
 const fs = require('node:fs');
 const path = require('node:path');
 const Ajv2020 = require('ajv/dist/2020');
@@ -11,9 +11,9 @@ const { canonicalEvent } = require('../progression/contracts');
 const { canonicalEvidence, resolveEffectiveEvidence } = require('../progression/evidence');
 const { canonicalGeneration, compareGenerations } = require('../progression/generation');
 const { canonicalPolicyArtifact } = require('../progression/policy-artifact');
-const { ingestEvidence } = require('../progression/producer');
-const { qualifyLedger } = require('../progression/qualification');
-const { project } = require('../progression/projection');
+const { ingestEvidence } = testProgression.producer;
+const { qualifyLedger } = testProgression.qualification;
+const { project } = testProgression.projection;
 const policy = require('../progression/policies/simulation-v1');
 
 function evidence(overrides = {}) {

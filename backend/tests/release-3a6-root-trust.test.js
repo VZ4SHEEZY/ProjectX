@@ -5,11 +5,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { testProducerTrust } = require('./helpers/test-producer-trust');
+const { testProducerTrust, testProgression } = require('./helpers/test-producer-trust');
 const { canonicalEvent } = require('../progression/contracts');
 const { canonicalEvidence } = require('../progression/evidence');
 const { correctionAuthorizationContract } = require('../progression/authority');
-const { resolveEffectiveEventGraph } = require('../progression/projection');
+const { resolveEffectiveEventGraph } = testProgression.projection;
 
 const backendRoot = path.resolve(__dirname, '..');
 

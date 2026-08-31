@@ -2,10 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { testProducerTrust } = require('./helpers/test-producer-trust');
+const { testProducerTrust, testProgression } = require('./helpers/test-producer-trust');
 const { canonicalEvent, appendLogicalLedger } = require('../progression/contracts');
-const { qualifyLedger, qualificationDecision } = require('../progression/qualification');
-const { project, resolveEffectiveEventGraph } = require('../progression/projection');
+const { qualifyLedger, qualificationDecision } = testProgression.qualification;
+const { project, resolveEffectiveEventGraph } = testProgression.projection;
 const policyV1 = require('../progression/policies/simulation-v1');
 const policyV2 = require('../progression/policies/simulation-v2');
 const { buildScenario, buildScenarioBundle } = require('../progression/simulator/scenarios');

@@ -1,20 +1,41 @@
 'use strict';
 
-// TEST-ONLY issuer. Tests load this before progression consumers and replace
-// only their registry assertion at the CommonJS loader boundary. Production has
-// no dependency or path to this issuer; fresh-process import probes bypass it.
-const producerInternalPath = require.resolve('../../progression/producer-internal');
-if (require.cache[producerInternalPath]) throw new Error('TEST_PRODUCER_TRUST_MUST_LOAD_BEFORE_PROGRESSION');
+// TEST-ONLY issuer and progression module graph. Each selected production
+// consumer is evaluated in a private Module instance with explicit, local
+// dependency overrides. Nothing is installed in Node's process-wide cache and
+// normal production imports always resolve to the real producer authority.
+const fs = require('node:fs');
+const Module = require('node:module');
+const path = require('node:path');
 
+const progressionRoot = path.resolve(__dirname, '../../progression');
 const issuedRegistries = new WeakSet();
-function assertProducerRegistry(registry) {
+
+function assertTestProducerRegistry(registry) {
   if (!registry || !issuedRegistries.has(registry)) throw new Error('TRUSTED_PRODUCER_REGISTRY_REQUIRED');
   return registry;
 }
-require.cache[producerInternalPath] = {
-  id: producerInternalPath, filename: producerInternalPath, loaded: true,
-  exports: { assertProducerRegistry }, children: [], paths: module.paths
-};
+
+function loadPrivateModule(filename, overrides = {}) {
+  const instance = new Module(`${filename}#test-producer-trust`, module);
+  instance.filename = filename;
+  instance.paths = Module._nodeModulePaths(path.dirname(filename));
+  const normalRequire = Module.createRequire(filename);
+  instance.require = request => Object.hasOwn(overrides, request) ? overrides[request] : normalRequire(request);
+  instance._compile(fs.readFileSync(filename, 'utf8'), filename);
+  return instance.exports;
+}
+
+function createTestProgression() {
+  const producer = loadPrivateModule(path.join(progressionRoot, 'producer.js'), {
+    './producer-internal': Object.freeze({ assertProducerRegistry: assertTestProducerRegistry })
+  });
+  const projection = loadPrivateModule(path.join(progressionRoot, 'projection.js'), { './producer': producer });
+  const qualification = loadPrivateModule(path.join(progressionRoot, 'qualification.js'), { './projection': projection });
+  return Object.freeze({ producer, projection, qualification });
+}
+
+const testProgression = createTestProgression();
 
 function testProducerTrust(entries) {
   const identities = new Map(entries.map(entry => [entry.principalId, Object.freeze({ producer: entry.producer, domains: Object.freeze([...entry.domains]) })]));
@@ -48,4 +69,4 @@ function testProducerTrust(entries) {
   });
 }
 
-module.exports = { testProducerTrust };
+module.exports = { testProducerTrust, testProgression };
