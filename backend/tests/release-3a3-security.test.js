@@ -10,7 +10,8 @@ const { canonicalEvent } = require('../progression/contracts');
 const { canonicalEvidence, resolveEffectiveEvidence } = require('../progression/evidence');
 const { canonicalGeneration, compareGenerations } = require('../progression/generation');
 const { canonicalPolicyArtifact } = require('../progression/policy-artifact');
-const { producerRegistry, ingestEvidence } = require('../progression/producer');
+const { ingestEvidence } = require('../progression/producer');
+const { testProducerTrust } = require('./helpers/test-producer-trust');
 const { qualifyLedger } = require('../progression/qualification');
 const { project } = require('../progression/projection');
 const policy = require('../progression/policies/simulation-v1');
@@ -53,10 +54,13 @@ test('policy bytes and canonical config are verified rather than trusting digest
 });
 
 test('authenticated producer assertions cannot be spoofed or cross domains', () => {
-  const registry = producerRegistry([{ principalId: 'payments-worker', producer: 'payment-service', domains: ['economic_finality'] }]);
+  const trust = testProducerTrust([{ principalId: 'payments-worker', producer: 'payment-service', domains: ['economic_finality'] }]);
+  const { registry } = trust;
   const payload = { ...evidence(), evidenceId: undefined, evidenceDigest: undefined, producer: 'moderation-service' };
-  assert.throws(() => ingestEvidence(payload, { authenticated: true, principalId: 'payments-worker' }, registry, 'economic_finality'), /UNTRUSTED_PRODUCER_CLAIM_MISMATCH/);
-  assert.throws(() => ingestEvidence({ ...payload, producer: 'payment-service' }, { authenticated: true, principalId: 'payments-worker' }, registry, 'moderation'), /PRODUCER_DOMAIN_UNAUTHORIZED/);
+  const context = trust.authenticatedContext('payments-worker', 'economic_finality');
+  assert.throws(() => ingestEvidence(payload, context, registry, 'economic_finality'), /UNTRUSTED_PRODUCER_CLAIM_MISMATCH/);
+  assert.throws(() => ingestEvidence({ ...payload, producer: 'payment-service' }, context, registry, 'moderation'), /PRODUCER_DOMAIN_UNAUTHORIZED/);
+  assert.throws(() => ingestEvidence({ ...payload, producer: 'payment-service' }, { authenticated: true, principalId: 'payments-worker' }, registry, 'economic_finality'), /AUTHENTICATED_PRODUCER_CONTEXT_REQUIRED/);
   assert.throws(() => ingestEvidence({ ...payload, producer: 'payment-service' }, { principalId: 'payments-worker' }, registry, 'economic_finality'), /AUTHENTICATED_PRODUCER_CONTEXT_REQUIRED/);
 });
 

@@ -7,7 +7,7 @@ const { resolveEffectiveEvidence } = require('./evidence');
 const { canonicalGeneration } = require('./generation');
 const { projectionContext, ORDERING_VERSION } = require('./context');
 const { assertProducerRegistry } = require('./producer');
-const { assertCorrectionAuthorizationContract } = require('./authority');
+const { assertCorrectionAuthorizationContract, COMPENSATION_CONTRACTS } = require('./authority');
 
 const BANDS = Object.freeze([[100, 'Apex'], [76, 'Legendary'], [51, 'Elite'], [26, 'Influential'], [11, 'Established'], [1, 'Initiation']]);
 const NEGATING = new Set(['moderation_reversal', 'reversal', 'refund', 'chargeback', 'chain_reorganization', 'supersession', 'amendment', 'compensation']);
@@ -48,7 +48,11 @@ function resolveEffectiveEventGraph(events, options = {}) {
     if (replacement) {
       if (replacement.correction || replacement.eventType !== target.eventType || replacement.activityClass !== target.activityClass || replacement.occurredAt > correction.effectiveAt) throw new Error('CORRECTION_REPLACEMENT_INVALID');
       if (['amendment', 'supersession'].includes(correction.type) && (replacement.sourceIdentity.objectType !== target.sourceIdentity.objectType || replacement.sourceIdentity.objectId !== target.sourceIdentity.objectId || evidence.some(item => item.type === 'moderation' && item.body.replacementVersion !== replacement.sourceIdentity.version))) throw new Error('CORRECTION_REPLACEMENT_INVALID');
-      if (correction.type === 'compensation' && (replacement.economic?.state === 'finalized' || replacement.economic?.amountMinor !== target.economic?.amountMinor || replacement.economic?.currency !== target.economic?.currency || replacement.actorId !== target.actorId || replacement.beneficiaryId !== target.beneficiaryId || replacement.object?.id === target.object?.id || evidence.some(item => item.type === 'economic_finality' && item.body.compensatingTransactionRef !== replacement.object?.id))) throw new Error('COMPENSATION_EVENT_INVALID');
+      if (correction.type === 'compensation') {
+        const contract = COMPENSATION_CONTRACTS[correction.type];
+        const finality = evidence.find(item => item.type === 'economic_finality');
+        if (!contract || target.economic?.state !== 'finalized' || !contract.eventStates.includes(replacement.economic?.state) || replacement.economic?.amountMinor !== target.economic.amountMinor || replacement.economic?.currency !== target.economic.currency || replacement.actorId !== target.actorId || replacement.beneficiaryId !== target.beneficiaryId || replacement.object?.type !== target.object?.type || replacement.object?.id === target.object.id || finality?.body.transactionRef === replacement.object?.id || finality?.body.compensatingTransactionRef !== replacement.object?.id || finality?.body.recipientId !== target.actorId || finality?.body.direction !== contract.direction || finality?.body.amountSign !== contract.amountSign) throw new Error('COMPENSATION_EVENT_INVALID');
+      }
     }
     return { event, correction, target, rule };
   });

@@ -6,6 +6,8 @@ const { canonicalGeneration, compareGenerations } = require('./generation');
 const EVIDENCE_TYPES = Object.freeze(['reach', 'moderation', 'fraud_trust', 'economic_finality']);
 const PRIVACY_CLASSES = Object.freeze(['public_aggregate', 'internal', 'restricted', 'highly_restricted']);
 const ECONOMIC_FINALITY_STATES = Object.freeze(['intent', 'pending', 'confirmed', 'finalized', 'failed', 'refund', 'chargeback', 'chain_reorganization', 'reversed']);
+const ECONOMIC_DIRECTIONS = Object.freeze(['payer_to_beneficiary', 'beneficiary_to_payer', 'void_original']);
+const ECONOMIC_AMOUNT_SIGNS = Object.freeze(['non_negative_magnitude']);
 const FRAUD_TRUST_FIELDS = Object.freeze(['trustConfidence', 'valueSignal', 'engagementDiversity', 'linkedAccount', 'linkedWallet', 'circularTransfer', 'sybilConfidence', 'botGenerated', 'botDisclosure', 'velocityPerHour', 'repeatOrdinal', 'reciprocalDensity', 'sameFactionDensity', 'lowValueRatio', 'uniqueSupporters', 'moderated', 'abusive', 'reportManipulation']);
 
 function canonicalEvidence(input) {
@@ -53,10 +55,12 @@ function validateBody(type, body) {
     requireString(body.detectorVersion, 'detectorVersion');
     for (const [key, value] of Object.entries(body.signals)) if (typeof value !== 'boolean' && (typeof value !== 'number' || !Number.isFinite(value))) throw new TypeError(`fraud/trust ${key} must be boolean or finite number`);
   } else {
-    requireFields(body, ['state', 'authorityRef', 'transactionRef']); requireOnly(body, ['state', 'authorityRef', 'transactionRef', 'blockRef', 'confirmationDepth', 'amountMinor', 'currency', 'payerId', 'beneficiaryId', 'recipientId', 'compensatingTransactionRef']);
+    requireFields(body, ['state', 'authorityRef', 'transactionRef']); requireOnly(body, ['state', 'authorityRef', 'transactionRef', 'blockRef', 'confirmationDepth', 'amountMinor', 'currency', 'payerId', 'beneficiaryId', 'recipientId', 'compensatingTransactionRef', 'direction', 'amountSign']);
     for (const key of ['state', 'authorityRef', 'transactionRef']) requireString(body[key], key);
-    for (const key of ['amountMinor', 'currency', 'payerId', 'beneficiaryId', 'recipientId', 'compensatingTransactionRef']) if (body[key] != null) requireString(body[key], key);
+    for (const key of ['amountMinor', 'currency', 'payerId', 'beneficiaryId', 'recipientId', 'compensatingTransactionRef', 'direction', 'amountSign']) if (body[key] != null) requireString(body[key], key);
     if (!ECONOMIC_FINALITY_STATES.includes(body.state)) throw new TypeError('unsupported economic finality state');
+    if (body.direction != null && !ECONOMIC_DIRECTIONS.includes(body.direction)) throw new TypeError('unsupported economic direction');
+    if (body.amountSign != null && !ECONOMIC_AMOUNT_SIGNS.includes(body.amountSign)) throw new TypeError('unsupported economic amount sign');
     if (body.blockRef != null) requireString(body.blockRef, 'blockRef');
     if (body.confirmationDepth != null && (!Number.isSafeInteger(body.confirmationDepth) || body.confirmationDepth < 0)) throw new TypeError('confirmationDepth must be a non-negative safe integer');
   }

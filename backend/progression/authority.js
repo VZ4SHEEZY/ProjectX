@@ -15,6 +15,16 @@ const TYPE_RULES = Object.freeze({
   supersession: { authorityClass: 'DOMAIN', evidenceType: 'moderation', replacement: true },
   compensation: { authorityClass: 'ECONOMIC', evidenceType: 'economic_finality', targetClass: 'TRANSACT', compensating: true }
 });
+const ECONOMIC_CORRECTION_STATE_CONTRACTS = Object.freeze({
+  refund: Object.freeze(['refund']),
+  chargeback: Object.freeze(['chargeback']),
+  reversal: Object.freeze(['reversed']),
+  chain_reorganization: Object.freeze(['chain_reorganization']),
+  compensation: Object.freeze(['reversed'])
+});
+const COMPENSATION_CONTRACTS = Object.freeze({
+  compensation: Object.freeze({ evidenceStates: ECONOMIC_CORRECTION_STATE_CONTRACTS.compensation, eventStates: Object.freeze(['reversed']), direction: 'beneficiary_to_payer', amountSign: 'non_negative_magnitude' })
+});
 
 function correctionAuthorizationContract(entries) {
   if (!Array.isArray(entries) || entries.length === 0) throw new TypeError('correction authorization contract requires entries');
@@ -67,11 +77,12 @@ function validateCorrectionSemantics(correctionEvent, target, evidence, rule) {
   if (type === 'moderation_reversal') {
     if (!['reversed', 'removed', 'invalidated'].includes(item.body.outcome) || item.body.targetEventId !== target.eventId || !sameRef(item.body.targetObject, target.object || target.subject)) throw new Error('CORRECTION_EVIDENCE_SEMANTICS_INVALID');
   } else if (['refund', 'chargeback', 'reversal', 'chain_reorganization', 'compensation'].includes(type)) {
-    const expected = { refund: 'refund', chargeback: 'chargeback', reversal: 'reversed', chain_reorganization: 'chain_reorganization', compensation: 'reversed' }[type];
-    if (item.body.transactionRef !== target.object?.id || item.body.state !== expected) throw new Error('CORRECTION_EVIDENCE_SEMANTICS_INVALID');
+    const allowedStates = ECONOMIC_CORRECTION_STATE_CONTRACTS[type];
+    if (!allowedStates || item.body.transactionRef !== target.object?.id || !allowedStates.includes(item.body.state)) throw new Error('CORRECTION_EVIDENCE_SEMANTICS_INVALID');
     if (type === 'compensation') {
-      const required = ['amountMinor', 'currency', 'payerId', 'beneficiaryId', 'recipientId', 'compensatingTransactionRef'];
-      if (required.some(field => !item.body[field]) || item.body.amountMinor !== target.economic?.amountMinor || item.body.currency !== target.economic?.currency || item.body.payerId !== target.actorId || item.body.beneficiaryId !== target.beneficiaryId || item.body.recipientId !== target.beneficiaryId) throw new Error('COMPENSATION_SEMANTICS_INVALID');
+      const contract = COMPENSATION_CONTRACTS[type];
+      const required = ['amountMinor', 'currency', 'payerId', 'beneficiaryId', 'recipientId', 'compensatingTransactionRef', 'direction', 'amountSign'];
+      if (!contract || required.some(field => !item.body[field]) || !contract.evidenceStates.includes(item.body.state) || item.body.amountMinor !== target.economic?.amountMinor || item.body.currency !== target.economic?.currency || item.body.payerId !== target.actorId || item.body.beneficiaryId !== target.beneficiaryId || item.body.recipientId !== target.actorId || item.body.direction !== contract.direction || item.body.amountSign !== contract.amountSign) throw new Error('COMPENSATION_SEMANTICS_INVALID');
     }
     if (type === 'chain_reorganization' && !item.body.blockRef) throw new Error('CORRECTION_EVIDENCE_SEMANTICS_INVALID');
   } else if (['amendment', 'supersession'].includes(type)) {
@@ -85,4 +96,4 @@ function sameRef(left, right) { return !!left && !!right && left.type === right.
 function matches(pattern, value) { return pattern.endsWith('*') ? value.startsWith(pattern.slice(0, -1)) : pattern === value; }
 function requireString(value, name) { if (typeof value !== 'string' || !value) throw new TypeError(`authority requires ${name}`); }
 
-module.exports = { AUTHORITY_PRECEDENCE, TYPE_RULES, correctionAuthorizationContract, assertCorrectionAuthorizationContract };
+module.exports = { AUTHORITY_PRECEDENCE, TYPE_RULES, ECONOMIC_CORRECTION_STATE_CONTRACTS, COMPENSATION_CONTRACTS, correctionAuthorizationContract, assertCorrectionAuthorizationContract };

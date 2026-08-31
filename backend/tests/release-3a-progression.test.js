@@ -11,7 +11,7 @@ const { buildScenario, buildScenarioBundle } = require('../progression/simulator
 const { canonicalEvidence, resolveEffectiveEvidence, assertNonOverlappingReach } = require('../progression/evidence');
 const { canonicalPolicyArtifact } = require('../progression/policy-artifact');
 const { correctionAuthorizationContract } = require('../progression/authority');
-const { producerRegistry } = require('../progression/producer');
+const { testProducerTrust } = require('./helpers/test-producer-trust');
 const { simulate, report } = require('../progression/simulator/run');
 
 test('canonical activity events are immutable and require ledger fields', () => {
@@ -275,7 +275,7 @@ test('amendment and compensation relationships are fully validated', () => {
 test('compensation binds amount, currency, payer, beneficiary, recipient, and compensating transaction', () => {
   const target = testEvent({ key: 'compensation-original', type: 'economy.support.final', activityClass: 'TRANSACT', economic: { amountMinor: '2500', currency: 'USD', state: 'finalized', finalityEvidenceRef: 'a'.repeat(32) } });
   const replacement = testEvent({ key: 'compensation-reversal', type: 'economy.support.final', activityClass: 'TRANSACT', economic: { amountMinor: '2500', currency: 'USD', state: 'reversed' } });
-  const body = { state: 'reversed', authorityRef: 'payment-service', transactionRef: target.object.id, compensatingTransactionRef: replacement.object.id, amountMinor: '2500', currency: 'USD', payerId: target.actorId, beneficiaryId: target.beneficiaryId, recipientId: target.beneficiaryId };
+  const body = { state: 'reversed', authorityRef: 'payment-service', transactionRef: target.object.id, compensatingTransactionRef: replacement.object.id, amountMinor: '2500', currency: 'USD', payerId: target.actorId, beneficiaryId: target.beneficiaryId, recipientId: target.actorId, direction: 'beneficiary_to_payer', amountSign: 'non_negative_magnitude' };
   const make = mutation => correctionEvidence(target, 'economic_finality', 'payment-service', 'reversed', { body: { ...body, ...mutation } });
   const validEvidence = make({});
   const correction = correctionEvent(target, 'compensation', 1, validEvidence, 'payment-service', 'ECONOMIC', { compensatingEventId: replacement.eventId });
@@ -360,14 +360,14 @@ function correctionEvidence(target, type, producer, state = 'reversed', extra = 
 }
 
 function correctionOptions(evidence) {
-  const registry = producerRegistry([
+  const trust = testProducerTrust([
     { principalId: 'moderation-principal', producer: 'moderation-service', domains: ['correction'] },
     { principalId: 'payment-principal', producer: 'payment-service', domains: ['correction'] },
     { principalId: 'domain-principal', producer: 'domain-service', domains: ['correction'] }
   ]);
   const producer = evidence.find(item => ['moderation-service', 'payment-service', 'domain-service'].includes(item.producer))?.producer || 'moderation-service';
   const principalId = { 'moderation-service': 'moderation-principal', 'payment-service': 'payment-principal', 'domain-service': 'domain-principal' }[producer];
-  return { producerRegistry: registry, authenticatedProducerContext: registry.authenticatedContext({ authenticated: true, principalId }, 'correction'), evidenceByRef: Object.fromEntries(evidence.map(item => [item.evidenceId, item])), evidenceProducers: { reach: ['release-3a-simulator'], fraud_trust: ['release-3a-simulator'], moderation: ['moderation-service', 'domain-service'], economic_finality: ['payment-service'] }, authorization: correctionAuthorizationContract([
+  return { producerRegistry: trust.registry, authenticatedProducerContext: trust.authenticatedContext(principalId, 'correction'), evidenceByRef: Object.fromEntries(evidence.map(item => [item.evidenceId, item])), evidenceProducers: { reach: ['release-3a-simulator'], fraud_trust: ['release-3a-simulator'], moderation: ['moderation-service', 'domain-service'], economic_finality: ['payment-service'] }, authorization: correctionAuthorizationContract([
     { producer: 'moderation-service', authorityClass: 'MODERATION', correctionTypes: ['moderation_reversal'], eventTypePatterns: ['*'], evidenceProducers: ['moderation-service'], evidenceContractVersions: { moderation: '1.0.0' }, version: '1' },
     { producer: 'payment-service', authorityClass: 'ECONOMIC', correctionTypes: ['reversal', 'refund', 'chargeback', 'chain_reorganization', 'compensation'], eventTypePatterns: ['economy.*'], evidenceProducers: ['payment-service'], evidenceContractVersions: { economic_finality: '1.0.0' }, version: '1' },
     { producer: 'domain-service', authorityClass: 'DOMAIN', correctionTypes: ['amendment', 'supersession'], eventTypePatterns: ['creation.*'], evidenceProducers: ['domain-service'], evidenceContractVersions: { moderation: '1.0.0' }, version: '1' }
