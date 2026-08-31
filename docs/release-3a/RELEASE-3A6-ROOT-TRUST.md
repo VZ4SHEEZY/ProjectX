@@ -4,4 +4,12 @@ Production progression is a consumer of producer authority, never its issuer. Th
 
 Authentication is deliberately fail-closed in 3A.6. The non-exported `authenticateServerIdentityFor3B` adapter is the future connection point for credentials, sessions, or service identity. Release 3B must implement that adapter inside the server-owned composition; it must not add dependency injection to progression entry points or export registry/context issuance.
 
-Tests use `backend/tests/helpers/test-producer-trust.js`. Before loading progression consumers, this test-only module installs a test-owned registry assertion in the CommonJS test loader cache and issues independently branded fixture contexts. No production module imports it. Fresh-process tests require the real production paths without the test loader override and reproduce the Release 3A.5 direct-import attack.
+## Test fixture history
+
+The original Release 3A.6 tests used `backend/tests/helpers/test-producer-trust.js` to install a test-owned registry assertion through Node's CommonJS `require.cache` before loading progression consumers. That historical setup kept test authority out of the production API, but its process-wide cache replacement made isolation depend on module loading state. Release 3A.7 superseded that testing implementation without changing production progression code.
+
+## Release 3A.7 test fixture isolation
+
+The Release 3A.7 helper does not modify `require.cache`, replace production modules or exports, or modify Node's process-wide module loader. Instead, it creates private, uncached CommonJS `Module` instances for selected progression components. Test-owned dependencies are supplied locally only to those private instances, producing an isolated test module graph with independently branded fixture contexts and registry authority.
+
+Normal application imports continue to use the normal production module graph. Loading or using the helper leaves the identity and exports of the production `producer-internal.js`, `producer.js`, and `projection.js` modules unchanged. Test execution is independent of whether the helper or production modules are imported first, and fixture-created registries are not accepted by the real production authority. No production module imports the helper.
