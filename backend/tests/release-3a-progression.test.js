@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { testProducerTrust } = require('./helpers/test-producer-trust');
 const { canonicalEvent, appendLogicalLedger } = require('../progression/contracts');
 const { qualifyLedger, qualificationDecision } = require('../progression/qualification');
 const { project, resolveEffectiveEventGraph } = require('../progression/projection');
@@ -11,7 +12,6 @@ const { buildScenario, buildScenarioBundle } = require('../progression/simulator
 const { canonicalEvidence, resolveEffectiveEvidence, assertNonOverlappingReach } = require('../progression/evidence');
 const { canonicalPolicyArtifact } = require('../progression/policy-artifact');
 const { correctionAuthorizationContract } = require('../progression/authority');
-const { testProducerTrust } = require('./helpers/test-producer-trust');
 const { simulate, report } = require('../progression/simulator/run');
 
 test('canonical activity events are immutable and require ledger fields', () => {

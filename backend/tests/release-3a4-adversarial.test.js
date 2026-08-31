@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { testProducerTrust } = require('./helpers/test-producer-trust');
 const fs = require('node:fs');
 const path = require('node:path');
 const Ajv2020 = require('ajv/dist/2020');
@@ -12,7 +13,6 @@ const { canonicalPolicyArtifact } = require('../progression/policy-artifact');
 const { loadPolicy } = require('../progression/policy-runtime');
 const { qualifyLedger } = require('../progression/qualification');
 const { project, resolveEffectiveEventGraph } = require('../progression/projection');
-const { testProducerTrust } = require('./helpers/test-producer-trust');
 const policy = require('../progression/policies/simulation-v1');
 
 function event() { return canonicalEvent({ idempotencyKey: '3a4-event', eventType: 'creation.published', activityClass: 'CREATE', actorId: 'creator', beneficiaryId: 'creator', occurredAt: '2026-08-28T00:00:00.000Z' }); }
