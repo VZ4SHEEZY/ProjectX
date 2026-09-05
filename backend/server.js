@@ -89,6 +89,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/social', require('./routes/social'));
 app.use('/api/profiles', require('./routes/profiles'));
+app.use('/api/progression', require('./routes/progression'));
 app.use('/api/posts', require('./routes/posts'));
 app.use('/api', require('./routes/comments'));
 app.use('/api/notifications', require('./routes/notifications'));

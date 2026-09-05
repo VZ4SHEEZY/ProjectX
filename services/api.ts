@@ -147,6 +147,10 @@ export const profileAPI = {
   saveAccessRules: (rules: unknown[]) => api.put('/profiles/me/access-rules', { rules }),
 };
 
+export const progressionAPI = {
+  getUser: (userId: string) => api.get(`/progression/users/${userId}`),
+};
+
 // ==================== POST API ====================
 export const postAPI = {
   getPosts: (params?: { type?: string; visibility?: string; sort?: string; page?: number; limit?: number; following?: boolean; author?: string }) =>

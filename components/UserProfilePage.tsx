@@ -5,6 +5,7 @@ import { userAPI, postAPI, profileAPI, socialAPI } from '../services/api';
 import VideoModal from './VideoModal';
 import ProfileV2Modules, { ProfileV2Module } from './ProfileV2Modules';
 import { factionVisualClass, profileThemeStyle, resolveProfileTheme } from '../profileV2Themes';
+import ProgressionPanel from './ProgressionPanel';
 
 interface UserProfilePageProps {
   userId: string;
@@ -198,6 +199,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
         </div>
       ) : (
         <div className="max-w-6xl mx-auto p-4 md:p-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
+          <div className="mb-4"><ProgressionPanel userId={user._id} /></div>
           {profileModules.length > 0 ? <ProfileV2Modules modules={profileModules} userId={user._id} owner={user} posts={userPosts} /> : <div className="p-6 border-b border-[#39FF14]/20">
             <h3 className="text-white font-bold text-lg mb-4">Posts ({userPosts.length})</h3>
             {userPosts.length === 0 ? (

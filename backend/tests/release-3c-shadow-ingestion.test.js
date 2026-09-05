@@ -129,8 +129,8 @@ test('Release 3C migration is additive and protects non-empty rollback', async (
   await assert.rejects(release3c.rollbackMigration(), /contains data/);
 });
 
-test('runtime remains shadow-only with no progression route or user-facing flag', () => {
+test('runtime remains shadow-only while Release 3D owns the gated read route', () => {
   assert.equal(persistence.SHADOW_MODE, true); assert.equal(persistence.USER_FACING_PROGRESSION_ENABLED, false);
   const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
-  assert.equal(/app\.use\([^\n]*progression/.test(server), false);
+  assert.equal(server.includes("app.use('/api/progression'"), true);
 });

@@ -8,6 +8,7 @@ import { renderWidget, ProfileWidgetColumn } from './ProfileWidgetRenderer';
 import { Copy, Wallet, Edit, Save, PaintBucket, Layers, Crown, Eye, EyeOff, Sparkles, MessageSquare, UserPlus, Heart, Eye as EyeIcon, Zap, Music } from 'lucide-react';
 import { authAPI, userAPI, postAPI } from '../services/api';
 import VideoModal from './VideoModal';
+import ProgressionPanel from './ProgressionPanel';
 
 interface ProfileGridProps {
   onOpenAdmin?: () => void;
@@ -372,6 +373,8 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({ user, onTip, onProfileUpdate,
       <div className={`relative z-20 w-full max-w-5xl mb-4 transition-all duration-500 ${isHudVisible ? 'opacity-100' : 'opacity-0'}`}>
         <MarqueeText text="THANKS FOR VISITING MY PROFILE! DROP A COMMENT BELOW!" user={user} />
       </div>
+
+      <div className="relative z-20 w-full max-w-5xl mb-4"><ProgressionPanel userId={user.id} /></div>
 
       <div className={`
         sticky top-16 md:top-0 z-20 w-full max-w-5xl flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6

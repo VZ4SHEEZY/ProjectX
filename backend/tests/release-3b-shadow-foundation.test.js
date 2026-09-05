@@ -201,11 +201,12 @@ test('multi-record writes still create and roll back their own transaction witho
   assert.equal(await Correction.exists({ correctionEventId: correction.eventId }), null);
 });
 
-test('shadow foundation is not imported by the application server or exposed as a route', () => {
+test('shadow persistence remains disabled while the separate product route is gated', () => {
   assert.equal(service.SHADOW_MODE, true);
   assert.equal(service.USER_FACING_PROGRESSION_ENABLED, false);
   const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   assert.equal(serverSource.includes('progression/persistence'), false);
+  assert.equal(serverSource.includes("app.use('/api/progression'"), true);
 });
 
 test('rollback refuses to discard persisted shadow data by default', async () => {

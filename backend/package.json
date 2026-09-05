@@ -11,6 +11,7 @@
     "test:progression": "node --test --test-concurrency=1 tests/release-3a-progression.test.js",
     "test:progression-persistence": "node --test --test-concurrency=1 tests/release-3b-shadow-foundation.test.js",
     "test:progression-ingestion": "node --test --test-concurrency=1 tests/release-3c-shadow-ingestion.test.js",
+    "test:progression-product": "node --test --test-concurrency=1 tests/release-3d-product-layer.test.js",
     "simulate:progression": "node progression/simulator/run.js",
     "test:migration": "node --test --test-concurrency=1 tests/release1-migration.test.js",
     "test:external": "node scripts/verify-external-integrations.js"
