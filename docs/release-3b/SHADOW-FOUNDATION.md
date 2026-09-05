@@ -20,11 +20,13 @@ Release 3B adds disabled backend storage and replay support for the Release 3A p
 - `progression_policy_artifacts`: immutable policy/version artifacts needed to identify a replay exactly.
 - `progression_projections`: rebuildable personal and faction checkpoints keyed by canonical projection context.
 
-The ledger collections reject update, replacement, and deletion operations through model middleware. Duplicate canonical deliveries are idempotent; reuse of an identity with different canonical content fails closed.
+The ledger collections reject update, replacement, and deletion operations through model middleware. Duplicate canonical deliveries are idempotent; reuse of an identity with different canonical content fails closed. Finalized qualification, contribution, and correction records validate their persisted event, evidence, policy, context, and beneficiary relationships before append. Raw events and evidence remain independently appendable so producer arrival order is not constrained.
 
 ## Replay
 
-The internal persistence service reads activity events in the Release 3A canonical order (`occurredAt`, producer, event ID), restores canonical evidence, and calls the unchanged Release 3A qualification and projection functions. It can return a selected user's rebuilt personal projection and persists resulting decisions, contribution records, and separate personal/faction checkpoints. The projection context preserves cutoff, watermark, evidence/correction generations and digests, policy artifact identity, and ordering version.
+The internal persistence service resolves replay policy by the complete persisted identity (`policyId`, version, and artifact digest), verifies the stored artifact, and selects only a registered implementation matching its verified code digest. Caller-supplied policy implementations are rejected. It reads activity events in the Release 3A canonical order (`occurredAt`, producer, event ID), restores canonical evidence, and calls the unchanged Release 3A qualification and projection functions. It can return a selected user's rebuilt personal projection and persists resulting decisions, contribution records, and separate personal/faction checkpoints. The projection context preserves cutoff, watermark, evidence/correction generations and digests, policy artifact identity, and ordering version.
+
+Atomic multi-collection operations start their own MongoDB transaction when no session is supplied. A caller-supplied valid session is reused without creating a nested session or transaction, allowing future domain/outbox work to compose the shadow writes into its existing transaction.
 
 Replay currently scans the shadow ledger so faction projections are rebuilt from the same complete input set as personal projections. It is an internal batch foundation, not a request-path API.
 

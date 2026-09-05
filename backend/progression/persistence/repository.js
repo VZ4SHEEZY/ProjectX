@@ -103,6 +103,26 @@ async function appendPolicyArtifact(artifact, options = {}) {
   return stored;
 }
 
+async function getActivityEvent(eventId, options = {}) {
+  return ActivityEvent.findOne({ eventId }).select('+canonicalPayload').session(options.session || null).lean();
+}
+
+async function getEvidence(evidenceIds, options = {}) {
+  return Evidence.find({ evidenceId: { $in: evidenceIds } }).select('+canonicalPayload').session(options.session || null).lean();
+}
+
+async function getQualificationDecision(decisionId, options = {}) {
+  return QualificationDecision.findOne({ decisionId }).select('+canonicalPayload').session(options.session || null).lean();
+}
+
+async function getPolicyArtifact(identity, options = {}) {
+  const query = {};
+  if (identity.policyId) query.policyId = identity.policyId;
+  if (identity.version) query.version = identity.version;
+  if (identity.artifactDigest) query.artifactDigest = identity.artifactDigest;
+  return PolicyArtifact.findOne(query).select('+canonicalPayload').session(options.session || null).lean();
+}
+
 async function storeProjection({ scope, subjectId, projectionContext, checkpoint }, options = {}) {
   return Projection.findOneAndUpdate(
     { scope, subjectId, projectionContextId: projectionContext.projectionContextId },
@@ -115,10 +135,10 @@ function getProjection(scope, subjectId, projectionContextId) {
   return Projection.findOne({ scope, subjectId, projectionContextId }).select('+projectionContext +checkpoint').lean();
 }
 
-async function getOrderedReplayInputs() {
+async function getOrderedReplayInputs(options = {}) {
   const [eventDocs, evidenceDocs] = await Promise.all([
-    ActivityEvent.find({}).select('+canonicalPayload').sort({ occurredAt: 1, producer: 1, eventId: 1 }).lean(),
-    Evidence.find({}).select('+canonicalPayload').sort({ observedAt: 1, evidenceId: 1 }).lean()
+    ActivityEvent.find({}).select('+canonicalPayload').sort({ occurredAt: 1, producer: 1, eventId: 1 }).session(options.session || null).lean(),
+    Evidence.find({}).select('+canonicalPayload').sort({ observedAt: 1, evidenceId: 1 }).session(options.session || null).lean()
   ]);
   return { events: eventDocs.map(value => value.canonicalPayload), evidence: evidenceDocs.map(value => value.canonicalPayload) };
 }
@@ -127,4 +147,4 @@ function sessionOption(options) { return options.session ? { session: options.se
 function omitPayload(value) { const { canonicalPayload, ...rest } = value; return rest; }
 function relationshipValue(value) { return { correctionEventId: value.correctionEventId, targetEventId: value.targetEventId, type: value.type, effectiveAt: value.effectiveAt, evidenceRefs: value.evidenceRefs, sequence: value.sequence, authorityVersion: value.authorityVersion, ...(value.replacementEventId ? { replacementEventId: value.replacementEventId } : {}), ...(value.compensatingEventId ? { compensatingEventId: value.compensatingEventId } : {}) }; }
 
-module.exports = { appendActivityEvent, appendEvidence, appendQualificationDecision, appendCorrectionRelationship, appendContributionResult, appendPolicyArtifact, storeProjection, getProjection, getOrderedReplayInputs };
+module.exports = { appendActivityEvent, appendEvidence, appendQualificationDecision, appendCorrectionRelationship, appendContributionResult, appendPolicyArtifact, getActivityEvent, getEvidence, getQualificationDecision, getPolicyArtifact, storeProjection, getProjection, getOrderedReplayInputs };
