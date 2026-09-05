@@ -8,6 +8,7 @@ const Notification = require('../models/Notification');
 const ContentView = require('../models/ContentView');
 const { canViewPost, publicUserProjection } = require('../services/accessPolicy');
 const { hasPlatformRole, auditPlatformAction } = require('../services/platformAuthorization');
+const { withProgressionOutbox } = require('../progression/runtime/outbox');
 
 async function filterAuthorizedPosts(viewer, posts) {
   const allowed = [];
@@ -371,21 +372,20 @@ router.post('/', protect, async (req, res) => {
       });
     }
 
-    const post = await Post.create({
-      author: req.user._id,
-      content,
-      type: type || 'text',
-      mediaUrl,
-      thumbnail,
-      visibility: visibility || 'public',
-      price,
-      isNSFW: isNSFW || false,
-      isSensitive: isSensitive || false,
-      tags: tags || [],
-      location,
-      duration,
-      status: 'published',
-      faction: req.user.faction
+    const post = await withProgressionOutbox(async ({ session, enqueue }) => {
+      const [created] = await Post.create([{
+        author: req.user._id, content, type: type || 'text', mediaUrl, thumbnail,
+        visibility: visibility || 'public', price, isNSFW: isNSFW || false,
+        isSensitive: isSensitive || false, tags: tags || [], location, duration,
+        status: 'published', faction: req.user.faction
+      }], { session });
+      await enqueue({
+        principal: 'user', eventType: 'creation.published', activityClass: 'CREATE',
+        actorId: req.user._id, beneficiaryId: req.user._id, occurredAt: created.createdAt,
+        subject: { type: 'user', id: String(req.user._id) }, object: { type: 'post', id: String(created._id) },
+        source: { objectType: 'post', objectId: created._id, transition: 'created', version: '1' }
+      });
+      return created;
     });
 
     await post.populate('author', 'username displayName avatar isVerified');
@@ -426,7 +426,7 @@ router.post('/', protect, async (req, res) => {
 // @access  Private
 router.put('/:id', protect, async (req, res) => {
   try {
-    let post = await Post.findById(req.params.id);
+    const post = await Post.findById(req.params.id);
 
     if (!post) {
       return res.status(404).json({
@@ -517,7 +517,7 @@ router.delete('/:id', protect, async (req, res) => {
 // @access  Private
 router.post('/:id/like', protect, async (req, res) => {
   try {
-    const post = await Post.findById(req.params.id);
+    let post = await Post.findById(req.params.id);
 
     if (!post) {
       return res.status(404).json({
@@ -527,29 +527,20 @@ router.post('/:id/like', protect, async (req, res) => {
     }
     if (!(await canViewPost(req.user, post)).allowed) return res.status(403).json({ success: false, message: 'Post access denied' });
 
-    const isLiked = post.likedBy.includes(req.user._id);
-
-    if (isLiked) {
-      // Unlike
-      post.likedBy = post.likedBy.filter(
-        id => id.toString() !== req.user._id.toString()
-      );
-      post.stats.likes = Math.max(0, post.stats.likes - 1);
-    } else {
-      // Like
-      post.likedBy.push(req.user._id);
-      post.stats.likes += 1;
-
-      // Create notification
-      if (post.author.toString() !== req.user._id.toString()) {
-        await createNotification(post.author, req.user._id, 'like', {
-          post: post._id,
-          message: `${req.user.displayName || req.user.username} liked your post`
-        });
-      }
-    }
-
-    await post.save();
+    const isLiked = post.likedBy.some(id => id.toString() === req.user._id.toString());
+    post = await withProgressionOutbox(async ({ session, enqueue }) => {
+      const current = await Post.findById(req.params.id).session(session);
+      const currentlyLiked = current.likedBy.some(id => id.toString() === req.user._id.toString());
+      if (currentlyLiked) { current.likedBy = current.likedBy.filter(id => id.toString() !== req.user._id.toString()); current.stats.likes = Math.max(0, current.stats.likes - 1); }
+      else { current.likedBy.push(req.user._id); current.stats.likes += 1; }
+      await current.save({ session });
+      const transition = currentlyLiked ? 'unliked' : 'liked';
+      if (!currentlyLiked) await enqueue({ principal: 'social', eventType: 'engagement.received', activityClass: 'ENGAGE', actorId: req.user._id, beneficiaryId: current.author,
+        occurredAt: current.updatedAt, subject: { type: 'user', id: String(current.author) }, object: { type: 'post', id: String(current._id) },
+        source: { objectType: 'post_reaction', objectId: `${current._id}:${req.user._id}`, transition, version: String(current.__v) } });
+      return current;
+    });
+    if (!isLiked && post.author.toString() !== req.user._id.toString()) await createNotification(post.author, req.user._id, 'like', { post: post._id, message: `${req.user.displayName || req.user.username} liked your post` });
 
     res.json({
       success: true,

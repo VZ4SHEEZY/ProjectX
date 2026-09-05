@@ -5,6 +5,7 @@ const { protect, requireAgeVerified } = require('../middleware/auth');
 const User = require('../models/User');
 const Tip = require('../models/Tip');
 const tipService = require('../services/tip');
+const { withProgressionOutbox } = require('../progression/runtime/outbox');
 
 const router = express.Router();
 const INTENT_TTL_MS = 15 * 60 * 1000;
@@ -22,13 +23,31 @@ const publicTip = tip => ({ id: tip._id, amount: tip.amount, status: tip.txStatu
 async function confirmTip(tip, txHash) {
   if (tip.txHash && tip.txHash.toLowerCase() !== txHash.toLowerCase()) throw new Error('Intent is already bound to a different transaction');
   const result = await tipService.verifyTipTransaction(tip.toObject ? tip.toObject() : tip, txHash);
-  tip.txHash = txHash.toLowerCase();
+  const normalizedHash = txHash.toLowerCase();
   if (result.pending) {
-    tip.txStatus = 'pending'; tip.confirmationCount = result.confirmations || 0;
+    tip.txHash = normalizedHash; tip.txStatus = 'pending'; tip.confirmationCount = result.confirmations || 0;
+    await tip.save();
   } else {
-    tip.txStatus = 'confirmed'; tip.blockNumber = result.blockNumber; tip.confirmationCount = result.confirmations; tip.confirmedAt = new Date(); tip.failureReason = undefined;
+    tip = await withProgressionOutbox(async ({ session, enqueue }) => {
+      const current = await Tip.findById(tip._id).session(session);
+      if (current.txStatus === 'confirmed') return current;
+      current.txHash = normalizedHash; current.txStatus = 'confirmed'; current.blockNumber = result.blockNumber;
+      current.confirmationCount = result.confirmations; current.confirmedAt = new Date(); current.failureReason = undefined;
+      await current.save({ session });
+      const observedAt = current.confirmedAt;
+      await enqueue({
+        principal: 'payments', eventType: 'economy.support.final', activityClass: 'TRANSACT', actorId: current.sender, beneficiaryId: current.creator,
+        occurredAt: observedAt, subject: { type: 'user', id: String(current.creator) }, object: { type: 'transaction', id: normalizedHash }, sourceEventId: normalizedHash,
+        source: { objectType: 'tip', objectId: current._id, transition: 'finalized', version: `${current.chainId}:${result.blockNumber}` },
+        economic: { amountMinor: current.amountUnits, currency: current.token, state: 'finalized' },
+        evidence: [{ type: 'economic_finality', contractVersion: '1.0.0', subject: { type: 'transaction', id: normalizedHash }, generation: '1', confidence: 1,
+          lineage: [`tip:${current._id}`, `tx:${normalizedHash}`], privacyClassification: 'restricted', retentionClass: 'audit',
+          body: { state: 'finalized', authorityRef: 'payment-service', transactionRef: normalizedHash, blockRef: String(result.blockNumber), confirmationDepth: result.confirmations,
+            amountMinor: current.amountUnits, currency: current.token, payerId: String(current.sender), beneficiaryId: String(current.creator), recipientId: String(current.creator), direction: 'payer_to_beneficiary', amountSign: 'non_negative_magnitude' } }]
+      });
+      return current;
+    });
   }
-  await tip.save();
   return { result, tip };
 }
 

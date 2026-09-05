@@ -52,4 +52,22 @@ function assertProducerRegistry(registry) {
   return registry;
 }
 
-module.exports = { assertProducerRegistry };
+// Non-enumerable, server-internal adapter for Release 3C. It exposes neither a
+// registry nor an authenticated context and accepts only the closed principals
+// composed above. Application routes cannot supply producer or authority claims.
+function ingestRuntime(payload, principalId, domain, kind) {
+  const identity = PRODUCTION_PRINCIPALS.find(entry => entry.principalId === principalId);
+  if (!identity || !identity.domains.includes(domain)) throw new Error(`PRODUCER_DOMAIN_UNAUTHORIZED:${domain}`);
+  if (kind === 'event') {
+    const { canonicalEvent } = require('./contracts');
+    if (payload.provenance?.producer && payload.provenance.producer !== identity.producer) throw new Error('UNTRUSTED_PRODUCER_CLAIM_MISMATCH');
+    return canonicalEvent({ ...payload, provenance: { ...(payload.provenance || {}), producer: identity.producer } });
+  }
+  const { canonicalEvidence } = require('./evidence');
+  if (payload.producer && payload.producer !== identity.producer) throw new Error('UNTRUSTED_PRODUCER_CLAIM_MISMATCH');
+  return canonicalEvidence({ ...payload, producer: identity.producer });
+}
+
+const exported = { assertProducerRegistry };
+Object.defineProperty(exported, 'ingestRuntime', { value: ingestRuntime, enumerable: false });
+module.exports = Object.freeze(exported);

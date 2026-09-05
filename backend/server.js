@@ -12,6 +12,7 @@ const { requireAdmin } = require('./middleware/admin');
 const { validateEnv, createCorsOrigin } = require('./config/env');
 const { registerAuthorizedSocketHandlers } = require('./services/socketAuthorization');
 const observability = require('./services/observability');
+const { startShadowWorker } = require('./progression/runtime/worker');
 require('dotenv').config();
 
 validateEnv();
@@ -252,8 +253,12 @@ app.use((req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
+let stopProgressionWorker = () => {};
 
 connectDB().then(() => {
+  if (process.env.PROGRESSION_SHADOW_WORKER_ENABLED !== 'false') {
+    stopProgressionWorker = startShadowWorker({ onError: error => observability.recordError('progression_shadow_worker_error', error) });
+  }
   httpServer.listen(PORT, () => {
     console.log(`
 ╔════════════════════════════════════════════════════════════╗
@@ -276,6 +281,7 @@ connectDB().then(() => {
 
 const shutdown = async (signal) => {
   console.log(`${signal} received, shutting down`);
+  stopProgressionWorker();
   io.close();
   await new Promise((resolve) => httpServer.close(resolve));
   await mongoose.connection.close();

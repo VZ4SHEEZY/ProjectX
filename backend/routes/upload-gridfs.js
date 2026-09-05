@@ -4,6 +4,7 @@ const multer = require('multer');
 const { protect, optionalAuth } = require('../middleware/auth');
 const { uploadToGridFS, downloadFromGridFS, getFileInfo, deleteFromGridFS } = require('../utils/gridfs');
 const Post = require('../models/Post');
+const { withProgressionOutbox } = require('../progression/runtime/outbox');
 const { canViewPost } = require('../services/accessPolicy');
 const mongoose = require('mongoose');
 
@@ -60,7 +61,8 @@ router.post('/video-gridfs', protect, upload.single('video'), async (req, res) =
     const thumbnailUrl = `/api/upload/thumbnail/${videoResult.fileId}`;
 
     // Create post document
-    const post = await Post.create({
+    const post = await withProgressionOutbox(async ({ session, enqueue }) => {
+      const [created] = await Post.create([{
       author: req.user._id,
       type: 'video',
       title: title || 'Untitled Video',
@@ -76,6 +78,11 @@ router.post('/video-gridfs', protect, upload.single('video'), async (req, res) =
         likes: 0,
         comments: 0
       }
+      }], { session });
+      await enqueue({ principal: 'user', eventType: 'creation.published', activityClass: 'CREATE', actorId: req.user._id, beneficiaryId: req.user._id,
+        occurredAt: created.createdAt, subject: { type: 'user', id: String(req.user._id) }, object: { type: 'post', id: String(created._id) },
+        source: { objectType: 'post', objectId: created._id, transition: 'created', version: '1' } });
+      return created;
     });
 
     // Populate author
@@ -221,13 +228,19 @@ router.post('/image-gridfs', protect, upload.single('image'), async (req, res) =
     const { title, description, isNSFW } = req.body;
 
     // Create post document
-    const post = await Post.create({
+    const post = await withProgressionOutbox(async ({ session, enqueue }) => {
+      const [created] = await Post.create([{
       author: req.user._id,
       type: 'image',
       title: title || 'Untitled Image',
       description: description || '',
       mediaUrl: `/api/upload/image/${imageResult.fileId}`,
       isNSFW: isNSFW === 'true' || isNSFW === true
+      }], { session });
+      await enqueue({ principal: 'user', eventType: 'creation.published', activityClass: 'CREATE', actorId: req.user._id, beneficiaryId: req.user._id,
+        occurredAt: created.createdAt, subject: { type: 'user', id: String(req.user._id) }, object: { type: 'post', id: String(created._id) },
+        source: { objectType: 'post', objectId: created._id, transition: 'created', version: '1' } });
+      return created;
     });
 
     await post.populate('author', 'username avatar walletAddress isVerified');

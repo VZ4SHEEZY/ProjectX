@@ -7,6 +7,7 @@ const { canViewPost } = require('../services/accessPolicy');
 const { createNotification } = require('./notifications');
 const mongoose = require('mongoose');
 const { hasPlatformRole, auditPlatformAction } = require('../services/platformAuthorization');
+const { withProgressionOutbox } = require('../progression/runtime/outbox');
 
 // @route   GET /api/posts/:postId/comments
 // @desc    Get all comments for a post
@@ -84,26 +85,27 @@ router.post('/posts/:postId/comments', protect, async (req, res) => {
     if (!(await canViewPost(req.user, post)).allowed) return res.status(403).json({ success: false, message: 'Post access denied' });
 
     // Create comment
-    const comment = await Comment.create({
-      author: req.user._id,
-      post: req.params.postId,
-      text: content.trim(),
-      parentComment: parentCommentId || null
+    let parentComment = null;
+    if (parentCommentId) {
+      parentComment = await Comment.findOne({ _id: parentCommentId, post: post._id, isDeleted: false });
+      if (!parentComment) return res.status(400).json({ success: false, message: 'Invalid parent comment' });
+    }
+    const comment = await withProgressionOutbox(async ({ session, enqueue }) => {
+      const [created] = await Comment.create([{ author: req.user._id, post: post._id, text: content.trim(), parentComment: parentCommentId || null }], { session });
+      await Post.updateOne({ _id: post._id }, { $inc: { 'stats.comments': 1 } }, { session });
+      if (parentComment) await Comment.updateOne({ _id: parentComment._id }, { $addToSet: { replies: created._id } }, { session });
+      const beneficiaryId = parentComment?.author || post.author;
+      await enqueue({ principal: 'social', eventType: 'engagement.received', activityClass: 'ENGAGE',
+        actorId: req.user._id, beneficiaryId, occurredAt: created.createdAt, subject: { type: 'user', id: String(beneficiaryId) }, object: { type: 'comment', id: String(created._id) },
+        source: { objectType: 'comment', objectId: created._id, transition: 'created', version: '1' } });
+      return created;
     });
 
     await comment.populate('author', 'username displayName avatar isVerified');
 
-    // Update post comment count
-    post.stats.comments += 1;
-    await post.save();
-
     // If it's a reply, add to parent comment
     if (parentCommentId) {
-      const parentComment = await Comment.findById(parentCommentId);
-      if (parentComment && parentComment.post.toString() === post._id.toString() && !parentComment.isDeleted) {
-        parentComment.replies.push(comment._id);
-        await parentComment.save();
-
+      if (parentComment) {
         // Notify parent comment author
         if (parentComment.author.toString() !== req.user._id.toString()) {
           await createNotification(parentComment.author, req.user._id, 'reply', {
@@ -111,11 +113,6 @@ router.post('/posts/:postId/comments', protect, async (req, res) => {
             message: `${req.user.displayName || req.user.username} replied to your comment`
           });
         }
-      } else {
-        await Comment.deleteOne({ _id: comment._id });
-        post.stats.comments = Math.max(0, post.stats.comments - 1);
-        await post.save();
-        return res.status(400).json({ success: false, message: 'Invalid parent comment' });
       }
     } else {
       // Notify post author of new comment
@@ -150,7 +147,7 @@ router.put('/comments/:id', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Valid comment content is required' });
     }
 
-    let comment = await Comment.findById(req.params.id);
+    const comment = await Comment.findById(req.params.id);
 
     if (!comment) {
       return res.status(404).json({
@@ -243,7 +240,7 @@ router.post('/comments/:id/like', protect, async (req, res) => {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({ success: false, message: 'Invalid comment ID' });
     }
-    const comment = await Comment.findById(req.params.id);
+    let comment = await Comment.findById(req.params.id);
 
     if (!comment) {
       return res.status(404).json({
@@ -252,26 +249,24 @@ router.post('/comments/:id/like', protect, async (req, res) => {
       });
     }
 
-    const isLiked = comment.likedBy.includes(req.user._id);
-
-    if (isLiked) {
-      // Unlike
-      comment.likedBy = comment.likedBy.filter(
-        id => id.toString() !== req.user._id.toString()
-      );
-      comment.likes = Math.max(0, comment.likes - 1);
-    } else {
-      // Like
-      comment.likedBy.push(req.user._id);
-      comment.likes += 1;
-    }
-
-    await comment.save();
+    const isLiked = comment.likes.some(id => id.toString() === req.user._id.toString());
+    comment = await withProgressionOutbox(async ({ session, enqueue }) => {
+      const current = await Comment.findById(req.params.id).session(session);
+      const currentlyLiked = current.likes.some(id => id.toString() === req.user._id.toString());
+      if (currentlyLiked) { current.likes = current.likes.filter(id => id.toString() !== req.user._id.toString()); current.likesCount = Math.max(0, current.likesCount - 1); }
+      else { current.likes.push(req.user._id); current.likesCount += 1; }
+      await current.save({ session });
+      const transition = currentlyLiked ? 'unliked' : 'liked';
+      if (!currentlyLiked) await enqueue({ principal: 'social', eventType: 'engagement.received', activityClass: 'ENGAGE', actorId: req.user._id, beneficiaryId: current.author,
+        occurredAt: current.updatedAt, subject: { type: 'user', id: String(current.author) }, object: { type: 'comment', id: String(current._id) },
+        source: { objectType: 'comment_reaction', objectId: `${current._id}:${req.user._id}`, transition, version: String(current.__v) } });
+      return current;
+    });
 
     res.json({
       success: true,
       isLiked: !isLiked,
-      likes: comment.likes
+      likes: comment.likesCount
     });
   } catch (error) {
     res.status(500).json({

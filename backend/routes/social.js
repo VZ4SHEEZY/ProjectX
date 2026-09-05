@@ -11,6 +11,7 @@ const Friendship = require('../models/Friendship');
 const TopFriend = require('../models/TopFriend');
 const { orderedPair, isBlockedEitherWay } = require('../services/relationshipPolicy');
 const { publicUserProjection, canViewProfile } = require('../services/accessPolicy');
+const { withProgressionOutbox } = require('../progression/runtime/outbox');
 
 const router = express.Router();
 const validOther = (req, res) => mongoose.isValidObjectId(req.params.userId) && req.params.userId !== req.user._id.toString() || (res.status(400).json({ success: false, message: 'Invalid user' }), false);
@@ -71,11 +72,16 @@ router.patch('/friends/requests/:requestId', protect, async (req, res) => {
   const request = await FriendRequest.findOne({ _id: req.params.requestId, recipient: req.user._id, status: 'pending' });
   if (!request) return res.status(404).json({ success: false, message: 'Friend request not found' });
   if (await isBlockedEitherWay(request.requester, request.recipient)) return res.status(403).json({ success: false, message: 'Relationship unavailable' });
-  request.status = req.body.status; request.respondedAt = new Date(); await request.save();
-  if (request.status === 'accepted') {
-    const [userLow, userHigh] = orderedPair(request.requester, request.recipient);
-    await Friendship.updateOne({ userLow, userHigh }, { $setOnInsert: { acceptedRequest: request._id } }, { upsert: true });
-  }
+  if (req.body.status === 'accepted') {
+    await withProgressionOutbox(async ({ session, enqueue }) => {
+      request.status = 'accepted'; request.respondedAt = new Date(); await request.save({ session });
+      const [userLow, userHigh] = orderedPair(request.requester, request.recipient);
+      const friendship = await Friendship.findOneAndUpdate({ userLow, userHigh }, { $setOnInsert: { acceptedRequest: request._id } }, { upsert: true, new: true, session });
+      await enqueue({ principal: 'social', eventType: 'relationship.formed', activityClass: 'ENGAGE', actorId: request.recipient, beneficiaryId: request.requester,
+        occurredAt: request.respondedAt, subject: { type: 'user', id: String(request.requester) }, object: { type: 'friendship', id: String(friendship._id) },
+        source: { objectType: 'friendship', objectId: `${userLow}:${userHigh}`, transition: 'accepted', version: String(request._id) } });
+    });
+  } else { request.status = 'declined'; request.respondedAt = new Date(); await request.save(); }
   res.json({ success: true, data: request });
 });
 

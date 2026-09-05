@@ -4,6 +4,7 @@ const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const Tip = require('../models/Tip');
 const { requireAdmin, logAdminAction } = require('../middleware/admin');
+const { withProgressionOutbox } = require('../progression/runtime/outbox');
 
 const MAX_SUBSCRIPTION_TIERS = 6;
 const ALLOWED_TIER_ICONS = new Set(['users', 'star', 'crown', 'zap']);
@@ -88,7 +89,14 @@ router.post('/apply', protect, async (req, res) => {
       user.creatorApprovedDate = new Date();
     }
 
-    await user.save();
+    if (user.creatorStatus === 'approved') {
+      await withProgressionOutbox(async ({ session, enqueue }) => {
+        await user.save({ session });
+        await enqueue({ principal: 'user', eventType: 'achievement.reached', activityClass: 'ACHIEVE', actorId: user._id, beneficiaryId: user._id,
+          occurredAt: user.creatorApprovedDate, subject: { type: 'user', id: String(user._id) }, object: { type: 'creator_status', id: String(user._id) },
+          source: { objectType: 'creator_status', objectId: user._id, transition: 'approved', version: '1' } });
+      });
+    } else await user.save();
 
     res.json({
       success: true,
@@ -321,13 +329,21 @@ router.post('/verify-admin', protect, requireAdmin, logAdminAction('creator_veri
     user.creatorVerifiedAt = new Date();
 
     // If pending, auto-approve
-    if (user.creatorStatus === 'pending') {
+    const becameCreator = user.creatorStatus === 'pending';
+    if (becameCreator) {
       user.creatorStatus = 'approved';
       user.isCreator = true;
       user.creatorApprovedDate = new Date();
     }
 
-    await user.save();
+    if (becameCreator) {
+      await withProgressionOutbox(async ({ session, enqueue }) => {
+        await user.save({ session });
+        await enqueue({ principal: 'user', eventType: 'achievement.reached', activityClass: 'ACHIEVE', actorId: user._id, beneficiaryId: user._id,
+          occurredAt: user.creatorApprovedDate, subject: { type: 'user', id: String(user._id) }, object: { type: 'creator_status', id: String(user._id) },
+          source: { objectType: 'creator_status', objectId: user._id, transition: 'approved', version: '1' } });
+      });
+    } else await user.save();
     await req.logAdminAction({ targetType: 'user', targetId: user._id, creatorStatus: user.creatorStatus });
 
     res.json({

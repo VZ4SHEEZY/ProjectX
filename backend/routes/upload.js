@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { protect } = require('../middleware/auth');
+const { withProgressionOutbox } = require('../progression/runtime/outbox');
 const User = require('../models/User');
 const Post = require('../models/Post');
 const observability = require('../services/observability');
@@ -78,7 +79,8 @@ router.post('/video', protect, videoUpload.single('video'), async (req, res) => 
     const user = await User.findById(req.user._id);
     
     // Create Post document in MongoDB
-    const post = await require('../models/Post').create({
+    const post = await withProgressionOutbox(async ({ session, enqueue }) => {
+      const [created] = await require('../models/Post').create([{
       author: req.user._id,
       type: 'video',
       title: req.body.title || 'Untitled Video',
@@ -94,6 +96,11 @@ router.post('/video', protect, videoUpload.single('video'), async (req, res) => 
       price: req.body.price ? parseFloat(req.body.price) : 0,
       isPublished: true,
       status: 'published'
+      }], { session });
+      await enqueue({ principal: 'user', eventType: 'creation.published', activityClass: 'CREATE', actorId: req.user._id, beneficiaryId: req.user._id,
+        occurredAt: created.createdAt, subject: { type: 'user', id: String(req.user._id) }, object: { type: 'post', id: String(created._id) },
+        source: { objectType: 'post', objectId: created._id, transition: 'created', version: '1' } });
+      return created;
     });
     
     // Populate author details

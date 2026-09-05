@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Post = require('../models/Post');
 const { protect, optionalAuth } = require('../middleware/auth');
 const { createNotification } = require('./notifications');
+const { withProgressionOutbox } = require('../progression/runtime/outbox');
 const Follow = require('../models/Follow');
 const FollowRequest = require('../models/FollowRequest');
 const Profile = require('../models/Profile');
@@ -232,37 +233,40 @@ router.post('/:id/follow', protect, async (req, res) => {
     }
 
     if (await isBlockedEitherWay(req.user._id, userToFollow._id)) return res.status(403).json({ success: false, message: 'Relationship unavailable' });
-    const currentUser = await User.findById(req.user._id);
+    let currentUser = await User.findById(req.user._id);
     const followingNow = await isFollowing(currentUser._id, userToFollow._id);
 
-    if (followingNow) {
-      // Unfollow
-      currentUser.following = currentUser.following.filter(
-        id => id.toString() !== req.params.id
-      );
-      userToFollow.followers = userToFollow.followers.filter(
-        id => id.toString() !== req.user._id.toString()
-      );
-      await Follow.deleteOne({ follower: currentUser._id, followed: userToFollow._id });
-    } else if (userToFollow.isPrivate === true) {
+    if (!followingNow && userToFollow.isPrivate === true) {
       const request = await FollowRequest.findOneAndUpdate({ requester: currentUser._id, recipient: userToFollow._id, status: 'pending' }, { $setOnInsert: { requester: currentUser._id, recipient: userToFollow._id, status: 'pending' } }, { upsert: true, new: true });
       return res.status(202).json({ success: true, isFollowing: false, followStatus: 'requested', requestId: request._id, followersCount: userToFollow.followersCount, followingCount: currentUser.followingCount, message: 'Follow request sent' });
-    } else {
-      // Follow
-      currentUser.following.push(req.params.id);
-      if (!userToFollow.followers.some(id => id.toString() === req.user._id.toString())) userToFollow.followers.push(req.user._id);
-      await Follow.updateOne({ follower: currentUser._id, followed: userToFollow._id }, { $setOnInsert: { source: 'native' } }, { upsert: true });
     }
-
-    currentUser.followingCount = currentUser.following.length;
-    userToFollow.followersCount = userToFollow.followers.length;
-    await currentUser.save();
-    await userToFollow.save();
+    if (followingNow) {
+      currentUser.following = currentUser.following.filter(id => id.toString() !== req.params.id);
+      userToFollow.followers = userToFollow.followers.filter(id => id.toString() !== req.user._id.toString());
+      await Follow.deleteOne({ follower: currentUser._id, followed: userToFollow._id });
+      currentUser.followingCount = currentUser.following.length; userToFollow.followersCount = userToFollow.followers.length;
+      await currentUser.save(); await userToFollow.save();
+      return res.json({ success: true, isFollowing: false, followStatus: 'none', followersCount: userToFollow.followersCount, followingCount: currentUser.followingCount, message: 'Unfollowed successfully' });
+    }
+    const updated = await withProgressionOutbox(async ({ session, enqueue }) => {
+      const [actor, beneficiary] = await Promise.all([User.findById(req.user._id).session(session), User.findById(userToFollow._id).session(session)]);
+      if (!actor.following.some(id => id.toString() === req.params.id)) actor.following.push(beneficiary._id);
+      if (!beneficiary.followers.some(id => id.toString() === req.user._id.toString())) beneficiary.followers.push(actor._id);
+      await Follow.updateOne({ follower: actor._id, followed: beneficiary._id }, { $setOnInsert: { source: 'native' } }, { upsert: true, session });
+      actor.followingCount = actor.following.length; beneficiary.followersCount = beneficiary.followers.length;
+      await actor.save({ session }); await beneficiary.save({ session });
+      await enqueue({ principal: 'social', eventType: 'relationship.formed', activityClass: 'ENGAGE', actorId: actor._id, beneficiaryId: beneficiary._id,
+        occurredAt: actor.updatedAt, subject: { type: 'user', id: String(beneficiary._id) }, object: { type: 'follow', id: `${actor._id}:${beneficiary._id}` },
+        source: { objectType: 'follow', objectId: `${actor._id}:${beneficiary._id}`, transition: 'followed', version: String(actor.__v) } });
+      return { currentUser: actor, userToFollow: beneficiary };
+    });
+    currentUser = updated.currentUser;
+    const updatedUserToFollow = updated.userToFollow;
 
     // Create follow notification (only if following, not unfollowing)
     if (!followingNow) {
       await createNotification(
-        userToFollow._id,
+        updatedUserToFollow._id,
         req.user._id,
         'follow',
         { message: `${currentUser.username} followed you` }
@@ -273,7 +277,7 @@ router.post('/:id/follow', protect, async (req, res) => {
       success: true,
       isFollowing: !followingNow,
       followStatus: followingNow ? 'none' : 'following',
-      followersCount: userToFollow.followersCount,
+      followersCount: updatedUserToFollow.followersCount,
       followingCount: currentUser.followingCount,
       message: followingNow ? 'Unfollowed successfully' : 'Followed successfully'
     });
