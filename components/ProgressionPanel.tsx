@@ -5,6 +5,7 @@ import { progressionAPI } from '../services/api';
 
 export interface ProgressionView {
   presentationVersion: string;
+  projectionState: 'available';
   level: number;
   tier: string;
   contribution: number;
@@ -14,22 +15,46 @@ export interface ProgressionView {
   faction: { state: 'unaffiliated' } | { state: 'affiliated'; name: string; color: string; contribution: number };
   creatorMode: boolean;
   unlocks: { unlocked: ProgressionUnlock[]; next: ProgressionUnlock[] };
+  updatedAt: string;
+}
+
+export interface UnavailableProgressionView {
+  presentationVersion: string;
+  projectionState: 'unavailable';
+  faction: { state: 'unaffiliated' } | { state: 'affiliated'; name: string; color: string; contribution: number };
+  creatorMode: boolean;
+  unlocks: { unlocked: []; next: [] };
+  updatedAt: null;
 }
 
 interface ProgressionUnlock { id: string; level: number; type: string; name: string; description: string }
 
 export const ProgressionPanel: React.FC<{ userId: string }> = ({ userId }) => {
-  const [data, setData] = useState<ProgressionView | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'error' | 'hidden'>('loading');
+  const [data, setData] = useState<ProgressionView | UnavailableProgressionView | null>(null);
+  const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
   useEffect(() => {
     if (!USER_FACING_PROGRESSION_ENABLED || !userId) return;
     let active = true;
+    setState('loading');
+    setResolvedUserId(null);
     progressionAPI.getUser(userId).then(response => {
-      if (active) setData(response.data?.data || null);
-    }).catch(() => { if (active) setData(null); });
+      if (active) { setData(response.data?.data || null); setResolvedUserId(userId); setState(response.data?.data ? 'ready' : 'error'); }
+    }).catch(error => {
+      if (!active) return;
+      setData(null);
+      setResolvedUserId(userId);
+      setState([403, 404].includes(error?.response?.status) ? 'hidden' : 'error');
+    });
     return () => { active = false; };
   }, [userId]);
 
-  if (!USER_FACING_PROGRESSION_ENABLED || !data) return null;
+  if (!USER_FACING_PROGRESSION_ENABLED || state === 'hidden') return null;
+  if (state === 'loading' || resolvedUserId !== userId) return <ProgressionStatus message="Syncing progression signal…" />;
+  if (state === 'error' || !data) return <ProgressionStatus message="Progression signal is temporarily unavailable." />;
+  if (data.projectionState === 'unavailable') return <ProgressionStatus message="Progression signal has not been evaluated yet." />;
+  const updatedAt = new Date(data.updatedAt);
+  const stale = !Number.isFinite(updatedAt.getTime()) || Date.now() - updatedAt.getTime() > 24 * 60 * 60 * 1000;
   const strongest = [...data.dimensions].sort((a, b) => b.contribution - a.contribution).slice(0, 4);
   return <section data-testid="progression-panel" className="w-full border border-[var(--profile-primary,#39FF14)]/30 bg-black/75 backdrop-blur-md p-4 md:p-5 shadow-[0_0_28px_rgba(57,255,20,0.08)]">
     <div className="flex items-start gap-4">
@@ -40,7 +65,7 @@ export const ProgressionPanel: React.FC<{ userId: string }> = ({ userId }) => {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><h2 className="text-base md:text-lg font-black uppercase tracking-wider text-white">{data.tier} signal</h2>{data.creatorMode && <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest text-[#ff4fd8]"><Crown size={11}/> Creator dimension</span>}</div>
         <div className="mt-2 h-1.5 overflow-hidden bg-white/10" aria-label={`${Math.round(data.progress * 100)}% toward next level`}><div className="h-full bg-[linear-gradient(90deg,var(--profile-primary,#39FF14),#ff00ff)]" style={{ width: `${data.progress * 100}%` }}/></div>
-        <p className="mt-1.5 text-[10px] uppercase tracking-wider text-gray-500">{data.level === 100 ? 'Apex signal reached' : `${data.contributionToNextLevel} signal to level ${data.level + 1}`}</p>
+        <p className="mt-1.5 text-[10px] uppercase tracking-wider text-gray-500">{data.level === 100 ? 'Apex signal reached' : `${data.contributionToNextLevel} signal to level ${data.level + 1}`} · <time dateTime={data.updatedAt} title={updatedAt.toLocaleString()}>{stale ? 'Update pending' : 'Signal current'}</time></p>
       </div>
     </div>
     <div className="mt-4 grid gap-4 md:grid-cols-[1.25fr_.75fr]">
@@ -50,5 +75,7 @@ export const ProgressionPanel: React.FC<{ userId: string }> = ({ userId }) => {
     <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-t border-white/10 pt-3"><div className="flex items-center gap-2 text-xs text-gray-300"><Sparkles size={13} className="text-[#ff00ff]"/>{data.unlocks.unlocked.at(-1)?.name || 'Signal Mark'} unlocked</div>{data.unlocks.next[0] && <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-gray-500">Next: {data.unlocks.next[0].name} · L{data.unlocks.next[0].level}<ChevronRight size={12}/></div>}</div>
   </section>;
 };
+
+const ProgressionStatus: React.FC<{ message: string }> = ({ message }) => <section data-testid="progression-panel-status" className="w-full border border-[var(--profile-primary,#39FF14)]/20 bg-black/60 px-4 py-3 backdrop-blur-md"><p className="text-[10px] uppercase tracking-[.16em] text-gray-500">{message}</p></section>;
 
 export default ProgressionPanel;

@@ -8,7 +8,9 @@ Presentation config version `release-3d-v1` makes Release 3A's established formu
 
 ## Read model and privacy
 
-`GET /api/progression/users/:userId` requires the existing bearer-token authentication and reads only the latest persisted personal and faction projection checkpoints. It returns the presentation version, level/tier progress, public dimensions, faction contribution state, creator presentation state, unlock summaries, and projection update time.
+`GET /api/progression/users/:userId` requires the existing bearer-token authentication and delegates visibility to the same `canViewProfile` policy used by ProjectX profiles. Private, followers-only, friends-only, and blocked states therefore fail closed exactly as the profile does. It reads only the latest persisted personal and faction projection checkpoints. It returns the presentation version, explicit projection availability, level/tier progress, public dimensions, faction contribution state, creator presentation state, unlock summaries, and projection update time.
+
+If no personal checkpoint exists, the response reports `projectionState: unavailable`; it does not fabricate Level 1, dimensions, or unlocks. Available projections report `projectionState: available`. Contribution presentation is truncated to two decimals before progress and remaining values are derived, preventing a precise value immediately below an integer threshold from displaying as though it crossed that threshold.
 
 The response intentionally excludes raw events, evidence, qualification decisions/reasons, producer identities, hidden allegiance data, policy artifacts and implementation details, projection contexts/checkpoints, fraud/trust signals, and platform roles. Platform authority, creator approval, and faction membership remain independent domain concepts.
 
@@ -29,7 +31,9 @@ Both gates require the exact string `true`:
 - Backend: `USER_FACING_PROGRESSION_ENABLED=true`
 - Frontend: `VITE_USER_FACING_PROGRESSION_ENABLED=true`
 
-Defaults are off. The Release 3B constant remains `USER_FACING_PROGRESSION_ENABLED = false`, and `SHADOW_MODE = true`. Local and test environments may opt in explicitly; Release 3D does not activate production.
+Defaults are off. The backend endpoint requires both environment values to be exactly `true`, while the frontend also independently hides the surface unless its Vite flag is enabled. Enabling either side alone leaves both API and product exposure closed. The Release 3B constant remains `USER_FACING_PROGRESSION_ENABLED = false`, and `SHADOW_MODE = true`. Local and test environments may opt in explicitly; Release 3D does not activate production.
+
+The panel renders compact loading, temporary-error, and not-yet-evaluated states. For available projections, it consumes `updatedAt` and labels checkpoints older than 24 hours as `Update pending`; Release 3E remains responsible for operational scheduling, monitoring, and freshness guarantees.
 
 ## Deferred to Release 3E
 
