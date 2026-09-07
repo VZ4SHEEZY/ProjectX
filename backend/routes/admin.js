@@ -8,8 +8,12 @@ const observability = require('../services/observability');
 const router = express.Router();
 
 // GET /api/admin/diagnostics - bounded, aggregate operational health (admin only)
-router.get('/diagnostics', protect, requireAdmin, (req, res) => {
-  res.json({ success: true, data: observability.diagnostics() });
+router.get('/diagnostics', protect, requireAdmin, async (req, res, next) => {
+  try {
+    const progression = process.env.PROGRESSION_OPERATIONS_ENABLED === 'true' ? await require('../progression/operations/metrics').snapshot() : { status: 'disabled' };
+    if (progression.status !== 'disabled') progression.alerts = require('../progression/operations/alerts').evaluate(progression);
+    res.json({ success: true, data: { ...observability.diagnostics(), progression } });
+  } catch (error) { next(error); }
 });
 
 // Owner-only system surface: bounded diagnostics, never configuration secrets.

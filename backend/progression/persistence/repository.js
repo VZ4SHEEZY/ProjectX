@@ -136,10 +136,11 @@ function getProjection(scope, subjectId, projectionContextId) {
 }
 
 async function getOrderedReplayInputs(options = {}) {
-  const [eventDocs, evidenceDocs] = await Promise.all([
-    ActivityEvent.find({}).select('+canonicalPayload').sort({ occurredAt: 1, producer: 1, eventId: 1 }).session(options.session || null).lean(),
-    Evidence.find({}).select('+canonicalPayload').sort({ observedAt: 1, evidenceId: 1 }).session(options.session || null).lean()
-  ]);
+  const eventQuery = options.beneficiaryId ? { beneficiaryId: String(options.beneficiaryId) } : {};
+  const eventDocs = await ActivityEvent.find(eventQuery).select('+canonicalPayload').sort({ occurredAt: 1, producer: 1, eventId: 1 }).session(options.session || null).lean();
+  const evidenceRefs = [...new Set(eventDocs.flatMap(value => value.canonicalPayload.correction?.evidenceRefs || value.canonicalPayload.evidenceRefs || []))];
+  const evidenceQuery = options.beneficiaryId ? { evidenceId: { $in: evidenceRefs } } : {};
+  const evidenceDocs = await Evidence.find(evidenceQuery).select('+canonicalPayload').sort({ observedAt: 1, evidenceId: 1 }).session(options.session || null).lean();
   return { events: eventDocs.map(value => value.canonicalPayload), evidence: evidenceDocs.map(value => value.canonicalPayload) };
 }
 

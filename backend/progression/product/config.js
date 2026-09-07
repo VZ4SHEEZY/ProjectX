@@ -1,6 +1,15 @@
 'use strict';
 
 const PRESENTATION_VERSION = 'release-3d-v1';
+const FRESHNESS_POLICY_VERSION = 'release-3e-v1';
+const DEFAULT_STALE_AFTER_MS = 6 * 60 * 60 * 1000;
+
+function freshnessPolicy(env = process.env) {
+  const configured = Number.parseInt(env.PROGRESSION_PRODUCT_STALE_AFTER_MS || DEFAULT_STALE_AFTER_MS, 10);
+  const staleAfterMs = Number.isFinite(configured) && configured >= 60_000 && configured <= 7 * 24 * 60 * 60 * 1000
+    ? configured : DEFAULT_STALE_AFTER_MS;
+  return Object.freeze({ version: FRESHNESS_POLICY_VERSION, staleAfterMs });
+}
 
 const TIERS = Object.freeze([
   { name: 'Initiation', minimumLevel: 1, maximumLevel: 10 },
@@ -33,4 +42,4 @@ const UNLOCKS = Object.freeze([
   { id: 'apex_signature', level: 100, type: 'profile_cosmetic', name: 'Apex Signature', description: 'The final 1–100 progression milestone.' }
 ]);
 
-module.exports = Object.freeze({ PRESENTATION_VERSION, TIERS, LEVEL_THRESHOLDS, DIMENSIONS, UNLOCKS });
+module.exports = Object.freeze({ PRESENTATION_VERSION, FRESHNESS_POLICY_VERSION, DEFAULT_STALE_AFTER_MS, freshnessPolicy, TIERS, LEVEL_THRESHOLDS, DIMENSIONS, UNLOCKS });

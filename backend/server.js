@@ -257,8 +257,14 @@ const PORT = process.env.PORT || 5000;
 let stopProgressionWorker = () => {};
 
 connectDB().then(() => {
-  if (process.env.PROGRESSION_SHADOW_WORKER_ENABLED !== 'false') {
-    stopProgressionWorker = startShadowWorker({ onError: error => observability.recordError('progression_shadow_worker_error', error) });
+  if (process.env.PROGRESSION_SHADOW_WORKER_ENABLED === 'true' && process.env.PROGRESSION_OPERATIONS_ENABLED === 'true') {
+    stopProgressionWorker = startShadowWorker({
+      intervalMs: process.env.PROGRESSION_WORKER_POLL_MS,
+      batchSize: process.env.PROGRESSION_WORKER_BATCH_SIZE,
+      concurrency: process.env.PROGRESSION_WORKER_CONCURRENCY,
+      maxAttempts: process.env.PROGRESSION_WORKER_MAX_ATTEMPTS,
+      onError: error => observability.recordError('progression_shadow_worker_error', error)
+    });
   }
   httpServer.listen(PORT, () => {
     console.log(`
@@ -282,7 +288,7 @@ connectDB().then(() => {
 
 const shutdown = async (signal) => {
   console.log(`${signal} received, shutting down`);
-  stopProgressionWorker();
+  await stopProgressionWorker();
   io.close();
   await new Promise((resolve) => httpServer.close(resolve));
   await mongoose.connection.close();

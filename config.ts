@@ -3,7 +3,9 @@ const configuredApiUrl = import.meta.env.VITE_API_URL || 'https://cyberdope-api.
 export const API_BASE_URL = configuredApiUrl.replace(/\/$/, '');
 export const API_ORIGIN = API_BASE_URL.replace(/\/api$/, '');
 export const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_ORIGIN).replace(/\/$/, '');
-export const USER_FACING_PROGRESSION_ENABLED = import.meta.env.VITE_USER_FACING_PROGRESSION_ENABLED === 'true';
+const progressionRolloutStage = Number.parseInt(import.meta.env.VITE_PROGRESSION_ROLLOUT_STAGE || '0', 10);
+export const USER_FACING_PROGRESSION_ENABLED = import.meta.env.VITE_USER_FACING_PROGRESSION_ENABLED === 'true'
+  && Number.isInteger(progressionRolloutStage) && progressionRolloutStage >= 1 && progressionRolloutStage <= 4;
 
 // No API keys here! They're safely stored on the backend server only.
 export const OPENAI_CONFIG = {

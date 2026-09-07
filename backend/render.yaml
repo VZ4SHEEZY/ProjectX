@@ -30,3 +30,17 @@ services:
         sync: false
       - key: PAYMENT_EXECUTION_ENABLED
         value: false
+      - key: USER_FACING_PROGRESSION_ENABLED
+        value: false
+      - key: VITE_USER_FACING_PROGRESSION_ENABLED
+        value: false
+      - key: PROGRESSION_OPERATIONS_ENABLED
+        value: false
+      - key: PROGRESSION_SHADOW_WORKER_ENABLED
+        value: false
+      - key: PROGRESSION_PRODUCT_STALE_AFTER_MS
+        value: 21600000
+      - key: PROGRESSION_ROLLOUT_STAGE
+        value: 0
+      - key: VITE_PROGRESSION_ROLLOUT_STAGE
+        value: 0

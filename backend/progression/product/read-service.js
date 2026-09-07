@@ -5,7 +5,7 @@ const ProgressionProjection = require('../../models/ProgressionProjection');
 const User = require('../../models/User');
 const FactionMembership = require('../../models/FactionMembership');
 const Creator = require('../../models/Creator');
-const { PRESENTATION_VERSION, TIERS, LEVEL_THRESHOLDS, DIMENSIONS, UNLOCKS } = require('./config');
+const { PRESENTATION_VERSION, freshnessPolicy, TIERS, LEVEL_THRESHOLDS, DIMENSIONS, UNLOCKS } = require('./config');
 
 function userFacingProgressionEnabled(env = process.env) {
   return env.USER_FACING_PROGRESSION_ENABLED === 'true'
@@ -79,11 +79,16 @@ async function getUserProgression(userId) {
       contribution: Math.round((Number(factionProjection?.checkpoint?.contributors?.[String(userId)]) || 0) * 100) / 100
     };
   }
+  const updatedAt = personalProjection?.rebuiltAt?.toISOString?.() || null;
+  const policy = freshnessPolicy();
+  const freshness = !updatedAt ? { state: 'unavailable', policyVersion: policy.version }
+    : { state: Date.now() - new Date(updatedAt).getTime() > policy.staleAfterMs ? 'stale' : 'current', policyVersion: policy.version };
   const base = {
     presentationVersion: PRESENTATION_VERSION,
     faction,
     creatorMode,
-    updatedAt: personalProjection?.rebuiltAt?.toISOString?.() || null
+    updatedAt,
+    freshness
   };
   if (!personalProjection?.checkpoint) {
     return { ...base, projectionState: 'unavailable', unlocks: { unlocked: [], next: [] } };

@@ -82,6 +82,34 @@ async function rebuildUserProjection({ userId, ...options } = {}) {
   };
 }
 
+async function rebuildSubjectProjection({ userId, ...options } = {}) {
+  if (typeof userId !== 'string' || !userId || userId.length > 256) throw new TypeError('a bounded userId is required');
+  if (options.policy) throw new TypeError('caller-supplied replay policies are not accepted; use policyIdentity');
+  const resolvedPolicy = await resolvePersistedPolicy(options.policyIdentity, { session: options.session });
+  const inputs = await repository.getOrderedReplayInputs({ session: options.session, beneficiaryId: userId });
+  const evidenceByRef = Object.fromEntries(inputs.evidence.map(item => [item.evidenceId, item]));
+  const replayContext = { ...(options.context || {}), evidenceByRef };
+  const decisions = qualifyLedger(inputs.events, resolvedPolicy.qualification, replayContext);
+  const rebuilt = project(inputs.events, decisions, resolvedPolicy, replayContext);
+  const eventsById = new Map(inputs.events.map(event => [event.eventId, event]));
+  await withOptionalTransaction({ transaction: true, session: options.session }, async transactionSession => {
+    for (const decision of decisions) {
+      await validateDecisionRelationships(decision, { session: transactionSession });
+      await repository.appendQualificationDecision(decision, { session: transactionSession });
+      await validateContributionRelationships(eventsById.get(decision.eventId), decision, { session: transactionSession });
+      await repository.appendContributionResult(eventsById.get(decision.eventId), decision, { session: transactionSession });
+    }
+    const checkpoint = rebuilt.personal[userId];
+    if (checkpoint) await repository.storeProjection({ scope: 'personal', subjectId: userId, projectionContext: rebuilt.projectionContext, checkpoint }, { session: transactionSession, rebuiltAt: options.rebuiltAt });
+  });
+  return {
+    projectionContext: rebuilt.projectionContext,
+    generationMetadata: rebuilt.generationMetadata,
+    inactiveEventIds: rebuilt.inactiveEventIds,
+    personal: rebuilt.personal[userId] || null
+  };
+}
+
 function getProjection(scope, subjectId, projectionContextId) {
   if (!['personal', 'faction'].includes(scope)) throw new TypeError('projection scope must be personal or faction');
   return repository.getProjection(scope, subjectId, projectionContextId);
@@ -154,4 +182,4 @@ async function validateCorrectionRelationships(event, options = {}) {
   }
 }
 
-module.exports = Object.freeze({ SHADOW_MODE, USER_FACING_PROGRESSION_ENABLED, appendEvent, appendEvidence, appendDecision, appendPolicy, appendContribution, rebuildProjection, rebuildUserProjection, getProjection, getOrderedReplayInputs });
+module.exports = Object.freeze({ SHADOW_MODE, USER_FACING_PROGRESSION_ENABLED, appendEvent, appendEvidence, appendDecision, appendPolicy, appendContribution, rebuildProjection, rebuildUserProjection, rebuildSubjectProjection, getProjection, getOrderedReplayInputs });

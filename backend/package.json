@@ -12,7 +12,12 @@
     "test:progression-persistence": "node --test --test-concurrency=1 tests/release-3b-shadow-foundation.test.js",
     "test:progression-ingestion": "node --test --test-concurrency=1 tests/release-3c-shadow-ingestion.test.js",
     "test:progression-product": "node --test --test-concurrency=1 tests/release-3d-product-layer.test.js",
+    "test:progression-rollout": "node --test --test-concurrency=1 tests/release-3e-rollout-readiness.test.js",
     "simulate:progression": "node progression/simulator/run.js",
+    "progression:migrate": "node migrations/006-release-3e-rollout-operations.js",
+    "progression:backfill": "node scripts/progression-backfill.js",
+    "progression:worker": "node scripts/progression-worker.js",
+    "progression:rebuild": "node scripts/progression-rebuild.js",
     "test:migration": "node --test --test-concurrency=1 tests/release1-migration.test.js",
     "test:external": "node scripts/verify-external-integrations.js"
   },

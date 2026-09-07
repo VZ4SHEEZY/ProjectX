@@ -13,6 +13,7 @@
     "contracts:verify:base-sepolia": "npm run contracts:compile && node backend/scripts/verify-tiprouter-sepolia.js",
     "test:e2e": "playwright test",
     "test:e2e:external": "EXTERNAL_E2E=1 playwright test e2e/external-wallet.spec.ts --project=desktop-chromium",
+    "test:e2e:progression-staging": "playwright test e2e/progression-staging-smoke.spec.ts",
     "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {

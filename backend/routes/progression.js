@@ -6,12 +6,13 @@ const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const { canViewProfile } = require('../services/accessPolicy');
 const { userFacingProgressionEnabled, getUserProgression } = require('../progression/product/read-service');
+const { rolloutEnabledFor } = require('../progression/operations/rollout');
 
 const router = express.Router();
 
 router.get('/users/:userId', protect, async (req, res, next) => {
   try {
-    if (!userFacingProgressionEnabled()) return res.status(404).json({ success: false, message: 'Route not found' });
+    if (!userFacingProgressionEnabled() || !rolloutEnabledFor(req.user)) return res.status(404).json({ success: false, message: 'Route not found' });
     if (!mongoose.isValidObjectId(req.params.userId)) return res.status(404).json({ success: false, message: 'User not found' });
     const owner = await User.findOne({ _id: req.params.userId, isActive: { $ne: false } });
     if (!owner) return res.status(404).json({ success: false, message: 'User not found' });

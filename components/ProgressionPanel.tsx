@@ -16,6 +16,7 @@ export interface ProgressionView {
   creatorMode: boolean;
   unlocks: { unlocked: ProgressionUnlock[]; next: ProgressionUnlock[] };
   updatedAt: string;
+  freshness: { state: 'current' | 'stale'; policyVersion: string };
 }
 
 export interface UnavailableProgressionView {
@@ -25,6 +26,7 @@ export interface UnavailableProgressionView {
   creatorMode: boolean;
   unlocks: { unlocked: []; next: [] };
   updatedAt: null;
+  freshness: { state: 'unavailable'; policyVersion: string };
 }
 
 interface ProgressionUnlock { id: string; level: number; type: string; name: string; description: string }
@@ -54,7 +56,7 @@ export const ProgressionPanel: React.FC<{ userId: string }> = ({ userId }) => {
   if (state === 'error' || !data) return <ProgressionStatus message="Progression signal is temporarily unavailable." />;
   if (data.projectionState === 'unavailable') return <ProgressionStatus message="Progression signal has not been evaluated yet." />;
   const updatedAt = new Date(data.updatedAt);
-  const stale = !Number.isFinite(updatedAt.getTime()) || Date.now() - updatedAt.getTime() > 24 * 60 * 60 * 1000;
+  const stale = data.freshness.state === 'stale';
   const strongest = [...data.dimensions].sort((a, b) => b.contribution - a.contribution).slice(0, 4);
   return <section data-testid="progression-panel" className="w-full border border-[var(--profile-primary,#39FF14)]/30 bg-black/75 backdrop-blur-md p-4 md:p-5 shadow-[0_0_28px_rgba(57,255,20,0.08)]">
     <div className="flex items-start gap-4">

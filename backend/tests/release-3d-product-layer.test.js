@@ -28,6 +28,7 @@ let pendingProjection;
 let token;
 const originalFlag = process.env.USER_FACING_PROGRESSION_ENABLED;
 const originalFrontendFlag = process.env.VITE_USER_FACING_PROGRESSION_ENABLED;
+const originalRolloutStage = process.env.PROGRESSION_ROLLOUT_STAGE;
 
 const app = express();
 app.use(express.json());
@@ -38,6 +39,7 @@ test.before(async () => {
   mongo = await MongoMemoryServer.create({ binary: { version: '7.0.14' } });
   await mongoose.connect(mongo.getUri());
   process.env.JWT_SECRET = 'release-3d-test-secret-release-3d';
+  process.env.PROGRESSION_ROLLOUT_STAGE = '4';
   [viewer, member, unaffiliated, pendingProjection] = await User.create([
     { username: 'viewer_3d', email: 'viewer3d@example.com', password: 'test-hash', isAgeVerified: true },
     { username: 'member_3d', email: 'member3d@example.com', password: 'test-hash', isCreator: true },
@@ -60,6 +62,8 @@ test.after(async () => {
   else process.env.USER_FACING_PROGRESSION_ENABLED = originalFlag;
   if (originalFrontendFlag == null) delete process.env.VITE_USER_FACING_PROGRESSION_ENABLED;
   else process.env.VITE_USER_FACING_PROGRESSION_ENABLED = originalFrontendFlag;
+  if (originalRolloutStage == null) delete process.env.PROGRESSION_ROLLOUT_STAGE;
+  else process.env.PROGRESSION_ROLLOUT_STAGE = originalRolloutStage;
   await mongoose.disconnect(); await mongo.stop();
 });
 
@@ -101,6 +105,7 @@ test('read model separates personal, faction, Unaffiliated, and creator state', 
   const pending = await getUserProgression(String(pendingProjection._id));
   assert.equal(pending.projectionState, 'unavailable');
   assert.equal(pending.updatedAt, null);
+  assert.equal(pending.freshness.state, 'unavailable');
   assert.deepEqual(pending.unlocks, { unlocked: [], next: [] });
   assert.equal('level' in pending, false);
   assert.equal('dimensions' in pending, false);
@@ -162,7 +167,7 @@ test('public product payload excludes hidden state and platform authority', asyn
   for (const privateField of ['policyArtifact', 'producer', 'evidence', 'qualification', 'allegiance', 'isAdmin', 'platformRole', 'checkpoint', 'projectionContext']) {
     assert.equal(serialized.includes(privateField), false, privateField);
   }
-  assert.deepEqual(Object.keys(response.body.data).sort(), ['contribution','contributionToNextLevel','creatorMode','currentLevelMinimum','dimensions','faction','level','nextLevelMinimum','presentationVersion','progress','projectionState','tier','unlocks','updatedAt'].sort());
+  assert.deepEqual(Object.keys(response.body.data).sort(), ['contribution','contributionToNextLevel','creatorMode','currentLevelMinimum','dimensions','faction','freshness','level','nextLevelMinimum','presentationVersion','progress','projectionState','tier','unlocks','updatedAt'].sort());
 });
 
 test('Profile V2 and owner profile render one responsive, flag-gated progression surface', () => {

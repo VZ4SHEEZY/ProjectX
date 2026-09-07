@@ -35,11 +35,16 @@ async function produceActivity(spec, { session } = {}) {
 }
 
 async function affiliationFor(userId, occurredAt, session) {
-  const membership = await FactionMembership.findOne({ user: userId, status: 'active' }).populate('faction', 'key').session(session || null).lean();
+  const instant = new Date(occurredAt);
+  const membership = await FactionMembership.findOne({
+    user: userId,
+    joinedAt: { $lte: instant },
+    $or: [{ endedAt: null }, { endedAt: { $gt: instant } }]
+  }).sort({ joinedAt: -1 }).populate('faction', 'key').session(session || null).lean();
   if (!membership?.faction) return { state: 'unaffiliated' };
   return { state: 'affiliated', factionId: String(membership.faction.key || membership.faction._id), membershipRef: String(membership._id), effectiveAt: timestamp(membership.joinedAt || membership.createdAt), source: membership.source || 'native' };
 }
 
 function timestamp(value) { return new Date(value || Date.now()).toISOString(); }
 
-module.exports = Object.freeze({ produceActivity });
+module.exports = Object.freeze({ produceActivity, affiliationFor });
