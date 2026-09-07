@@ -22,7 +22,7 @@ function loadPolicy(artifact) {
 
 function digest(bytes) { return `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}`; }
 function builtinPolicyCode(version) {
-  if (version === 'sim-2026-08-v1') return v1Code;
+  if (version === 'sim-2026-08-v1' || version === '2026-09-release-3-v1') return v1Code;
   if (version === 'sim-2026-08-v2-experimental') return v2Code;
   throw new Error('POLICY_IMPLEMENTATION_NOT_REGISTERED');
 }

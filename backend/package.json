@@ -18,6 +18,7 @@
     "progression:backfill": "node scripts/progression-backfill.js",
     "progression:worker": "node scripts/progression-worker.js",
     "progression:rebuild": "node scripts/progression-rebuild.js",
+    "progression:policy": "node scripts/progression-policy.js",
     "test:migration": "node --test --test-concurrency=1 tests/release1-migration.test.js",
     "test:external": "node scripts/verify-external-integrations.js"
   },
