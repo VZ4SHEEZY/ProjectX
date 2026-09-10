@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, DollarSign, Gift, Eye, ArrowRight } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface Tip {
   id: string;
@@ -40,7 +41,7 @@ const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ isCreator, userToke
   const fetchEarnings = async () => {
     try {
       setLoading(true);
-      const res = await fetch('https://cyberdope-api.onrender.com/api/creator/earnings', {
+      const res = await fetch(`${API_BASE_URL}/creator/earnings`, {
         headers: {
           'Authorization': `Bearer ${userToken}`
         }

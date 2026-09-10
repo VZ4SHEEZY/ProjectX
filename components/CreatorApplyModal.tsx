@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Star, Lock, CheckCircle, AlertCircle } from 'lucide-react';
 import GlitchButton from './GlitchButton';
+import { API_BASE_URL } from '../config';
 
 interface CreatorApplyModalProps {
   isOpen: boolean;
@@ -27,7 +28,7 @@ const CreatorApplyModal: React.FC<CreatorApplyModalProps> = ({
 
     try {
       const token = localStorage.getItem('cdToken');
-      const res = await fetch('https://cyberdope-api.onrender.com/api/creator/apply', {
+      const res = await fetch(`${API_BASE_URL}/creator/apply`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

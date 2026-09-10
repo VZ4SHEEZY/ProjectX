@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Gift, X, Check, AlertCircle, Zap } from 'lucide-react';
 import GlitchButton from './GlitchButton';
+import { API_BASE_URL } from '../config';
 
 interface TipButtonProps {
   creatorId: string;
@@ -59,7 +60,7 @@ const TipButton: React.FC<TipButtonProps> = ({
           // Fetch USDC balance and allowance
           if (accounts[0]) {
             try {
-              const res = await fetch('https://cyberdope-api.onrender.com/api/wallet/balance', {
+              const res = await fetch(`${API_BASE_URL}/wallet/balance`, {
                 headers: { 'Authorization': `Bearer ${userToken}` }
               });
               const data = await res.json();
@@ -101,7 +102,7 @@ const TipButton: React.FC<TipButtonProps> = ({
       // For now, we're calling a backend endpoint that will be created
       // This is where Task 3 will implement the actual contract call
       
-      const res = await fetch('https://cyberdope-api.onrender.com/api/tips/send', {
+      const res = await fetch(`${API_BASE_URL}/tips/send`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${userToken}`,

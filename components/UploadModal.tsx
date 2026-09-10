@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Upload, FileVideo, AlertTriangle, CheckCircle, Activity, DollarSign, Lock, ShieldAlert } from 'lucide-react';
 import GlitchButton from './GlitchButton';
 import { User } from '../types';
+import { API_BASE_URL } from '../config';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -86,8 +87,6 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
       formData.append('duration', '0');
 
       const token = localStorage.getItem('cdToken');
-      const apiUrl = 'https://cyberdope-api.onrender.com/api';
-
       // Upload with progress tracking
       const xhr = new XMLHttpRequest();
 
@@ -135,7 +134,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, currentUser 
         alert('Upload cancelled.');
       });
 
-      xhr.open('POST', `${apiUrl}/upload/video`);
+      xhr.open('POST', `${API_BASE_URL}/upload/video`);
       xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       xhr.send(formData);
     } catch (error) {
