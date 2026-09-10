@@ -111,6 +111,52 @@ test('deterministic replay stores separate personal/faction checkpoints and pres
   assert.equal(await Projection.countDocuments({ scope: 'personal' }), 2);
 });
 
+test('subject rebuild atomically persists affiliated faction checkpoints and remains idempotent', async () => {
+  const policyIdentity = { policyId: policy.artifact.policyId, version: policy.artifact.version, artifactDigest: policy.artifact.artifactDigest };
+  const rebuiltAt = new Date('2026-09-04T01:00:00.000Z');
+  const first = await service.rebuildSubjectProjection({ userId: 'cross_faction_viral', policyIdentity, rebuiltAt });
+  const second = await service.rebuildSubjectProjection({ userId: 'cross_faction_viral', policyIdentity, rebuiltAt });
+  const storedPersonal = await service.getProjection('personal', 'cross_faction_viral', first.projectionContext.projectionContextId);
+  const storedFaction = await service.getProjection('faction', 'Neon', first.projectionContext.projectionContextId);
+
+  assert.ok(first.personal);
+  assert.deepEqual(second, first);
+  assert.deepEqual(storedPersonal.checkpoint, first.personal);
+  assert.deepEqual(storedFaction.checkpoint, first.faction.Neon);
+  assert.equal(storedFaction.policyId, policyIdentity.policyId);
+  assert.equal(storedFaction.policyVersion, policyIdentity.version);
+  assert.equal(storedFaction.policyArtifactDigest, policyIdentity.artifactDigest);
+  assert.equal(await Projection.countDocuments({ scope: 'faction', subjectId: 'Neon', projectionContextId: first.projectionContext.projectionContextId }), 1);
+});
+
+test('subject rebuild keeps Unaffiliated personal-only', async () => {
+  const policyIdentity = { policyId: policy.artifact.policyId, version: policy.artifact.version, artifactDigest: policy.artifact.artifactDigest };
+  const result = await service.rebuildSubjectProjection({ userId: 'unaffiliated_power', policyIdentity, rebuiltAt: new Date('2026-09-04T02:00:00.000Z') });
+
+  assert.ok(result.personal);
+  assert.deepEqual(result.faction, {});
+  assert.equal(await Projection.countDocuments({ scope: 'faction', 'checkpoint.contributors.unaffiliated_power': { $exists: true } }), 0);
+});
+
+test('subject rebuild transaction does not leave partial personal/faction projection state', async () => {
+  const policyIdentity = { policyId: policy.artifact.policyId, version: policy.artifact.version, artifactDigest: policy.artifact.artifactDigest };
+  const preview = await service.rebuildSubjectProjection({ userId: 'cross_faction_viral', policyIdentity });
+  const contextId = preview.projectionContext.projectionContextId;
+  await Projection.deleteMany({ projectionContextId: contextId, $or: [{ scope: 'personal', subjectId: 'cross_faction_viral' }, { scope: 'faction', subjectId: 'Neon' }] });
+  const originalStoreProjection = repository.storeProjection;
+  try {
+    repository.storeProjection = async (value, options) => {
+      if (value.scope === 'faction') throw new Error('simulated faction projection failure');
+      return originalStoreProjection(value, options);
+    };
+    await assert.rejects(service.rebuildSubjectProjection({ userId: 'cross_faction_viral', policyIdentity }), /simulated faction projection failure/);
+  } finally {
+    repository.storeProjection = originalStoreProjection;
+  }
+  assert.equal(await Projection.exists({ scope: 'personal', subjectId: 'cross_faction_viral', projectionContextId: contextId }), null);
+  assert.equal(await Projection.exists({ scope: 'faction', subjectId: 'Neon', projectionContextId: contextId }), null);
+});
+
 test('durable replay resolves only a verified persisted policy identity', async () => {
   const identity = { policyId: policy.artifact.policyId, version: policy.artifact.version, artifactDigest: policy.artifact.artifactDigest };
   assert.ok(await PolicyArtifact.findOne({ artifactDigest: identity.artifactDigest }));

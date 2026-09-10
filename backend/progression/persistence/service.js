@@ -101,12 +101,16 @@ async function rebuildSubjectProjection({ userId, ...options } = {}) {
     }
     const checkpoint = rebuilt.personal[userId];
     if (checkpoint) await repository.storeProjection({ scope: 'personal', subjectId: userId, projectionContext: rebuilt.projectionContext, checkpoint }, { session: transactionSession, rebuiltAt: options.rebuiltAt });
+    for (const [factionId, factionCheckpoint] of Object.entries(rebuilt.faction)) {
+      await repository.storeProjection({ scope: 'faction', subjectId: factionId, projectionContext: rebuilt.projectionContext, checkpoint: factionCheckpoint }, { session: transactionSession, rebuiltAt: options.rebuiltAt });
+    }
   });
   return {
     projectionContext: rebuilt.projectionContext,
     generationMetadata: rebuilt.generationMetadata,
     inactiveEventIds: rebuilt.inactiveEventIds,
-    personal: rebuilt.personal[userId] || null
+    personal: rebuilt.personal[userId] || null,
+    faction: rebuilt.faction
   };
 }
 
