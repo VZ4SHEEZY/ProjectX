@@ -1,10 +1,10 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import crypto from 'node:crypto';
 
 // Pin the database engine so local and CI runs use the same wire/storage behavior.
-const mongo = await MongoMemoryServer.create({ binary: { version: '7.0.14' } });
+const mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 }, binary: { version: '7.0.14' } });
 const runId = crypto.randomBytes(5).toString('hex');
 const qaSecret = crypto.randomBytes(32).toString('base64url');
 const children = [];
