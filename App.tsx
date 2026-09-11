@@ -452,7 +452,7 @@ const App: React.FC = () => {
           />
           <NavButton 
             active={currentView === 'messages'}
-            onClick={() => setIsUploadModalOpen(true)}
+            onClick={() => setIsPostComposerOpen(true)}
             icon={Plus}
             label="CREATE"
           />
@@ -625,7 +625,7 @@ const App: React.FC = () => {
                 currentUser={user}
                 activeTab={feedTab}
                 onTabChange={setFeedTab}
-                onCreate={() => setIsUploadModalOpen(true)}
+                onCreate={() => setIsPostComposerOpen(true)}
                 onCreatorClick={handleViewUserProfile}
               />
             </div>
@@ -731,7 +731,8 @@ const App: React.FC = () => {
         {/* CREATE (Center) */}
         <div className="relative flex items-center justify-center -mt-6">
           <button 
-            onClick={() => setIsUploadModalOpen(true)}
+            onClick={() => setIsPostComposerOpen(true)}
+            aria-label="CREATE"
             className="w-14 h-14 bg-gradient-to-br from-[var(--primary-color,#39FF14)] to-[#2dd412] rounded-full flex items-center justify-center shadow-[0_0_25px_rgba(57,255,20,0.6)] hover:scale-110 active:scale-95 transition-all btn-touch"
           >
             <Plus size={26} className="text-black" strokeWidth={3} />
