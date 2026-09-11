@@ -23,6 +23,27 @@ const AccessRule = require('../models/AccessRule');
 const Faction = require('../models/Faction');
 
 const router = express.Router();
+const asyncHandler = handler => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+
+const factionKey = name => name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+
+async function findOrCreateFaction(name) {
+  const key = factionKey(name);
+  const existingByName = await Faction.findOne({ name });
+  if (existingByName) return existingByName;
+
+  const existingByKey = await Faction.findOne({ key });
+  if (existingByKey) return existingByKey;
+
+  try {
+    return await Faction.create({ key, name, status: 'active', founding: true });
+  } catch (error) {
+    if (error?.code !== 11000) throw error;
+    const concurrentlyCreated = await Faction.findOne({ $or: [{ name }, { key }] });
+    if (concurrentlyCreated) return concurrentlyCreated;
+    throw error;
+  }
+}
 
 router.use((req, res, next) => {
   const expected = process.env.QA_E2E_SECRET;
@@ -69,7 +90,7 @@ async function removeQaData(runId) {
   return ids.length;
 }
 
-router.post('/seed', async (req, res) => {
+router.post('/seed', asyncHandler(async (req, res) => {
   const runId = String(req.body.runId || '').replace(/[^a-z0-9]/gi, '').slice(0, 16);
   if (!runId) return res.status(400).json({ error: 'Valid runId required' });
   await removeQaData(runId);
@@ -98,10 +119,7 @@ router.post('/seed', async (req, res) => {
   ];
   const factionDocs = new Map();
   for (const name of factionNames) {
-    const key = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const faction = await Faction.findOneAndUpdate(
-      { key }, { $set: { name, status: 'active', founding: true } }, { upsert: true, new: true }
-    );
+    const faction = await findOrCreateFaction(name);
     factionDocs.set(name, faction);
   }
   const certificationUsers = [];
@@ -158,7 +176,7 @@ router.post('/seed', async (req, res) => {
     factionProfiles.push({ username: entry.user.username, faction: factionName, id: entry.user._id.toString() });
   }
 
-  const unaffiliatedUser = await makeUser('unaffiliated', { displayName: 'Independent Signal' });
+  const unaffiliatedUser = await makeUser('unaffiliated', { displayName: 'Independent Signal', faction: 'Unaffiliated' });
   const unaffiliatedProfile = await Profile.create({
     user: unaffiliatedUser._id,
     displayName: unaffiliatedUser.displayName,
@@ -246,11 +264,12 @@ router.post('/seed', async (req, res) => {
     topFriendsOwner: individualityProfiles[0],
     friendIds: friendEntries.map(entry => entry.user._id.toString())
   } });
-});
+}));
 
-router.delete('/accounts/:runId', async (req, res) => {
+router.delete('/accounts/:runId', asyncHandler(async (req, res) => {
   const runId = String(req.params.runId || '').replace(/[^a-z0-9]/gi, '').slice(0, 16);
   res.json({ success: true, deletedUsers: await removeQaData(runId) });
-});
+}));
 
 module.exports = router;
+module.exports.findOrCreateFaction = findOrCreateFaction;
