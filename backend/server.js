@@ -37,6 +37,10 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
+// Render probes this endpoint frequently. Keep it outside the application rate
+// limiter so infrastructure health checks cannot make a healthy instance fail.
+app.get('/api/health', require('./routes/health'));
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -114,15 +118,6 @@ app.use('/api/admin', require('./routes/admin'));
 if (process.env.QA_E2E_ENABLED === 'true' && process.env.NODE_ENV !== 'production') {
   app.use('/api/qa', require('./routes/qa'));
 }
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    ...observability.versionMetadata()
-  });
-});
 
 // Seed endpoint - populate feed with test videos
 app.post('/api/seed-feed', protect, requireAdmin, async (req, res) => {
