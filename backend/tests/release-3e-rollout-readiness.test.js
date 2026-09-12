@@ -19,6 +19,7 @@ const { startShadowWorker, healthStatus } = require('../progression/runtime/work
 const { rolloutEnabledFor, rolloutConfig } = require('../progression/operations/rollout');
 const alerts = require('../progression/operations/alerts');
 const { freshnessPolicy } = require('../progression/product/config');
+const { dedicatedWorkerEnabled } = require('../progression/operations/config');
 const { getUserProgression } = require('../progression/product/read-service');
 const release3b = require('../migrations/004-release-3b-shadow-foundation');
 const release3c = require('../migrations/005-release-3c-shadow-ingestion');
@@ -73,6 +74,31 @@ test('worker is bounded, recovers stale locks, caps retries, and exposes interna
   assert.equal(view.outbox.processed, 2); assert.equal(view.outbox.failed, 1); assert.ok(view.worker.staleLockRecoveryCount >= 1);
   const stop = startShadowWorker({ intervalMs: 250, batchSize: 1, concurrency: 1 });
   assert.equal(healthStatus().running, true); await stop(); assert.equal(healthStatus().running, false);
+});
+
+test('dedicated worker fails closed for every operations and shadow flag combination', () => {
+  assert.equal(dedicatedWorkerEnabled({ PROGRESSION_OPERATIONS_ENABLED: 'false', PROGRESSION_SHADOW_WORKER_ENABLED: 'false' }), false);
+  assert.equal(dedicatedWorkerEnabled({ PROGRESSION_OPERATIONS_ENABLED: 'false', PROGRESSION_SHADOW_WORKER_ENABLED: 'true' }), false);
+  assert.equal(dedicatedWorkerEnabled({ PROGRESSION_OPERATIONS_ENABLED: 'true', PROGRESSION_SHADOW_WORKER_ENABLED: 'false' }), false);
+  assert.equal(dedicatedWorkerEnabled({ PROGRESSION_OPERATIONS_ENABLED: 'true', PROGRESSION_SHADOW_WORKER_ENABLED: 'true' }), true);
+  assert.equal(dedicatedWorkerEnabled({}), false);
+});
+
+test('worker pause and restart preserves pending outbox data and operation checkpoints', async () => {
+  const pending = await Outbox.create({ eventId: 'p'.repeat(32), event: { pending: true }, evidence: [], status: 'pending', availableAt: new Date('2099-01-01') });
+  const checkpoint = await Operation.create({ operationKey: 'pause-restart', kind: 'rebuild', scope: 'global', checkpoint: { processed: 7 } });
+  const stop = startShadowWorker({ intervalMs: 250, batchSize: 1, concurrency: 1 });
+  assert.equal(healthStatus().running, true);
+  await stop();
+  assert.equal(healthStatus().running, false);
+  assert.equal((await Outbox.findById(pending._id)).status, 'pending');
+  assert.equal((await Operation.findById(checkpoint._id)).checkpoint.processed, 7);
+  const stopRestarted = startShadowWorker({ intervalMs: 250, batchSize: 1, concurrency: 1 });
+  assert.equal(healthStatus().running, true);
+  await stopRestarted();
+  assert.equal(healthStatus().running, false);
+  assert.ok(await Outbox.exists({ _id: pending._id }));
+  assert.ok(await Operation.exists({ _id: checkpoint._id }));
 });
 
 test('rollout stages fail closed, support explicit cohorts, and roll back immediately', () => {

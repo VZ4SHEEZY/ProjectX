@@ -31,7 +31,7 @@ Only extant published posts are backfillable as `creation.published`: their immu
 
 ## Worker and rebuild operation
 
-The dedicated worker requires `PROGRESSION_OPERATIONS_ENABLED=true`. Configure bounded values after staging load tests:
+The dedicated worker requires both `PROGRESSION_OPERATIONS_ENABLED=true` and `PROGRESSION_SHADOW_WORKER_ENABLED=true`. The operations flag is the global emergency kill switch; the shadow-worker flag pauses only worker consumption. Configure bounded values after staging load tests:
 
 - `PROGRESSION_WORKER_POLL_MS` (minimum effective cadence 250 ms)
 - `PROGRESSION_WORKER_BATCH_SIZE` (maximum 500)
@@ -44,7 +44,7 @@ The dedicated worker requires `PROGRESSION_OPERATIONS_ENABLED=true`. Configure b
 - `PROGRESSION_POLICY_ID`, `PROGRESSION_POLICY_VERSION`, `PROGRESSION_POLICY_ARTIFACT_DIGEST`
 - `PROGRESSION_ALERT_POLL_MS` (30 seconds to 15 minutes; default 60 seconds)
 
-The worker claims records atomically, drains bounded batches, backs off failures, stops retrying at the configured attempt ceiling, recovers five-minute stale leases, and drains for up to 30 seconds on SIGTERM/SIGINT. Duplicate deliveries are absorbed by canonical persistence. User requests remain independent of worker state. Pause it by setting `PROGRESSION_SHADOW_WORKER_ENABLED=false` and restarting the worker service; this does not disable ingestion into the outbox.
+The worker claims records atomically, drains bounded batches, backs off failures, stops retrying at the configured attempt ceiling, recovers five-minute stale leases, and drains for up to 30 seconds on SIGTERM/SIGINT. Duplicate deliveries are absorbed by canonical persistence. User requests remain independent of worker state. Pause it by setting `PROGRESSION_SHADOW_WORKER_ENABLED=false` and restarting the worker service; the dedicated process then fails closed before connecting to MongoDB. Setting `PROGRESSION_OPERATIONS_ENABLED=false` is the broader emergency stop. Neither switch deletes outbox records, ledger events, or checkpoints, and worker pause does not disable ingestion into the outbox.
 
 Rebuilds accept only an exact persisted policy identity. `npm run progression:rebuild -- --user <id>` isolates one user; the global command pages active users by `_id`, persists a cursor and counts, resumes after interruption, and isolates per-user failures. Failed subjects remain in the checkpoint and receive a bounded three-round retry budget before the operation terminates failed for operator review. Raw events are never publicly mutable. The optional scheduler assigns each cadence window a deterministic operation key and prevents overlapping local runs.
 
@@ -90,7 +90,7 @@ Create a private JSON manifest outside source control containing an approved sta
 ## Recovery procedures
 
 - Flag rollback: set both user-facing flags and both rollout stages to false/zero, redeploy the matching backend/frontend configuration, and verify API 404 plus absent UI.
-- Worker pause/restart: turn only `PROGRESSION_SHADOW_WORKER_ENABLED` off, allow SIGTERM drain, then restart with the operations gate and worker flag true. Pending and failed records remain restart-safe.
+- Worker pause/restart: turn only `PROGRESSION_SHADOW_WORKER_ENABLED` off and restart, allowing the prior process to complete its SIGTERM drain; the replacement fails closed before connecting. Restart again with both `PROGRESSION_OPERATIONS_ENABLED` and `PROGRESSION_SHADOW_WORKER_ENABLED` true. The operations flag remains the global kill switch. Pending and failed records remain restart-safe.
 - Failed outbox/stale lease: inspect admin diagnostics and structured errors. A restart recovers leases older than five minutes. Correct the underlying cause; records below the attempt cap retry automatically. Do not rewrite payloads or reset attempts without an incident-approved, audited procedure.
 - Failed rebuild: rerun the same operation key to resume its cursor and failed-subject checkpoint. After the bounded retry budget, investigate and use a new recorded operation key only after the cause is corrected.
 - Failed backfill batch: rerun the same operation key and same dry-run/apply mode. It resumes after the last committed cursor; canonical event IDs and the unique outbox index absorb duplicates.

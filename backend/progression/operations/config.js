@@ -11,4 +11,6 @@ function policyIdentity(env = process.env) {
 }
 
 function operationsEnabled(env = process.env) { return env.PROGRESSION_OPERATIONS_ENABLED === 'true'; }
-module.exports = Object.freeze({ policyIdentity, operationsEnabled });
+function shadowWorkerEnabled(env = process.env) { return env.PROGRESSION_SHADOW_WORKER_ENABLED === 'true'; }
+function dedicatedWorkerEnabled(env = process.env) { return operationsEnabled(env) && shadowWorkerEnabled(env); }
+module.exports = Object.freeze({ policyIdentity, operationsEnabled, shadowWorkerEnabled, dedicatedWorkerEnabled });

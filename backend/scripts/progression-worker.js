@@ -3,14 +3,14 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const { startShadowWorker } = require('../progression/runtime/worker');
-const { operationsEnabled } = require('../progression/operations/config');
+const { dedicatedWorkerEnabled } = require('../progression/operations/config');
 const { policyIdentity } = require('../progression/operations/config');
 const { startRebuildScheduler } = require('../progression/operations/scheduler');
 const metrics = require('../progression/operations/metrics');
 const { startMonitor } = require('../progression/operations/alerts');
 
 async function main() {
-  if (!operationsEnabled()) throw new Error('PROGRESSION_OPERATIONS_ENABLED must be explicitly true');
+  if (!dedicatedWorkerEnabled()) throw new Error('PROGRESSION_OPERATIONS_ENABLED and PROGRESSION_SHADOW_WORKER_ENABLED must both be explicitly true');
   if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is required');
   await mongoose.connect(process.env.MONGODB_URI, { autoIndex: false, autoCreate: false });
   const stop = startShadowWorker({ intervalMs: process.env.PROGRESSION_WORKER_POLL_MS, batchSize: process.env.PROGRESSION_WORKER_BATCH_SIZE, concurrency: process.env.PROGRESSION_WORKER_CONCURRENCY, maxAttempts: process.env.PROGRESSION_WORKER_MAX_ATTEMPTS });
