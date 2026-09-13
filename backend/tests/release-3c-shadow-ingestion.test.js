@@ -15,6 +15,7 @@ const FactionMembership = require('../models/FactionMembership');
 const persistence = require('../progression/persistence/service');
 const { withProgressionOutbox, enqueue } = require('../progression/runtime/outbox');
 const { produceActivity } = require('../progression/runtime/event-producer');
+const { validateEvent } = require('../progression/contracts');
 const { processNext, operationalMetrics, rebuildShadowProjection } = require('../progression/runtime/worker');
 const release3b = require('../migrations/004-release-3b-shadow-foundation');
 const release3c = require('../migrations/005-release-3c-shadow-ingestion');
@@ -54,6 +55,41 @@ test('runtime producer creates canonical, deterministic, unaffiliated shadow eve
   assert.equal(first.event.affiliations.actor.state, 'unaffiliated');
   assert.equal(first.event.affiliations.beneficiary.state, 'unaffiliated');
   await assert.rejects(produceActivity({ ...spec, principal: 'browser' }), /PRODUCER_UNAUTHORIZED/);
+});
+
+test('outbox persistence preserves closed empty facts and canonical identities', async () => {
+  const spec = creationSpec();
+  const payload = await produceActivity(spec);
+  let first;
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      first = await enqueue(spec, { session });
+    });
+  } finally { await session.endSession(); }
+
+  assert.equal(first.eventId, payload.event.eventId);
+  await assert.rejects(
+    Outbox.create({ eventId: payload.event.eventId, event: payload.event, evidence: payload.evidence }),
+    error => error?.code === 11000
+  );
+  assert.equal(await Outbox.countDocuments({ eventId: payload.event.eventId }), 1);
+
+  const raw = await mongoose.connection.db.collection('progression_outbox').findOne({ eventId: payload.event.eventId });
+  assert.equal(Object.hasOwn(raw.event, 'facts'), true);
+  assert.equal(typeof raw.event.facts, 'object');
+  assert.deepEqual(raw.event.facts, {});
+  assert.doesNotThrow(() => validateEvent(raw.event));
+  assert.equal(raw.event.eventId, payload.event.eventId);
+  assert.equal(raw.event.idempotencyKey, payload.event.idempotencyKey);
+
+  const nonEmptyEvent = structuredClone(payload.event);
+  nonEmptyEvent.eventId = 'a'.repeat(32);
+  nonEmptyEvent.idempotencyKey = 'b'.repeat(32);
+  nonEmptyEvent.facts = { regression: { nested: true } };
+  await Outbox.create({ eventId: nonEmptyEvent.eventId, event: nonEmptyEvent, evidence: [] });
+  const nonEmptyRaw = await mongoose.connection.db.collection('progression_outbox').findOne({ eventId: nonEmptyEvent.eventId });
+  assert.deepEqual(nonEmptyRaw.event.facts, nonEmptyEvent.facts);
 });
 
 test('domain write and outbox entry commit atomically in one caller-owned transaction', async () => {

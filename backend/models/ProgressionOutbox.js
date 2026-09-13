@@ -12,7 +12,7 @@ const progressionOutboxSchema = new mongoose.Schema({
   lockedAt: Date,
   processedAt: Date,
   lastError: { type: String, maxlength: 1000 }
-}, { timestamps: true, collection: 'progression_outbox' });
+}, { timestamps: true, collection: 'progression_outbox', minimize: false });
 
 progressionOutboxSchema.index({ status: 1, availableAt: 1, createdAt: 1, eventId: 1 }, { name: 'progression_outbox_delivery_v1' });
 
