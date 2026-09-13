@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 
 const schema = new mongoose.Schema({
   operationKey: { type: String, required: true, unique: true, immutable: true },
-  kind: { type: String, required: true, enum: ['backfill', 'rebuild'] },
+  kind: { type: String, required: true, enum: ['backfill', 'rebuild', 'outbox_remediation'] },
   scope: { type: String, required: true, enum: ['global', 'user'] },
   subjectId: { type: String, default: null },
   status: { type: String, required: true, enum: ['pending', 'running', 'complete', 'failed'], default: 'pending' },
