@@ -1,6 +1,7 @@
 'use strict';
 
 const mongoose = require('mongoose');
+const User = require('../../models/User');
 const { canonicalEvent, stableJson } = require('../contracts');
 const { canonicalEvidence } = require('../evidence');
 const { qualificationDecision, qualifyLedger } = require('../qualification');
@@ -79,7 +80,13 @@ async function calculateProjection({ policyIdentity, policy, context = {}, sessi
 
 async function planProjection(options = {}) {
   const { inputs, decisions, projection } = await calculateProjection(options);
-  const contributions = decisions.map(decision => decision.contributionResult);
+  const activeUsers = await User.find({ isActive: { $ne: false } }).select('_id').session(options.session || null).lean();
+  const activeUserIds = new Set(activeUsers.map(user => String(user._id)));
+  const eventsById = new Map(inputs.events.map(event => [event.eventId, event]));
+  const persistedDecisions = decisions.filter(decision => activeUserIds.has(eventsById.get(decision.eventId)?.beneficiaryId));
+  const persistedContributions = persistedDecisions.map(decision => decision.contributionResult);
+  const factionContributions = decisions.map(decision => decision.contributionResult);
+  const personal = Object.fromEntries(Object.entries(projection.personal).filter(([subjectId]) => activeUserIds.has(subjectId)));
   return {
     mode: 'plan',
     policyIdentity: {
@@ -90,20 +97,21 @@ async function planProjection(options = {}) {
     projectionContext: projection.projectionContext,
     counts: {
       activityEvents: inputs.events.length,
-      decisions: decisions.length,
-      qualified: decisions.filter(decision => decision.state === 'qualified').length,
-      rejected: decisions.filter(decision => decision.state === 'rejected').length,
-      contributions: decisions.length,
-      personalContributions: contributions.filter(value => value.personal !== 0).length,
-      factionContributions: contributions.filter(value => value.faction !== 0).length,
-      personalProjections: Object.keys(projection.personal).length,
+      canonicalQualifications: decisions.length,
+      decisions: persistedDecisions.length,
+      qualified: persistedDecisions.filter(decision => decision.state === 'qualified').length,
+      rejected: persistedDecisions.filter(decision => decision.state === 'rejected').length,
+      contributions: persistedDecisions.length,
+      personalContributions: persistedContributions.filter(value => value.personal !== 0).length,
+      factionContributions: factionContributions.filter(value => value.faction !== 0).length,
+      personalProjections: Object.keys(personal).length,
       factionProjections: Object.keys(projection.faction).length
     },
     totals: {
-      personalContribution: roundTotal(contributions.reduce((sum, value) => sum + value.personal, 0)),
-      factionContribution: roundTotal(contributions.reduce((sum, value) => sum + value.faction, 0))
+      personalContribution: roundTotal(persistedContributions.reduce((sum, value) => sum + value.personal, 0)),
+      factionContribution: roundTotal(factionContributions.reduce((sum, value) => sum + value.faction, 0))
     },
-    personal: projection.personal,
+    personal,
     faction: projection.faction,
     inactiveEventIds: projection.inactiveEventIds
   };

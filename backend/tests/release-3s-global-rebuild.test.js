@@ -80,7 +80,7 @@ test('plan is a genuine non-persisting complete-ledger calculation', async () =>
   const plan = await persistence.planProjection({ policyIdentity: identity });
   assert.equal(plan.mode, 'plan');
   assert.deepEqual(plan.counts, {
-    activityEvents: 4, decisions: 4, qualified: 4, rejected: 0, contributions: 4,
+    activityEvents: 4, canonicalQualifications: 4, decisions: 4, qualified: 4, rejected: 0, contributions: 4,
     personalContributions: 4, factionContributions: 3, personalProjections: 4, factionProjections: 2
   });
   assert.equal(Object.keys(plan.faction.Neon.contributors).length, 2);
