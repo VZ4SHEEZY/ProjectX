@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const mongoose = require('mongoose');
 const User = require('../../models/User');
 const { canonicalEvent, stableJson } = require('../contracts');
@@ -83,11 +84,12 @@ async function planProjection(options = {}) {
   const activeUsers = await User.find({ isActive: { $ne: false } }).select('_id').session(options.session || null).lean();
   const activeUserIds = new Set(activeUsers.map(user => String(user._id)));
   const eventsById = new Map(inputs.events.map(event => [event.eventId, event]));
+  const activeSubjectsWithActivity = new Set(inputs.events.map(event => event.beneficiaryId).filter(userId => activeUserIds.has(userId)));
   const persistedDecisions = decisions.filter(decision => activeUserIds.has(eventsById.get(decision.eventId)?.beneficiaryId));
   const persistedContributions = persistedDecisions.map(decision => decision.contributionResult);
   const factionContributions = decisions.map(decision => decision.contributionResult);
   const personal = Object.fromEntries(Object.entries(projection.personal).filter(([subjectId]) => activeUserIds.has(subjectId)));
-  return {
+  const plan = {
     mode: 'plan',
     policyIdentity: {
       policyId: projection.projectionContext.policyId,
@@ -96,6 +98,8 @@ async function planProjection(options = {}) {
     },
     projectionContext: projection.projectionContext,
     counts: {
+      usersScanned: activeUsers.length,
+      subjectsWithActivity: activeSubjectsWithActivity.size,
       activityEvents: inputs.events.length,
       canonicalQualifications: decisions.length,
       decisions: persistedDecisions.length,
@@ -115,6 +119,7 @@ async function planProjection(options = {}) {
     faction: projection.faction,
     inactiveEventIds: projection.inactiveEventIds
   };
+  return { ...plan, planDigest: `sha256:${crypto.createHash('sha256').update(stableJson(plan)).digest('hex')}` };
 }
 
 function roundTotal(value) { return Math.round(value * 100) / 100; }

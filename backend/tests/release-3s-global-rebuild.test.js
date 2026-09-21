@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const mongoose = require('mongoose');
@@ -9,7 +10,7 @@ const Decision = require('../models/ProgressionQualificationDecision');
 const Contribution = require('../models/ProgressionContributionResult');
 const Operation = require('../models/ProgressionOperation');
 const Projection = require('../models/ProgressionProjection');
-const { canonicalEvent } = require('../progression/contracts');
+const { canonicalEvent, stableJson } = require('../progression/contracts');
 const { buildScenarioBundle } = require('../progression/simulator/scenarios');
 const policy = require('../progression/policies/simulation-v1');
 const persistence = require('../progression/persistence/service');
@@ -78,9 +79,13 @@ test('plan is a genuine non-persisting complete-ledger calculation', async () =>
     projections: await Projection.countDocuments(), operations: await Operation.countDocuments()
   };
   const plan = await persistence.planProjection({ policyIdentity: identity });
+  const repeatedPlan = await persistence.planProjection({ policyIdentity: identity });
   assert.equal(plan.mode, 'plan');
+  assert.deepEqual(repeatedPlan, plan);
+  const { planDigest, ...digestInput } = plan;
+  assert.equal(planDigest, `sha256:${crypto.createHash('sha256').update(stableJson(digestInput)).digest('hex')}`);
   assert.deepEqual(plan.counts, {
-    activityEvents: 4, canonicalQualifications: 4, decisions: 4, qualified: 4, rejected: 0, contributions: 4,
+    usersScanned: 4, subjectsWithActivity: 4, activityEvents: 4, canonicalQualifications: 4, decisions: 4, qualified: 4, rejected: 0, contributions: 4,
     personalContributions: 4, factionContributions: 3, personalProjections: 4, factionProjections: 2
   });
   assert.equal(Object.keys(plan.faction.Neon.contributors).length, 2);
