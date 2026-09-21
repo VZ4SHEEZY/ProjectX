@@ -1,5 +1,6 @@
 'use strict';
 
+const mongoose = require('mongoose');
 const User = require('../../models/User');
 const ProgressionOperation = require('../../models/ProgressionOperation');
 const persistence = require('../persistence/service');
@@ -44,14 +45,34 @@ async function runGlobalBatch({ operationKey, policyIdentity, batchSize = 25, co
   }
   const remainingFailures = retrying ? [...priorFailures.slice(limit), ...failedSubjectIds] : [...priorFailures, ...failedSubjectIds];
   const doneScanning = retrying ? true : users.length < limit;
-  const done = doneScanning && remainingFailures.length === 0;
+  const readyToFinalize = doneScanning && remainingFailures.length === 0;
   const retryRound = retrying ? Number(operation.checkpoint?.retryRound || 0) + 1 : 0;
   const retriesExhausted = doneScanning && remainingFailures.length > 0 && retryRound >= Math.min(10, Math.max(1, Number.parseInt(maxFailureRetries, 10) || 3));
-  const updated = await ProgressionOperation.findOneAndUpdate({ _id: operation._id }, {
-    $set: { status: done ? 'complete' : retriesExhausted ? 'failed' : 'pending', cursor: retrying ? operation.cursor : (users.at(-1)?._id?.toString() || operation.cursor), checkpoint: { failedSubjectIds: remainingFailures, scanComplete: doneScanning, retryRound }, lastHeartbeatAt: new Date(), ...(done ? { lastSuccessAt: new Date() } : {}), ...(retriesExhausted ? { lastError: `${remainingFailures.length} subject rebuild(s) exhausted retry budget` } : {}) },
+  let updated = await ProgressionOperation.findOneAndUpdate({ _id: operation._id }, {
+    $set: { status: retriesExhausted ? 'failed' : 'pending', cursor: retrying ? operation.cursor : (users.at(-1)?._id?.toString() || operation.cursor), checkpoint: { failedSubjectIds: remainingFailures, scanComplete: doneScanning, retryRound, factionFinalized: false }, lastHeartbeatAt: new Date(), ...(retriesExhausted ? { lastError: `${remainingFailures.length} subject rebuild(s) exhausted retry budget` } : {}) },
     $inc: { 'stats.scanned': delta.scanned, 'stats.rebuilt': delta.rebuilt, 'stats.failed': delta.failed }
   }, { new: true });
-  return { complete: done || retriesExhausted, succeeded: done, delta, operation: updated };
+  if (readyToFinalize && !retriesExhausted) updated = await finalizeGlobal(operation._id, policyIdentity);
+  return { complete: updated.status === 'complete' || updated.status === 'failed', succeeded: updated.status === 'complete', delta, operation: updated };
+}
+
+async function finalizeGlobal(operationId, policyIdentity) {
+  const session = await mongoose.startSession();
+  try {
+    let updated;
+    await session.withTransaction(async () => {
+      const result = await persistence.rebuildFactionProjections({ policyIdentity, session });
+      updated = await ProgressionOperation.findOneAndUpdate(
+        { _id: operationId, status: 'pending' },
+        { $set: { status: 'complete', 'checkpoint.factionFinalized': true, 'checkpoint.projectionContextId': result.projectionContext.projectionContextId, lastHeartbeatAt: new Date(), lastSuccessAt: new Date(), lastError: null } },
+        { new: true, session }
+      );
+      if (!updated) throw new Error('REBUILD_OPERATION_FINALIZATION_STATE_MISMATCH');
+    });
+    return updated;
+  } finally {
+    await session.endSession();
+  }
 }
 
 async function claim({ operationKey, scope, subjectId, policyIdentity }) {

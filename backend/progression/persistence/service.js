@@ -46,12 +46,7 @@ async function appendContribution(eventInput, decisionInput, options = {}) {
 
 async function rebuildProjection({ policyIdentity, policy, context = {}, rebuiltAt, session } = {}) {
   if (policy) throw new TypeError('caller-supplied replay policies are not accepted; use policyIdentity');
-  const resolvedPolicy = await resolvePersistedPolicy(policyIdentity, { session });
-  const inputs = await repository.getOrderedReplayInputs({ session });
-  const evidenceByRef = Object.fromEntries(inputs.evidence.map(item => [item.evidenceId, item]));
-  const replayContext = { ...context, evidenceByRef };
-  const decisions = qualifyLedger(inputs.events, resolvedPolicy.qualification, replayContext);
-  const projection = project(inputs.events, decisions, resolvedPolicy, replayContext);
+  const { inputs, decisions, projection } = await calculateProjection({ policyIdentity, context, session });
   const eventsById = new Map(inputs.events.map(event => [event.eventId, event]));
 
   await withOptionalTransaction({ transaction: true, session }, async transactionSession => {
@@ -69,6 +64,60 @@ async function rebuildProjection({ policyIdentity, policy, context = {}, rebuilt
     }
   });
   return projection;
+}
+
+async function calculateProjection({ policyIdentity, policy, context = {}, session } = {}) {
+  if (policy) throw new TypeError('caller-supplied replay policies are not accepted; use policyIdentity');
+  const resolvedPolicy = await resolvePersistedPolicy(policyIdentity, { session });
+  const inputs = await repository.getOrderedReplayInputs({ session });
+  const evidenceByRef = Object.fromEntries(inputs.evidence.map(item => [item.evidenceId, item]));
+  const replayContext = { ...context, evidenceByRef };
+  const decisions = qualifyLedger(inputs.events, resolvedPolicy.qualification, replayContext);
+  const projection = project(inputs.events, decisions, resolvedPolicy, replayContext);
+  return { inputs, decisions, projection };
+}
+
+async function planProjection(options = {}) {
+  const { inputs, decisions, projection } = await calculateProjection(options);
+  const contributions = decisions.map(decision => decision.contributionResult);
+  return {
+    mode: 'plan',
+    policyIdentity: {
+      policyId: projection.projectionContext.policyId,
+      version: projection.projectionContext.policyVersion,
+      artifactDigest: projection.projectionContext.policyArtifactDigest
+    },
+    projectionContext: projection.projectionContext,
+    counts: {
+      activityEvents: inputs.events.length,
+      decisions: decisions.length,
+      qualified: decisions.filter(decision => decision.state === 'qualified').length,
+      rejected: decisions.filter(decision => decision.state === 'rejected').length,
+      contributions: decisions.length,
+      personalContributions: contributions.filter(value => value.personal !== 0).length,
+      factionContributions: contributions.filter(value => value.faction !== 0).length,
+      personalProjections: Object.keys(projection.personal).length,
+      factionProjections: Object.keys(projection.faction).length
+    },
+    totals: {
+      personalContribution: roundTotal(contributions.reduce((sum, value) => sum + value.personal, 0)),
+      factionContribution: roundTotal(contributions.reduce((sum, value) => sum + value.faction, 0))
+    },
+    personal: projection.personal,
+    faction: projection.faction,
+    inactiveEventIds: projection.inactiveEventIds
+  };
+}
+
+function roundTotal(value) { return Math.round(value * 100) / 100; }
+
+async function rebuildFactionProjections({ rebuiltAt, session, ...options } = {}) {
+  if (!session) throw new TypeError('global faction finalization requires a transaction session');
+  const { projection } = await calculateProjection({ ...options, session });
+  for (const [subjectId, checkpoint] of Object.entries(projection.faction)) {
+    await repository.storeProjection({ scope: 'faction', subjectId, projectionContext: projection.projectionContext, checkpoint }, { session, rebuiltAt });
+  }
+  return { projectionContext: projection.projectionContext, faction: projection.faction };
 }
 
 async function rebuildUserProjection({ userId, ...options } = {}) {
@@ -101,9 +150,6 @@ async function rebuildSubjectProjection({ userId, ...options } = {}) {
     }
     const checkpoint = rebuilt.personal[userId];
     if (checkpoint) await repository.storeProjection({ scope: 'personal', subjectId: userId, projectionContext: rebuilt.projectionContext, checkpoint }, { session: transactionSession, rebuiltAt: options.rebuiltAt });
-    for (const [factionId, factionCheckpoint] of Object.entries(rebuilt.faction)) {
-      await repository.storeProjection({ scope: 'faction', subjectId: factionId, projectionContext: rebuilt.projectionContext, checkpoint: factionCheckpoint }, { session: transactionSession, rebuiltAt: options.rebuiltAt });
-    }
   });
   return {
     projectionContext: rebuilt.projectionContext,
@@ -186,4 +232,4 @@ async function validateCorrectionRelationships(event, options = {}) {
   }
 }
 
-module.exports = Object.freeze({ SHADOW_MODE, USER_FACING_PROGRESSION_ENABLED, appendEvent, appendEvidence, appendDecision, appendPolicy, appendContribution, rebuildProjection, rebuildUserProjection, rebuildSubjectProjection, getProjection, getOrderedReplayInputs });
+module.exports = Object.freeze({ SHADOW_MODE, USER_FACING_PROGRESSION_ENABLED, appendEvent, appendEvidence, appendDecision, appendPolicy, appendContribution, calculateProjection, planProjection, rebuildFactionProjections, rebuildProjection, rebuildUserProjection, rebuildSubjectProjection, getProjection, getOrderedReplayInputs });

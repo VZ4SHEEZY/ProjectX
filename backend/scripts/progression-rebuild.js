@@ -11,6 +11,10 @@ async function main() {
   const identity = policyIdentity();
   await mongoose.connect(process.env.MONGODB_URI, { autoIndex: false, autoCreate: false });
   try {
+    if (process.argv.includes('--plan')) {
+      console.log(JSON.stringify(await require('../progression/persistence/service').planProjection({ policyIdentity: identity }), null, 2));
+      return;
+    }
     const userId = argument('--user');
     if (userId) console.log(JSON.stringify(await rebuild.runUser({ userId, policyIdentity: identity }), null, 2));
     else {
