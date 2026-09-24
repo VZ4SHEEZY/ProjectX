@@ -124,6 +124,13 @@ async function getPolicyArtifact(identity, options = {}) {
 }
 
 async function storeProjection({ scope, subjectId, projectionContext, checkpoint }, options = {}) {
+  if (options.preserveExisting) {
+    const existing = await Projection.findOne({ scope, subjectId, projectionContextId: projectionContext.projectionContextId }).select('+projectionContext +checkpoint').session(options.session || null).lean();
+    if (existing) {
+      if (stableJson(existing.projectionContext) !== stableJson(projectionContext) || stableJson(existing.checkpoint) !== stableJson(checkpoint)) throw new Error('PROGRESSION_PROJECTION_IDENTITY_COLLISION');
+      return existing;
+    }
+  }
   return Projection.findOneAndUpdate(
     { scope, subjectId, projectionContextId: projectionContext.projectionContextId },
     { $set: { policyId: projectionContext.policyId, policyVersion: projectionContext.policyVersion, policyArtifactDigest: projectionContext.policyArtifactDigest, evaluationGeneration: projectionContext.evaluationGeneration, projectionContext, checkpoint, rebuiltAt: options.rebuiltAt || new Date() } },

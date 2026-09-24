@@ -9,7 +9,7 @@ const observability = require('../../services/observability');
 
 const LOCK_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_MAX_ATTEMPTS = 8;
-const workerState = { startedAt: null, stoppedAt: null, lastSuccessAt: null, lastFailureAt: null, processed: 0, decisions: 0, contributions: 0, personalProjections: 0, factionProjections: 0, failures: 0, consecutiveFailures: 0, staleLocksRecovered: 0 };
+const workerState = { startedAt: null, stoppedAt: null, lastSuccessAt: null, lastFailureAt: null, processed: 0, decisions: 0, contributions: 0, personalProjections: 0, factionProjections: 0, failures: 0, consecutiveFailures: 0, staleLocksRecovered: 0, totalProcessingLatencyMs: 0, lastProcessingLatencyMs: null, maxProcessingLatencyMs: 0 };
 
 function scopeQuery(processingScope = { mode: 'normal', eventIds: [] }) {
   if (processingScope.mode === 'normal') return {};
@@ -59,6 +59,7 @@ async function processClaimed({ now = new Date(), maxAttempts = DEFAULT_MAX_ATTE
     { sort: { createdAt: 1, eventId: 1 }, new: true }
   ).select('+event +evidence');
   if (!item) return null;
+  const processingStartedAt = Date.now();
   try {
     const processedAt = new Date();
     let advancement = null;
@@ -82,8 +83,10 @@ async function processClaimed({ now = new Date(), maxAttempts = DEFAULT_MAX_ATTE
       await persistence.appendEvent(item.event);
       await ProgressionOutbox.updateOne({ _id: item._id, status: 'processing' }, { $set: { status: 'processed', processedAt, lockedAt: null } });
     }
-    observability.write('info', advancement ? 'progression_live_processed' : 'progression_shadow_processed', { eventId: item.eventId, decisionId: advancement?.decisionId || null, beneficiaryId: advancement?.beneficiaryId || null, factionId: advancement?.factionId || null, producer: item.event.provenance.producer, sourceType: item.event.sourceIdentity.objectType, attempts: item.attempts, processedAt: processedAt.toISOString() });
+    const processingLatencyMs = Date.now() - processingStartedAt;
+    observability.write('info', advancement ? 'progression_live_processed' : 'progression_shadow_processed', { eventId: item.eventId, decisionId: advancement?.decisionId || null, beneficiaryId: advancement?.beneficiaryId || null, factionId: advancement?.factionId || null, producer: item.event.provenance.producer, sourceType: item.event.sourceIdentity.objectType, attempts: item.attempts, processedAt: processedAt.toISOString(), processingLatencyMs });
     workerState.lastSuccessAt = processedAt; workerState.processed += 1; workerState.consecutiveFailures = 0;
+    workerState.totalProcessingLatencyMs += processingLatencyMs; workerState.lastProcessingLatencyMs = processingLatencyMs; workerState.maxProcessingLatencyMs = Math.max(workerState.maxProcessingLatencyMs, processingLatencyMs);
     if (advancement) { workerState.decisions += 1; workerState.contributions += 1; workerState.personalProjections += 1; if (advancement.faction) workerState.factionProjections += 1; }
     return { eventId: item.eventId, status: 'processed', advancement };
   } catch (error) {
@@ -164,6 +167,7 @@ function healthStatus() {
     processingRatePerSecond: elapsedSeconds ? Math.round(workerState.processed / elapsedSeconds * 1000) / 1000 : 0,
     retryRate: workerState.processed + workerState.failures ? Math.round(workerState.failures / (workerState.processed + workerState.failures) * 10000) / 10000 : 0,
     liveEffects: { events: workerState.processed, decisions: workerState.decisions, contributions: workerState.contributions, personalProjections: workerState.personalProjections, factionProjections: workerState.factionProjections },
+    processingLatencyMs: { last: workerState.lastProcessingLatencyMs, average: workerState.processed ? Math.round(workerState.totalProcessingLatencyMs / workerState.processed) : null, max: workerState.processed ? workerState.maxProcessingLatencyMs : null },
     consecutiveFailures: workerState.consecutiveFailures,
     staleLockRecoveryCount: workerState.staleLocksRecovered
   };

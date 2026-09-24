@@ -52,7 +52,7 @@ The production policy artifact must be approved and persisted before staging reb
 
 ## Release 3X live progression pipeline
 
-Release 3X extends the dedicated worker so one claimed outbox item, its evidence/activity event, canonical qualification decision, contribution, personal projection, applicable event-time faction projection, and outbox acknowledgement commit in one MongoDB transaction. It calls the same `calculateProjection` ledger evaluator used by rebuild/replay; there is no second scoring implementation. Immutable event, evidence, decision, and contribution identities retain their existing collision checks. Unaffiliated events persist personal progression and no faction projection.
+Release 3X extends the dedicated worker so one claimed outbox item, its evidence/activity event, canonical qualification decision, contribution, personal projection, applicable event-time faction projection, and outbox acknowledgement commit in one MongoDB transaction. It calls the same `calculateProjection` ledger evaluator used by rebuild/replay; there is no second scoring implementation. Live evaluation pins cutoff and watermark to the canonical event ingestion time, so a delayed retry derives the same immutable decision and projection identities after newer activity exists. An identical live projection retry preserves the original checkpoint timestamp instead of making an older context appear newest. Immutable event, evidence, decision, and contribution identities retain their existing collision checks. Unaffiliated events persist personal progression and no faction projection.
 
 Live processing is fail-closed and requires all existing worker gates plus an exact persisted policy identity and `PROGRESSION_LIVE_PIPELINE_ENABLED=true`. A database-backed five-minute lease serializes canonical evaluation across worker replicas. Duplicate delivery re-enters the same deterministic identities and projection key, producing exactly-once logical state. A derived-state or acknowledgement failure aborts the entire transaction, leaves no partial canonical event, and returns the outbox item to observable failed/retry state.
 
@@ -68,6 +68,8 @@ Before staging activation, run `npm run progression:live-migrate` as a read-only
 6. Stop the worker and clear bounded IDs after evidence capture. Keep Stage 0 unless a separately authorized Stage 1 presentation check follows.
 
 Release 3X rollback is worker/config rollback: disable `PROGRESSION_LIVE_PIPELINE_ENABLED`, then disable the shadow worker or operations gate and restart/drain the service. Preserve all ledger/outbox/derived records for audit. The lease migration is additive; only an empty lease collection may be rolled back. Rebuild remains the correction/replay and audit reconciliation mechanism and must produce the same logical checkpoints as live-derived state.
+
+Worker health exposes live event/decision/contribution/personal/faction effect counts, failures and retry rate, plus last/average/maximum processing latency. Successful structured logs include the canonical event and decision identities, attempt number, affected subjects, and processing latency; failures retain the bounded error on the outbox item and emit the existing structured failure event.
 
 ## Freshness and observability
 
