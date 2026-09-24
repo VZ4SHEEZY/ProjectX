@@ -1,34 +1,91 @@
 'use strict';
 
+const mongoose = require('mongoose');
+const crypto = require('node:crypto');
 const ProgressionOutbox = require('../../models/ProgressionOutbox');
+const ProgressionPipelineLease = require('../../models/ProgressionPipelineLease');
 const persistence = require('../persistence/service');
 const observability = require('../../services/observability');
 
 const LOCK_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_MAX_ATTEMPTS = 8;
-const workerState = { startedAt: null, stoppedAt: null, lastSuccessAt: null, lastFailureAt: null, processed: 0, failures: 0, consecutiveFailures: 0, staleLocksRecovered: 0 };
+const workerState = { startedAt: null, stoppedAt: null, lastSuccessAt: null, lastFailureAt: null, processed: 0, decisions: 0, contributions: 0, personalProjections: 0, factionProjections: 0, failures: 0, consecutiveFailures: 0, staleLocksRecovered: 0 };
 
-async function processNext({ now = new Date(), maxAttempts = DEFAULT_MAX_ATTEMPTS } = {}) {
+function scopeQuery(processingScope = { mode: 'normal', eventIds: [] }) {
+  if (processingScope.mode === 'normal') return {};
+  if (processingScope.mode !== 'bounded' || !Array.isArray(processingScope.eventIds) || processingScope.eventIds.length < 1) throw new Error('INVALID_PROGRESSION_PROCESSING_SCOPE');
+  return { eventId: { $in: processingScope.eventIds } };
+}
+
+async function acquirePipelineLease(now) {
+  const ownerId = crypto.randomUUID();
+  try {
+    const lease = await ProgressionPipelineLease.findOneAndUpdate(
+      { leaseKey: 'canonical-live-pipeline-v1', $or: [{ expiresAt: { $lte: now } }, { ownerId }] },
+      { $set: { ownerId, acquiredAt: now, expiresAt: new Date(now.getTime() + LOCK_TIMEOUT_MS) }, $setOnInsert: { leaseKey: 'canonical-live-pipeline-v1' } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    return lease?.ownerId === ownerId ? ownerId : null;
+  } catch (error) {
+    if (error?.code === 11000) return null;
+    throw error;
+  }
+}
+
+async function releasePipelineLease(ownerId) {
+  if (ownerId) await ProgressionPipelineLease.deleteOne({ leaseKey: 'canonical-live-pipeline-v1', ownerId });
+}
+
+async function processNext(options = {}) {
+  if (!options.policyIdentity) return processClaimed(options);
+  const now = options.now || new Date();
+  const ownerId = await acquirePipelineLease(now);
+  if (!ownerId) return null;
+  try { return await processClaimed({ ...options, now }); }
+  finally { await releasePipelineLease(ownerId); }
+}
+
+async function processClaimed({ now = new Date(), maxAttempts = DEFAULT_MAX_ATTEMPTS, policyIdentity, processingScope } = {}) {
+  const bounded = scopeQuery(processingScope);
   const stale = new Date(now.getTime() - LOCK_TIMEOUT_MS);
   const recovery = await ProgressionOutbox.updateMany(
-    { status: 'processing', lockedAt: { $lt: stale }, attempts: { $lt: maxAttempts } },
+    { ...bounded, status: 'processing', lockedAt: { $lt: stale }, attempts: { $lt: maxAttempts } },
     { $set: { status: 'failed', lockedAt: null, availableAt: now, lastError: 'stale worker lease recovered' } }
   );
   workerState.staleLocksRecovered += recovery.modifiedCount || 0;
   const item = await ProgressionOutbox.findOneAndUpdate(
-    { availableAt: { $lte: now }, attempts: { $lt: maxAttempts }, status: { $in: ['pending', 'failed'] } },
+    { ...bounded, availableAt: { $lte: now }, attempts: { $lt: maxAttempts }, status: { $in: ['pending', 'failed'] } },
     { $set: { status: 'processing', lockedAt: now }, $inc: { attempts: 1 }, $unset: { lastError: 1 } },
     { sort: { createdAt: 1, eventId: 1 }, new: true }
   ).select('+event +evidence');
   if (!item) return null;
   try {
-    for (const evidence of item.evidence) await persistence.appendEvidence(evidence);
-    await persistence.appendEvent(item.event);
     const processedAt = new Date();
-    await ProgressionOutbox.updateOne({ _id: item._id, status: 'processing' }, { $set: { status: 'processed', processedAt, lockedAt: null } });
-    observability.write('info', 'progression_shadow_processed', { eventId: item.eventId, producer: item.event.provenance.producer, sourceType: item.event.sourceIdentity.objectType, attempts: item.attempts, processedAt: processedAt.toISOString() });
+    let advancement = null;
+    if (policyIdentity) {
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          for (const evidence of item.evidence) await persistence.appendEvidence(evidence, { session });
+          await persistence.appendEvent(item.event, { session });
+          advancement = await persistence.advanceLiveEvent({ eventId: item.eventId, policyIdentity, session, rebuiltAt: processedAt });
+          const acknowledgement = await ProgressionOutbox.updateOne({ _id: item._id, status: 'processing' }, { $set: { status: 'processed', processedAt, lockedAt: null } }, { session });
+          if (acknowledgement.modifiedCount !== 1) throw new Error('PROGRESSION_OUTBOX_ACKNOWLEDGEMENT_CONFLICT');
+        });
+      } finally {
+        await session.endSession();
+      }
+    } else {
+      // Compatibility path for shadow-only tooling. The dedicated worker entrypoint
+      // always supplies a persisted policy identity and cannot select this branch.
+      for (const evidence of item.evidence) await persistence.appendEvidence(evidence);
+      await persistence.appendEvent(item.event);
+      await ProgressionOutbox.updateOne({ _id: item._id, status: 'processing' }, { $set: { status: 'processed', processedAt, lockedAt: null } });
+    }
+    observability.write('info', advancement ? 'progression_live_processed' : 'progression_shadow_processed', { eventId: item.eventId, decisionId: advancement?.decisionId || null, beneficiaryId: advancement?.beneficiaryId || null, factionId: advancement?.factionId || null, producer: item.event.provenance.producer, sourceType: item.event.sourceIdentity.objectType, attempts: item.attempts, processedAt: processedAt.toISOString() });
     workerState.lastSuccessAt = processedAt; workerState.processed += 1; workerState.consecutiveFailures = 0;
-    return { eventId: item.eventId, status: 'processed' };
+    if (advancement) { workerState.decisions += 1; workerState.contributions += 1; workerState.personalProjections += 1; if (advancement.faction) workerState.factionProjections += 1; }
+    return { eventId: item.eventId, status: 'processed', advancement };
   } catch (error) {
     const delay = Math.min(60_000, 1000 * (2 ** Math.min(item.attempts, 6)));
     await ProgressionOutbox.updateOne({ _id: item._id, status: 'processing' }, { $set: { status: 'failed', availableAt: new Date(Date.now() + delay), lockedAt: null, lastError: String(error.message || error).slice(0, 1000) } });
@@ -78,13 +135,13 @@ async function rebuildShadowProjection(args) {
   }
 }
 
-function startShadowWorker({ intervalMs = 1000, batchSize = 25, concurrency = 2, maxAttempts = DEFAULT_MAX_ATTEMPTS, onError = console.error } = {}) {
+function startShadowWorker({ intervalMs = 1000, batchSize = 25, concurrency = 2, maxAttempts = DEFAULT_MAX_ATTEMPTS, policyIdentity, processingScope, onError = console.error } = {}) {
   let stopped = false; let running = false;
   workerState.startedAt = new Date(); workerState.stoppedAt = null;
   const tick = async () => {
     if (stopped || running) return;
     running = true;
-    try { await processBatch({ batchSize, concurrency, maxAttempts }); } catch (error) { workerState.lastFailureAt = new Date(); onError(error); } finally { running = false; }
+    try { await processBatch({ batchSize, concurrency, maxAttempts, policyIdentity, processingScope }); } catch (error) { workerState.lastFailureAt = new Date(); onError(error); } finally { running = false; }
   };
   const timer = setInterval(tick, Math.max(250, intervalMs));
   timer.unref?.();
@@ -106,6 +163,7 @@ function healthStatus() {
     lastFailure: workerState.lastFailureAt?.toISOString() || null,
     processingRatePerSecond: elapsedSeconds ? Math.round(workerState.processed / elapsedSeconds * 1000) / 1000 : 0,
     retryRate: workerState.processed + workerState.failures ? Math.round(workerState.failures / (workerState.processed + workerState.failures) * 10000) / 10000 : 0,
+    liveEffects: { events: workerState.processed, decisions: workerState.decisions, contributions: workerState.contributions, personalProjections: workerState.personalProjections, factionProjections: workerState.factionProjections },
     consecutiveFailures: workerState.consecutiveFailures,
     staleLockRecoveryCount: workerState.staleLocksRecovered
   };

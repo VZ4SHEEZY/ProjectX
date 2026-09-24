@@ -38,6 +38,10 @@ services:
         value: false
       - key: PROGRESSION_SHADOW_WORKER_ENABLED
         value: false
+      - key: PROGRESSION_LIVE_PIPELINE_ENABLED
+        value: false
+      - key: PROGRESSION_PROCESSING_MODE
+        value: normal
       - key: PROGRESSION_PRODUCT_STALE_AFTER_MS
         value: 21600000
       - key: PROGRESSION_ROLLOUT_STAGE

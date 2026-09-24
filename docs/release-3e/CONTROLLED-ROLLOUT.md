@@ -50,6 +50,25 @@ Rebuilds accept only an exact persisted policy identity. `npm run progression:re
 
 The production policy artifact must be approved and persisted before staging rebuild. The simulator artifact is marked simulation-only and must not be selected for production.
 
+## Release 3X live progression pipeline
+
+Release 3X extends the dedicated worker so one claimed outbox item, its evidence/activity event, canonical qualification decision, contribution, personal projection, applicable event-time faction projection, and outbox acknowledgement commit in one MongoDB transaction. It calls the same `calculateProjection` ledger evaluator used by rebuild/replay; there is no second scoring implementation. Immutable event, evidence, decision, and contribution identities retain their existing collision checks. Unaffiliated events persist personal progression and no faction projection.
+
+Live processing is fail-closed and requires all existing worker gates plus an exact persisted policy identity and `PROGRESSION_LIVE_PIPELINE_ENABLED=true`. A database-backed five-minute lease serializes canonical evaluation across worker replicas. Duplicate delivery re-enters the same deterministic identities and projection key, producing exactly-once logical state. A derived-state or acknowledgement failure aborts the entire transaction, leaves no partial canonical event, and returns the outbox item to observable failed/retry state.
+
+Normal queue mode is `PROGRESSION_PROCESSING_MODE=normal`. Controlled staging/canary proof uses `PROGRESSION_PROCESSING_MODE=bounded` and `PROGRESSION_BOUNDED_EVENT_IDS=<canonical-event-id[,canonical-event-id...]>`; bounded mode accepts 1–25 canonical IDs and otherwise refuses startup. It only restricts which existing outbox records may be claimed. It cannot construct payloads, bypass evidence validation, qualification, policy resolution, or the real application/outbox path. Never use bounded mode as a permanent production queue configuration.
+
+Before staging activation, run `npm run progression:live-migrate` as a read-only preflight, then apply the additive lease collection with `npm run progression:live-migrate -- --apply`. Record the target, revision, policy identity, event ID, source identity, source timestamp, and zero unexpected pending/processing/failed items. For a one-event proof:
+
+1. Keep API/UI rollout flags off and the scheduler off.
+2. Configure the exact approved policy identity, enable operations/shadow/live gates, select bounded mode, and provide only the approved event ID.
+3. Perform exactly one real application action that atomically creates its domain record and outbox record.
+4. Start one dedicated worker and verify one processed outbox record, event, decision, contribution, personal projection, and (when affiliated) event-time faction projection.
+5. Verify unrelated pending records were not claimed, retry the same immutable delivery only in an isolated staging proof, and reconcile the live checkpoints against `calculateProjection`/plan output.
+6. Stop the worker and clear bounded IDs after evidence capture. Keep Stage 0 unless a separately authorized Stage 1 presentation check follows.
+
+Release 3X rollback is worker/config rollback: disable `PROGRESSION_LIVE_PIPELINE_ENABLED`, then disable the shadow worker or operations gate and restart/drain the service. Preserve all ledger/outbox/derived records for audit. The lease migration is additive; only an empty lease collection may be rolled back. Rebuild remains the correction/replay and audit reconciliation mechanism and must produce the same logical checkpoints as live-derived state.
+
 ## Freshness and observability
 
 Product freshness policy `release-3e-v1` maps a missing checkpoint to `unavailable`, and an existing checkpoint to `current` or `stale`. `PROGRESSION_PRODUCT_STALE_AFTER_MS` defaults to six hours, is bounded from one minute to seven days, and should be greater than the proven rebuild completion interval. The public API exposes only state, policy version, and `updatedAt`; queue health and operation checkpoints stay privileged.

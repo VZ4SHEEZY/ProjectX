@@ -79,6 +79,44 @@ async function calculateProjection({ policyIdentity, policy, context = {}, sessi
   return { inputs, decisions, projection };
 }
 
+// Derive one newly-ingested event through the same canonical ledger evaluator used
+// by rebuild/replay, while persisting only that event's immutable result and the
+// projections it can affect. The caller owns the transaction so event ingestion,
+// derived state, and outbox acknowledgement can commit as one unit.
+async function advanceLiveEvent({ eventId, policyIdentity, context = {}, session, rebuiltAt } = {}) {
+  if (typeof eventId !== 'string' || !/^[a-f0-9]{32}$/.test(eventId)) throw new TypeError('a canonical eventId is required');
+  if (!session || typeof session.inTransaction !== 'function' || !session.inTransaction()) throw new TypeError('advanceLiveEvent requires an active transaction session');
+  const { inputs, decisions, projection } = await calculateProjection({ policyIdentity, context, session });
+  const event = inputs.events.find(value => value.eventId === eventId);
+  const decision = decisions.find(value => value.eventId === eventId);
+  if (!event || !decision) throw new Error(`PROGRESSION_LIVE_EVENT_NOT_FOUND:${eventId}`);
+
+  await validateDecisionRelationships(decision, { session });
+  await repository.appendQualificationDecision(decision, { session });
+  await validateContributionRelationships(event, decision, { session });
+  await repository.appendContributionResult(event, decision, { session });
+
+  const personal = projection.personal[event.beneficiaryId];
+  if (!personal) throw new Error(`PROGRESSION_LIVE_PERSONAL_PROJECTION_NOT_FOUND:${event.beneficiaryId}`);
+  await repository.storeProjection({ scope: 'personal', subjectId: event.beneficiaryId, projectionContext: projection.projectionContext, checkpoint: personal }, { session, rebuiltAt });
+
+  const factionId = event.affiliations.beneficiary.state === 'affiliated' ? event.affiliations.beneficiary.factionId : null;
+  const faction = factionId ? projection.faction[factionId] : null;
+  if (decision.contributionResult.faction !== 0 && (!factionId || !faction)) throw new Error('PROGRESSION_LIVE_FACTION_PROJECTION_NOT_FOUND');
+  if (faction) await repository.storeProjection({ scope: 'faction', subjectId: factionId, projectionContext: projection.projectionContext, checkpoint: faction }, { session, rebuiltAt });
+
+  return {
+    eventId,
+    decisionId: decision.decisionId,
+    beneficiaryId: event.beneficiaryId,
+    factionId,
+    contribution: decision.contributionResult,
+    projectionContext: projection.projectionContext,
+    personal,
+    faction
+  };
+}
+
 async function planProjection(options = {}) {
   const { inputs, decisions, projection } = await calculateProjection(options);
   const activeUsers = await User.find({ isActive: { $ne: false } }).select('_id').session(options.session || null).lean();
@@ -245,4 +283,4 @@ async function validateCorrectionRelationships(event, options = {}) {
   }
 }
 
-module.exports = Object.freeze({ SHADOW_MODE, USER_FACING_PROGRESSION_ENABLED, appendEvent, appendEvidence, appendDecision, appendPolicy, appendContribution, calculateProjection, planProjection, rebuildFactionProjections, rebuildProjection, rebuildUserProjection, rebuildSubjectProjection, getProjection, getOrderedReplayInputs });
+module.exports = Object.freeze({ SHADOW_MODE, USER_FACING_PROGRESSION_ENABLED, appendEvent, appendEvidence, appendDecision, appendPolicy, appendContribution, advanceLiveEvent, calculateProjection, planProjection, rebuildFactionProjections, rebuildProjection, rebuildUserProjection, rebuildSubjectProjection, getProjection, getOrderedReplayInputs });
