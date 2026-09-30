@@ -14,10 +14,14 @@ function socketOrigin(origin) {
 }
 
 export function frontendDeployment(env = process.env) {
-  const production = env.VERCEL_ENV !== 'preview';
+  const staging = env.VITE_DEPLOYMENT_ENV === 'staging';
+  const production = env.VERCEL_ENV !== 'preview' && !staging;
   const apiOrigin = originOf(env.VITE_API_URL || `${PRODUCTION_API_ORIGIN}/api`, 'VITE_API_URL');
   const socketOriginBinding = originOf(env.VITE_SOCKET_URL || apiOrigin, 'VITE_SOCKET_URL');
 
+  if (staging && (apiOrigin !== STAGING_API_ORIGIN || socketOriginBinding !== STAGING_API_ORIGIN)) {
+    throw new Error('Staging VITE_API_URL and VITE_SOCKET_URL must target the staging API');
+  }
   if (production && (apiOrigin !== PRODUCTION_API_ORIGIN || socketOriginBinding !== PRODUCTION_API_ORIGIN)) {
     throw new Error('Production VITE_API_URL and VITE_SOCKET_URL must target the production API');
   }
@@ -36,7 +40,7 @@ export function frontendDeployment(env = process.env) {
   }
 
   const csp = `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https://res.cloudinary.com; connect-src 'self' ${[...connectOrigins].join(' ')}; upgrade-insecure-requests`;
-  return { production, apiOrigin, socketOrigin: socketOriginBinding, csp };
+  return { production, staging, apiOrigin, socketOrigin: socketOriginBinding, csp };
 }
 
 export function createVercelConfig({ appRoot = false, env = process.env } = {}) {

@@ -12,6 +12,11 @@ const stagingEnv = {
   VITE_API_URL: `${deploymentOrigins.STAGING_API_ORIGIN}/api`,
   VITE_SOCKET_URL: deploymentOrigins.STAGING_API_ORIGIN
 };
+const stableStagingEnv = {
+  ...stagingEnv,
+  VERCEL_ENV: 'production',
+  VITE_DEPLOYMENT_ENV: 'staging'
+};
 
 test('production binding and CSP include production and exclude staging', () => {
   const deployment = frontendDeployment(productionEnv);
@@ -28,6 +33,14 @@ test('preview binding and CSP permit staging API and socket while retaining requ
   assert.equal(deployment.apiOrigin, deploymentOrigins.STAGING_API_ORIGIN);
   assert.equal(deployment.socketOrigin, deploymentOrigins.STAGING_API_ORIGIN);
   for (const origin of [deploymentOrigins.PRODUCTION_API_ORIGIN, deploymentOrigins.STAGING_API_ORIGIN, 'wss://cyberdope-api-staging.onrender.com']) assert.ok(deployment.csp.includes(origin), origin);
+});
+
+test('explicit stable staging deployment requires the isolated staging API', () => {
+  const deployment = frontendDeployment(stableStagingEnv);
+  assert.equal(deployment.production, false);
+  assert.equal(deployment.staging, true);
+  assert.equal(deployment.apiOrigin, deploymentOrigins.STAGING_API_ORIGIN);
+  assert.throws(() => frontendDeployment({ ...stableStagingEnv, VITE_API_URL: `${deploymentOrigins.PRODUCTION_API_ORIGIN}/api` }), /must target the staging API/);
 });
 
 test('both Vercel project-root configurations use the environment-derived CSP', () => {
