@@ -118,6 +118,9 @@ app.use('/api/admin', require('./routes/admin'));
 if (process.env.QA_E2E_ENABLED === 'true' && process.env.NODE_ENV !== 'production') {
   app.use('/api/qa', require('./routes/qa'));
 }
+if (process.env.OUTRIDER_ENABLED === 'true' && process.env.OUTRIDER_OBSERVER_ENABLED === 'true' && process.env.NODE_ENV !== 'production') {
+  app.use('/api/internal/outrider', require('./routes/outrider'));
+}
 
 // Seed endpoint - populate feed with test videos
 app.post('/api/seed-feed', protect, requireAdmin, async (req, res) => {

@@ -26,6 +26,13 @@ const FORBIDDEN = new Set([
   'cyberdope.user.private.read', 'cyberdope.repository.access',
   'cyberdope.payment.write', 'cyberdope.config.write', 'cyberdope.deploy'
 ]);
+const ACTIONS = Object.freeze({
+  SPEAK_TO_AGENT: 'speak_to_agent', RESPOND_TO_OBSERVER: 'respond_to_observer',
+  MOVE_SPACE: 'move_space', CREATE_WORLD_EVENT: 'create_world_event',
+  CREATE_OUTRIDER_ARTIFACT: 'create_outrider_artifact',
+  INSPECT_PERMITTED_WORLD_STATE: 'inspect_permitted_world_state',
+  REMEMBER_PERMITTED_FACT: 'remember_permitted_fact', PROPOSE_POST: 'propose_post', NOOP: 'noop'
+});
 
 function id(prefix = 'glass') { return `${prefix}_${crypto.randomUUID()}`; }
 function requireString(value, field) {
@@ -57,4 +64,4 @@ function worldSignal(input) {
   return Object.freeze(value);
 }
 
-module.exports = { CONTRACT_VERSION, CAPABILITIES, CROSS_GLASS, FORBIDDEN, capabilityRequest, worldSignal };
+module.exports = { CONTRACT_VERSION, CAPABILITIES, CROSS_GLASS, FORBIDDEN, ACTIONS, capabilityRequest, worldSignal };

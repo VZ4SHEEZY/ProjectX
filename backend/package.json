@@ -24,7 +24,9 @@
     "progression:policy": "node scripts/progression-policy.js",
     "test:migration": "node --test --test-concurrency=1 tests/release1-migration.test.js",
     "test:external": "node scripts/verify-external-integrations.js"
-    ,"test:outrider": "node --test --test-concurrency=1 tests/outrider-phase-0.test.js"
+    ,"test:outrider": "node --test --test-concurrency=1 tests/outrider-phase-0.test.js tests/outrider-phase-1.test.js",
+    "outrider:migrate": "node migrations/008-outrider-phase-1.js",
+    "outrider:seed": "node scripts/outrider-seed.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

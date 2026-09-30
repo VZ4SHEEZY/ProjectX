@@ -8,11 +8,14 @@ const schema = new mongoose.Schema({
   ownerUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   runtime: { provider: String, model: String, version: String },
   memoryNamespace: { type: String, required: true, unique: true, immutable: true },
+  goals: { type: [String], default: [] },
+  currentSpaceId: { type: String, default: null },
   worldState: { type: mongoose.Schema.Types.Mixed, default: {} },
   personalityConfig: { type: mongoose.Schema.Types.Mixed, default: {} },
   voiceConfig: { type: mongoose.Schema.Types.Mixed, default: {} },
   creativeConfig: { type: mongoose.Schema.Types.Mixed, default: {} },
-  status: { type: String, enum: ['draft', 'active', 'suspended', 'retired'], default: 'draft' },
+  status: { type: String, enum: ['draft', 'active', 'disabled', 'suspended', 'retired'], default: 'draft' },
+  lastExecutedAt: { type: Date, default: null },
   version: { type: Number, required: true, default: 1 }
 }, { timestamps: true, strict: 'throw', minimize: false, collection: 'outrider_agents' });
 schema.pre('validate', function(next) {
