@@ -6,6 +6,7 @@ export const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_ORIGIN).replac
 const progressionRolloutStage = Number.parseInt(import.meta.env.VITE_PROGRESSION_ROLLOUT_STAGE || '0', 10);
 export const USER_FACING_PROGRESSION_ENABLED = import.meta.env.VITE_USER_FACING_PROGRESSION_ENABLED === 'true'
   && Number.isInteger(progressionRolloutStage) && progressionRolloutStage >= 1 && progressionRolloutStage <= 4;
+export const OUTRIDER_ENABLED = import.meta.env.VITE_OUTRIDER_ENABLED === 'true';
 
 // No API keys here! They're safely stored on the backend server only.
 export const OPENAI_CONFIG = {

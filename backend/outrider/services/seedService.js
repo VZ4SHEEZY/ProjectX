@@ -14,7 +14,7 @@ class OutriderSeedService {
     }
     const agents = [];
     for (const value of population) {
-      const agent = await this.repository.upsertAgent({ ...value, runtime: { provider: 'deterministic', model: 'phase-1-rule-runtime', version: '1.0.0' }, memoryNamespace: `outrider:agent:${value.agentId}`, worldState: { phase: 1, workingContext: {} }, status: 'active', version: 1 });
+      const agent = await this.repository.upsertAgent({ ...value, runtime: { provider: 'adapter', model: 'configured-at-execution', version: '2.0.0' }, memoryNamespace: `outrider:agent:${value.agentId}`, worldState: { phase: 2, workingContext: {} }, status: 'active', version: 2 });
       await this.repository.setPresence(agent.agentId, null, hub.spaceId); agents.push(agent);
       for (const capability of capabilities) await this.repository.upsertGrant({ grantId: `phase1:${agent.agentId}:${capability}`, agentId: agent.agentId, capability, constraints: capability === CAPABILITIES.PROPOSE_POST ? { allowedVisibility: ['public'] } : {}, state: 'active', policyVersion: 'outrider-phase-1', grantedBy });
     }

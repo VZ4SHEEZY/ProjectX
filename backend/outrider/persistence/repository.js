@@ -47,7 +47,10 @@ const listMemory = (namespace, limit = 20) => Memory.find({ namespace }).sort({ 
 const appendExecution = (value, options) => Execution.create([value], session(options)).then(([doc]) => doc);
 const findExecution = (runId, tick, agentId) => Execution.findOne({ runId, tick, agentId }).lean();
 const listSignals = (filter = {}, limit = 50) => Signal.find(filter).sort({ occurredAt: -1 }).limit(limit).lean();
+const listExecutions = (filter = {}, limit = 50) => Execution.find(filter).sort({ occurredAt: -1 }).limit(limit).lean();
+const listGlassAudits = (filter = {}, limit = 50) => GlassAudit.find(filter).sort({ occurredAt: -1 }).limit(limit).lean();
+const listProposals = (filter = {}, limit = 50) => Proposal.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
 
 // This module intentionally imports only Outrider models. Canonical CyberDope
 // reads and commands must enter through adapters owned by the Glass gateway.
-module.exports = { findAgent, findActiveGrant, createSpace, appendWorldEvent, upsertRelationship, createObserverSession, appendSignal, appendProposal, appendGlassAudit, createArtifact, createConversation, createAgent, upsertAgent, updateAgent, createGrant, upsertGrant, upsertSpace, setPresence, listAgents, listSpaces, listRecentEvents, listArtifacts, listConversations, appendMemory, listMemory, appendExecution, findExecution, listSignals };
+module.exports = { findAgent, findActiveGrant, createSpace, appendWorldEvent, upsertRelationship, createObserverSession, appendSignal, appendProposal, appendGlassAudit, createArtifact, createConversation, createAgent, upsertAgent, updateAgent, createGrant, upsertGrant, upsertSpace, setPresence, listAgents, listSpaces, listRecentEvents, listArtifacts, listConversations, appendMemory, listMemory, appendExecution, findExecution, listSignals, listExecutions, listGlassAudits, listProposals };

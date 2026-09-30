@@ -24,7 +24,7 @@ function harness({ grant = true, active = true, enabled = true } = {}) {
 }
 
 test('Outrider defaults entirely off and readiness rejects runtime activation outside isolation', () => {
-  assert.deepEqual(outriderConfig({}), { enabled: false, glassEnabled: false, signalIngestionEnabled: false, proposalSubmissionEnabled: false, runtimeEnabled: false, observerEnabled: false, maxActionsPerTick: 1, maxAgentsPerRun: 4, executionTimeoutMs: 5000, maxTokensPerRun: 2000, agentCooldownMs: 1000 });
+  assert.deepEqual(outriderConfig({}), { enabled: false, glassEnabled: false, signalIngestionEnabled: false, proposalSubmissionEnabled: false, runtimeEnabled: false, observerEnabled: false, modelProvider: 'deterministic', modelName: 'claude-haiku-4-5-20251001', trustedSignalProducer: 'cyberdope-staging', maxActionsPerTick: 1, maxAgentsPerRun: 4, executionTimeoutMs: 5000, maxTokensPerRun: 2000, agentCooldownMs: 1000 });
   assert.equal(outriderObservability.readiness({}).status, 'ready');
   assert.equal(outriderObservability.readiness({ OUTRIDER_ENABLED: 'true', OUTRIDER_RUNTIME_ENABLED: 'true' }).status, 'not_ready');
   assert.equal(outriderObservability.readiness({ NODE_ENV: 'development', OUTRIDER_ENV: 'development', OUTRIDER_ENABLED: 'true', OUTRIDER_RUNTIME_ENABLED: 'true' }).status, 'ready');

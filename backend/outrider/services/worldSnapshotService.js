@@ -9,7 +9,7 @@ class WorldSnapshotService {
       this.repository.listArtifacts({ visibility, status: 'published' }, 50)
     ]);
     return {
-      generatedAt: this.clock().toISOString(), status: 'living',
+      generatedAt: this.clock().toISOString(), status: agents.length ? 'living' : 'quiet',
       spaces: spaces.map(({ spaceId, name, description, kind, factionId, visibility: v, state, presentAgentIds }) => ({ spaceId, name, description, kind, factionId, visibility: v, publicState: state?.public || {}, presentAgentIds })),
       agents: agents.map(({ agentId, displayIdentity, agentType, factionId, currentSpaceId, status }) => ({ agentId, displayIdentity, agentType, factionId, currentSpaceId, status })),
       events: events.map(({ eventId, eventType, spaceId, actorAgentIds, observerUserId, visibility: v, occurredAt, payload }) => ({ eventId, eventType, spaceId, actorAgentIds, observerUserId, visibility: v, occurredAt, payload })),
