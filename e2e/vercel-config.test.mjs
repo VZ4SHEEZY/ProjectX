@@ -18,6 +18,11 @@ const releaseAStagingEnv = {
   VITE_API_URL: `${deploymentOrigins.RELEASE_A_STAGING_API_ORIGIN}/api`,
   VITE_SOCKET_URL: deploymentOrigins.RELEASE_A_STAGING_API_ORIGIN
 };
+const stableStagingEnv = {
+  ...stagingEnv,
+  VERCEL_ENV: 'production',
+  VITE_DEPLOYMENT_ENV: 'staging'
+};
 
 test('production binding and CSP include production and exclude staging', () => {
   const deployment = frontendDeployment(productionEnv);
@@ -43,6 +48,14 @@ test('dedicated Release A staging is exact-origin bound and cannot target produc
   for (const origin of [deploymentOrigins.PRODUCTION_API_ORIGIN, deploymentOrigins.STAGING_API_ORIGIN]) {
     assert.throws(() => frontendDeployment({ ...releaseAStagingEnv, VITE_API_URL: `${origin}/api`, VITE_SOCKET_URL: origin }), /must target the isolated Release A staging API/);
   }
+});
+
+test('explicit stable staging deployment requires the isolated staging API', () => {
+  const deployment = frontendDeployment(stableStagingEnv);
+  assert.equal(deployment.production, false);
+  assert.equal(deployment.staging, true);
+  assert.equal(deployment.apiOrigin, deploymentOrigins.STAGING_API_ORIGIN);
+  assert.throws(() => frontendDeployment({ ...stableStagingEnv, VITE_API_URL: `${deploymentOrigins.PRODUCTION_API_ORIGIN}/api` }), /must target the staging API/);
 });
 
 test('both Vercel project-root configurations use the environment-derived CSP', () => {

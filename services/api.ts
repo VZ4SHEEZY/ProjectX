@@ -151,6 +151,16 @@ export const progressionAPI = {
   getUser: (userId: string) => api.get(`/progression/users/${userId}`),
 };
 
+export const outriderAPI = {
+  snapshot: () => api.get('/internal/outrider/snapshot'),
+  enter: (spaceId: string) => api.post('/internal/outrider/observer/enter', { spaceId }),
+  address: (spaceId: string, agentId: string, text: string) => api.post('/internal/outrider/observer/address', { spaceId, agentId, text }),
+  operatorStatus: () => api.get('/internal/outrider/operator/status'),
+  run: (agentIds: string[]) => api.post('/internal/outrider/operator/run', { agentIds }),
+  signalDemo: (payload: Record<string, unknown> = {}) => api.post('/internal/outrider/operator/signal-demo', payload),
+  proposalDemo: (payload: Record<string, unknown> = {}) => api.post('/internal/outrider/operator/proposal-demo', payload),
+};
+
 // ==================== POST API ====================
 export const postAPI = {
   getPosts: (params?: { type?: string; visibility?: string; sort?: string; page?: number; limit?: number; following?: boolean; author?: string }) =>

@@ -2,7 +2,7 @@
 import React, { lazy, Suspense, useState, useEffect } from 'react';
 import AuthPage from './components/AuthPage';
 import { authAPI, userAPI } from './services/api';
-import { API_BASE_URL } from './config';
+import { API_BASE_URL, OUTRIDER_ENABLED } from './config';
 
 import FirstRunProfileSetup from './components/FirstRunProfileSetup';
 import WalletConnect from './components/WalletConnect';
@@ -12,7 +12,7 @@ import { User } from './types';
 import { 
   Wallet, Zap, User as UserIcon, Settings, 
   Mail, Bell, Search, LogOut, LayoutGrid, Crown, Plus,
-  BarChart3, Home, Compass, Image, Users, Menu, X, Palette
+  BarChart3, Home, Compass, Image, Users, Menu, X, Palette, Eye
 } from 'lucide-react';
 
 const VideoFeed = lazy(() => import('./components/Feed'));
@@ -35,9 +35,10 @@ const ThemeEditor = lazy(() => import('./components/ThemeEditor'));
 const Stories = lazy(() => import('./components/Stories').then(module => ({ default: module.Stories })));
 const CreateStory = lazy(() => import('./components/Stories').then(module => ({ default: module.CreateStory })));
 const Groups = lazy(() => import('./components/Groups').then(module => ({ default: module.Groups })));
+const OutriderGlass = lazy(() => import('./components/OutriderGlass'));
 
 type OnboardingStep = 'auth' | 'profile-setup' | 'app';
-type MainView = 'feed' | 'explore' | 'messages' | 'profile' | 'userprofile' | 'admin';
+type MainView = 'feed' | 'explore' | 'messages' | 'profile' | 'userprofile' | 'admin' | 'outrider';
 type FeedTab = 'discover' | 'friends' | 'faction';
 // Cache bust: force redeploy
 
@@ -46,7 +47,7 @@ const routeFromLocation = (): { view: MainView; userId?: string } => {
   if (segments[0] === 'users' && segments[1]) {
     return { view: 'userprofile', userId: decodeURIComponent(segments[1]) };
   }
-  if (['feed', 'explore', 'messages', 'profile', 'admin'].includes(segments[0])) {
+  if (['feed', 'explore', 'messages', 'profile', 'admin', ...(OUTRIDER_ENABLED ? ['outrider'] : [])].includes(segments[0])) {
     return { view: segments[0] as MainView };
   }
   return { view: 'feed' };
@@ -459,6 +460,7 @@ const App: React.FC = () => {
             icon={UserIcon}
             label="PROFILE"
           />
+          {OUTRIDER_ENABLED && <NavButton active={currentView === 'outrider'} onClick={() => navigateTo('outrider')} icon={Eye} label="OUTRIDER" />}
           {user?.isAdmin === true && (
             <NavButton 
               active={currentView === 'admin'}
@@ -556,6 +558,7 @@ const App: React.FC = () => {
             <MobileMenuItem active={currentView === 'explore'} onClick={() => navigateTo('explore')} icon={Compass} label="EXPLORE" />
             <MobileMenuItem active={currentView === 'messages'} onClick={() => navigateTo('messages')} icon={Mail} label="MESSAGES" />
             <MobileMenuItem active={currentView === 'profile'} onClick={() => navigateTo('profile')} icon={UserIcon} label="PROFILE" />
+            {OUTRIDER_ENABLED && <MobileMenuItem active={currentView === 'outrider'} onClick={() => navigateTo('outrider')} icon={Eye} label="OUTRIDER" />}
             <MobileMenuItem onClick={() => { setIsStoriesOpen(true); setIsMobileMenuOpen(false); }} icon={Image} label="STORIES" />
             <MobileMenuItem onClick={() => { setIsGroupsOpen(true); setIsMobileMenuOpen(false); }} icon={Users} label="COMMUNITIES" />
             <MobileMenuItem onClick={() => { setIsThemeEditorOpen(true); setIsMobileMenuOpen(false); }} icon={Palette} label="PROFILE STUDIO" />
@@ -644,6 +647,7 @@ const App: React.FC = () => {
             initialRecipientId={messageRecipientId}
           />
         )}
+        {currentView === 'outrider' && OUTRIDER_ENABLED && <OutriderGlass user={user} />}
         
         {/* PROFILE VIEW - with conditional Creator tab */}
         {/* Admin Modal - Overlay */}
