@@ -33,6 +33,10 @@ router.put('/me', protect, async (req, res) => {
   Object.keys(profileFields).forEach(key => profileFields[key] === undefined && delete profileFields[key]);
   const profile = await Profile.findOneAndUpdate({ user: req.user._id }, { $set: profileFields, $setOnInsert: { source: 'native' } }, { upsert: true, new: true, runValidators: true });
   const compatibilityFields = {};
+  for (const key of ['displayName', 'bio', 'avatar', 'banner', 'website', 'socialLinks']) {
+    if (source[key] !== undefined) compatibilityFields[key] = source[key];
+  }
+  if (source.location !== undefined) compatibilityFields.location = source.location;
   if (source.profilePrivacy !== undefined) compatibilityFields.profilePrivacy = profileFields.privacy;
   if (source.isPrivate !== undefined) compatibilityFields.isPrivate = source.isPrivate;
   if (source.dmAudience !== undefined) { compatibilityFields.dmAudience = source.dmAudience; compatibilityFields.allowDMs = source.dmAudience !== 'nobody'; }

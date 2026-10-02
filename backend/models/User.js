@@ -52,7 +52,7 @@ const userSchema = new mongoose.Schema({
       'Nova Rift', 'Silver Wraith', 'Inferno Grid', 'Quantum Veil',
       'Unaffiliated'
     ],
-    default: 'Quantum Veil'
+    default: 'Unaffiliated'
   },
   factionColor: { type: String, default: '#39FF14' },
   zodiacSign: { type: String, default: '' },

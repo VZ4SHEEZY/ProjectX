@@ -11,6 +11,10 @@ interface DesktopFeedWrapperProps {
   onVideoSelect?: (video: Video) => void;
   onCreatorClick?: (username: string) => void;
   onCommentClick: (postId: string) => void;
+  onLoadMore?: () => void;
+  onRefresh?: () => void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
 }
 
 const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({ 
@@ -21,6 +25,10 @@ const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({
   onVideoSelect, 
   onCreatorClick,
   onCommentClick,
+  onLoadMore,
+  onRefresh,
+  hasMore,
+  isLoadingMore,
 }) => {
   const [isFollowing, setIsFollowing] = React.useState(false);
 
@@ -57,6 +65,10 @@ const DesktopFeedWrapper: React.FC<DesktopFeedWrapperProps> = ({
 
       {/* RIGHT: Sidebar (35%) */}
       <div className="flex-[0.35] bg-gray-950 border border-[#39FF14]/20 rounded-lg p-4 flex flex-col gap-4 overflow-y-auto">
+        <div className="flex gap-2">
+          <button onClick={onRefresh} disabled={isLoadingMore} className="flex-1 border border-white/20 px-3 py-2 text-xs text-white disabled:opacity-50">REFRESH</button>
+          {hasMore && <button onClick={onLoadMore} disabled={isLoadingMore} className="flex-1 border border-[#39FF14] px-3 py-2 text-xs text-[#39FF14] disabled:opacity-50">{isLoadingMore ? 'LOADING…' : 'LOAD MORE'}</button>}
+        </div>
         {/* Creator Card */}
         <div className="border-b border-[#39FF14]/20 pb-4">
           <div 

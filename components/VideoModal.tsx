@@ -9,9 +9,10 @@ interface VideoModalProps {
   video: Video | null | undefined;
   currentUser?: User;
   onUsernameClick?: (userId: string) => void;
+  onRequireAuth?: () => void;
 }
 
-const VideoModal: React.FC<VideoModalProps> = ({ isOpen, onClose, video, currentUser, onUsernameClick }) => {
+const VideoModal: React.FC<VideoModalProps> = ({ isOpen, onClose, video, currentUser, onUsernameClick, onRequireAuth }) => {
   if (!isOpen || !video) return null;
   
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -47,6 +48,7 @@ const VideoModal: React.FC<VideoModalProps> = ({ isOpen, onClose, video, current
   if (!video) return null;
 
   const handleLike = async () => {
+    if (!currentUser) { onRequireAuth?.(); return; }
     try {
       if (isLiked) {
         await postAPI.unlikePost(video.id);
@@ -89,6 +91,7 @@ const VideoModal: React.FC<VideoModalProps> = ({ isOpen, onClose, video, current
   };
 
   const handleFollow = async () => {
+    if (!currentUser) { onRequireAuth?.(); return; }
     try {
       if (isFollowing) {
         // Unfollow

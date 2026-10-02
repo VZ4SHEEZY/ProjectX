@@ -14,9 +14,10 @@ interface UserProfilePageProps {
   onBack: () => void;
   onFollowChange?: (userId: string, isFollowing: boolean) => void;
   onMessage?: (userId: string) => void;
+  onRequireAuth?: () => void;
 }
 
-const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, currentUser, onBack, onMessage }) => {
+const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, currentUser, onBack, onMessage, onRequireAuth }) => {
   const [user, setUser] = useState<any>(null);
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -87,6 +88,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
   };
 
   const handleFollow = async () => {
+    if (!currentUser) { onRequireAuth?.(); return; }
     try {
       const response = await userAPI.followUser(user._id);
       if (response.data?.success) {
@@ -105,10 +107,11 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
   };
 
   const handleFriend = async () => {
+    if (!currentUser) { onRequireAuth?.(); return; }
     try { if (isFriend) { await socialAPI.removeFriend(user._id); setIsFriend(false); } else { await socialAPI.sendFriendRequest(user._id); } } catch (error) { console.error('Friend action error:', error); }
   };
 
-  const handleBlock = async () => { if (window.confirm(`Block ${user.username}?`)) { await socialAPI.block(user._id); onBack(); } };
+  const handleBlock = async () => { if (!currentUser) { onRequireAuth?.(); return; } if (window.confirm(`Block ${user.username}?`)) { await socialAPI.block(user._id); onBack(); } };
 
   if (isLoading) {
     return (
@@ -178,11 +181,11 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
                 <button onClick={handleFriend} className="flex items-center gap-2 px-4 py-2 border border-[#FF00FF] text-[#FF00FF] rounded font-bold">
                   {isFriend ? <UserMinus size={16} /> : <UserPlus size={16} />}{isFriend ? 'UNFRIEND' : 'ADD FRIEND'}
                 </button>
-                <button onClick={() => onMessage?.(user._id)} className="flex items-center gap-2 px-4 py-2 border border-[#39FF14] text-[#39FF14] rounded hover:bg-[#39FF14] hover:text-black transition-all font-bold">
+                <button onClick={() => currentUser ? onMessage?.(user._id) : onRequireAuth?.()} className="flex items-center gap-2 px-4 py-2 border border-[#39FF14] text-[#39FF14] rounded hover:bg-[#39FF14] hover:text-black transition-all font-bold">
                   <MessageSquare size={16} />
                   MESSAGE
                 </button>
-                <button aria-label="Mute user" onClick={() => socialAPI.mute(user._id)} className="p-2 border border-gray-700 text-gray-400 rounded"><VolumeX size={16} /></button>
+                {currentUser && <button aria-label="Mute user" onClick={() => socialAPI.mute(user._id)} className="p-2 border border-gray-700 text-gray-400 rounded"><VolumeX size={16} /></button>}
                 <button aria-label="Block user" onClick={handleBlock} className="p-2 border border-red-800 text-red-400 rounded"><Ban size={16} /></button>
               </div>
             )}
@@ -199,7 +202,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
         </div>
       ) : (
         <div className="max-w-6xl mx-auto p-4 md:p-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
-          <div className="mb-4"><ProgressionPanel userId={user._id} /></div>
+          {currentUser && <div className="mb-4"><ProgressionPanel userId={user._id} /></div>}
           {profileModules.length > 0 ? <ProfileV2Modules modules={profileModules} userId={user._id} owner={user} posts={userPosts} /> : <div className="p-6 border-b border-[#39FF14]/20">
             <h3 className="text-white font-bold text-lg mb-4">Posts ({userPosts.length})</h3>
             {userPosts.length === 0 ? (
@@ -249,6 +252,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
         onClose={() => setSelectedVideo(null)}
         video={selectedVideo}
         currentUser={currentUser}
+        onRequireAuth={onRequireAuth}
       />
     </div>
   );

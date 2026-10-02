@@ -21,6 +21,12 @@ async function filterAuthorizedPosts(viewer, posts) {
   return allowed;
 }
 
+function pagination(query, defaultLimit = 20) {
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(query.limit, 10) || defaultLimit));
+  return { page, limit, skip: (page - 1) * limit };
+}
+
 // @route   GET /api/posts
 // @desc    Get all posts (feed)
 // @access  Public/Private
@@ -98,8 +104,7 @@ router.get('/', optionalAuth, async (req, res) => {
 // @access  Private
 router.get('/feed/foryou', protect, async (req, res) => {
   try {
-    // Return ALL posts (no page/limit filtering)
-    const { limit = 1000 } = req.query;
+    const { page, limit, skip } = pagination(req.query);
 
     // Simple feed: show all published public posts
     let query = {
@@ -114,15 +119,20 @@ router.get('/feed/foryou', protect, async (req, res) => {
 
     const posts = await Post.find(query)
       .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
-      .sort('-createdAt')
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(skip)
       .limit(limit);
 
     const postsWithAccess = await filterAuthorizedPosts(req.user, posts);
+    const total = await Post.countDocuments(query);
 
     res.json({
       success: true,
-      count: posts.length,
-      total: posts.length,
+      count: postsWithAccess.length,
+      total,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+      hasMore: skip + posts.length < total,
       data: postsWithAccess
     });
   } catch (error) {
@@ -140,7 +150,7 @@ router.get('/feed/foryou', protect, async (req, res) => {
 // @access  Private
 router.get('/feed/following', protect, async (req, res) => {
   try {
-    const { page = 1, limit = 50 } = req.query;
+    const { page, limit, skip } = pagination(req.query);
 
     if (req.user.following.length === 0) {
       return res.json({
@@ -169,15 +179,20 @@ router.get('/feed/following', protect, async (req, res) => {
 
     const posts = await Post.find(query)
       .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
-      .sort('-createdAt')
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(skip)
       .limit(limit);
 
     const postsWithAccess = await filterAuthorizedPosts(req.user, posts);
+    const total = await Post.countDocuments(query);
 
     res.json({
       success: true,
       count: postsWithAccess.length,
-      total: postsWithAccess.length,
+      total,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+      hasMore: skip + posts.length < total,
       data: postsWithAccess
     });
   } catch (error) {
@@ -194,7 +209,7 @@ router.get('/feed/following', protect, async (req, res) => {
 // @access  Private
 router.get('/feed/faction', protect, async (req, res) => {
   try {
-    const { page = 1, limit = 50 } = req.query;
+    const { page, limit, skip } = pagination(req.query);
 
     // Check if user is in a faction
     if (!req.user.faction || req.user.faction === 'Unaffiliated') {
@@ -221,7 +236,8 @@ router.get('/feed/faction', protect, async (req, res) => {
 
     const posts = await Post.find(query)
       .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
-      .sort('-createdAt')
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(skip)
       .limit(limit);
 
     const postsWithAccess = await filterAuthorizedPosts(req.user, posts);
@@ -234,6 +250,7 @@ router.get('/feed/faction', protect, async (req, res) => {
       total: count,
       totalPages: Math.ceil(count / limit),
       currentPage: parseInt(page),
+      hasMore: skip + posts.length < count,
       data: postsWithAccess
     });
   } catch (error) {
@@ -250,7 +267,8 @@ router.get('/feed/faction', protect, async (req, res) => {
 // @access  Public
 router.get('/feed/trending', async (req, res) => {
   try {
-    const { page = 1, limit = 10, timeframe = '24h' } = req.query;
+    const { timeframe = '7d' } = req.query;
+    const { page, limit, skip } = pagination(req.query, 10);
 
     // Calculate time range
     const timeRanges = {
@@ -261,20 +279,29 @@ router.get('/feed/trending', async (req, res) => {
 
     const since = new Date(Date.now() - (timeRanges[timeframe] || timeRanges['24h']));
 
-    const posts = await Post.find({
+    const query = {
       status: 'published',
       visibility: 'public',
-      createdAt: { $gte: since },
       isNSFW: false
-    })
+    };
+    // Rank real public content. A timeframe is a preference, not an empty-feed
+    // trap: if it contains no posts, fall back to the full public catalog.
+    let effectiveQuery = { ...query, createdAt: { $gte: since } };
+    if (!await Post.exists(effectiveQuery)) effectiveQuery = query;
+    const posts = await Post.find(effectiveQuery)
     .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
-    .sort('-stats.views -stats.likes')
-    .limit(limit * 1)
-    .skip((page - 1) * limit);
+    .sort({ 'stats.likes': -1, 'stats.views': -1, createdAt: -1 })
+    .limit(limit)
+    .skip(skip);
+    const total = await Post.countDocuments(effectiveQuery);
 
     res.json({
       success: true,
       count: posts.length,
+      total,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+      hasMore: skip + posts.length < total,
       data: posts
     });
   } catch (error) {

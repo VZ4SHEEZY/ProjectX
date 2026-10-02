@@ -35,8 +35,25 @@ test('signup validates errors and creates a disposable account in the isolated d
   const data = await runtime(); const suffix = `${data.runId}${testInfo.project.name.startsWith('mobile') ? 'm' : 'd'}`;
   await page.goto('/'); await page.getByRole('button', { name: 'INITIALIZE' }).click();
   await page.getByPlaceholder(/letters, numbers/i).fill(`qa_${suffix}`); await page.getByPlaceholder('your@email.com').fill(`qa_${suffix}@example.invalid`);
-  await page.getByPlaceholder('••••••••').fill('ephemeral-password'); await page.getByRole('button', { name: 'CREATE NODE' }).click();
+  await page.getByPlaceholder('••••••••').fill('ephemeral-password');
+  await page.getByLabel('Faction choice').selectOption('Unaffiliated');
+  await page.getByRole('button', { name: 'CREATE NODE' }).click();
   await expect(page.getByText('ACCESS GRANTED')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'Establish your signal' })).toBeVisible({ timeout: 10_000 });
+  await page.getByLabel('Display name').fill('Independent Tester');
+  await page.getByLabel('Bio').fill('A complete unaffiliated first-run profile.');
+  await page.getByRole('button', { name: 'SAVE & DISCOVER' }).click();
+  await expect(page.getByRole('heading', { name: 'EXPLORE' })).toBeVisible();
+});
+
+test('anonymous visitors can view a public profile and auth actions preserve its URL', async ({ monitoredPage: page }) => {
+  const data = await runtime(); const peer = userFor(data, 'peer');
+  await page.goto(`/users/${peer.username}`);
+  await expect(page.getByText(peer.username, { exact: false }).first()).toBeVisible();
+  await expect(page.getByTitle('Logout')).toHaveCount(0);
+  await page.getByRole('button', { name: 'FOLLOW' }).click();
+  await expect(page.getByRole('button', { name: 'ESTABLISH LINK' })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/users/${peer.username}$`));
 });
 
 test('profile, follow count, search, direct navigation, and browser history work', async ({ monitoredPage: page }) => {

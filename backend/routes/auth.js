@@ -46,6 +46,17 @@ const ZODIAC_FACTIONS = {
   Pisces:      { name: 'Phantom Signal',  color: '#E8E8E8' },
 };
 
+const FACTION_COLORS = Object.values(ZODIAC_FACTIONS).reduce((colors, faction) => {
+  colors[faction.name] = faction.color;
+  return colors;
+}, { Unaffiliated: '#39FF14' });
+Object.assign(FACTION_COLORS, {
+  'Crimson Static': '#DC143C', 'Scarlet Dominion': '#8B0000',
+  'Chrome Legion': '#C0C0C0', 'Ember Protocol': '#FF6B00',
+  'Violet Surge': '#8A2BE2', 'Binary Ghost': '#00FF41',
+  'Copper Throne': '#B87333', 'Silver Wraith': '#B8B8B8'
+});
+
 // Generate JWT Token
 const generateToken = (userId) => {
   if (!process.env.JWT_SECRET) {
@@ -72,7 +83,11 @@ router.post('/register', [
     .withMessage('Please provide a valid email'),
   body('password')
     .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters')
+    .withMessage('Password must be at least 6 characters'),
+  body('faction')
+    .isString()
+    .custom(value => Object.prototype.hasOwnProperty.call(FACTION_COLORS, value))
+    .withMessage('Choose a valid faction or remain Unaffiliated')
 ], async (req, res) => {
   try {
     // Check validation errors
@@ -81,7 +96,7 @@ router.post('/register', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { username, email, password, dateOfBirth } = req.body;
+    const { username, email, password, dateOfBirth, faction } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({
@@ -96,16 +111,10 @@ router.post('/register', [
       });
     }
 
-    // Faction assignment via zodiac
-    let faction = 'Quantum Veil';
-    let factionColor = '#7DF9FF';
-    let zodiacSign = '';
-    if (dateOfBirth) {
-      zodiacSign = getZodiacSign(dateOfBirth);
-      const factionData = ZODIAC_FACTIONS[zodiacSign] || ZODIAC_FACTIONS['Aquarius'];
-      faction = factionData.name;
-      factionColor = factionData.color;
-    }
+    // Faction identity is an explicit user choice. DOB may still describe a zodiac
+    // sign, but it never assigns or changes faction membership.
+    const factionColor = FACTION_COLORS[faction];
+    const zodiacSign = dateOfBirth ? getZodiacSign(dateOfBirth) : '';
 
     // Create new user
     const user = await User.create({
@@ -121,10 +130,12 @@ router.post('/register', [
 
     // Establish normalized Release 1 identity records immediately. Legacy fields remain
     // dual-written until reconciliation proves the normalized records authoritative.
-    const factionRecord = await Faction.findOneAndUpdate({ name: faction }, { $setOnInsert: { key: faction.toLowerCase().replace(/[^a-z0-9]+/g, '_'), name: faction, color: factionColor, founding: true }, $set: { status: 'active' } }, { upsert: true, new: true });
-    await FactionMembership.create({ user: user._id, faction: factionRecord._id, status: 'active', source: 'native', joinedAt: new Date() });
+    if (faction !== 'Unaffiliated') {
+      const factionRecord = await Faction.findOneAndUpdate({ name: faction }, { $setOnInsert: { key: faction.toLowerCase().replace(/[^a-z0-9]+/g, '_'), name: faction, color: factionColor, founding: true }, $set: { status: 'active' } }, { upsert: true, new: true });
+      await FactionMembership.create({ user: user._id, faction: factionRecord._id, status: 'active', source: 'native', joinedAt: new Date() });
+    }
     const profile = await Profile.create({ user: user._id, displayName: req.body.displayName || '', avatar: user.avatar, privacy: 'public', source: 'native' });
-    await ProfileLayout.create({ profile: profile._id, factionStarterTheme: 'full', version: 1 });
+    await ProfileLayout.create({ profile: profile._id, factionStarterTheme: faction === 'Unaffiliated' ? 'off' : 'full', version: 1 });
     await ProfileModule.insertMany(['identity','bio','faction','top_friends','posts','media','links'].map((type, position) => ({ profile: profile._id, type, position, enabled: true, config: {}, schemaVersion: 1 })));
 
     // Create embedded wallet (silent, no user interaction)

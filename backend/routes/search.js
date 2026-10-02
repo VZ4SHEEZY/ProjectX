@@ -37,6 +37,7 @@ router.get('/', optionalAuth, async (req, res) => {
     if (type === 'all' || type === 'users') {
       const userQuery = {
         isActive: true,
+        isQaAccount: { $ne: true },
         $or: [
           { username: { $regex: safeSearch, $options: 'i' } },
           { displayName: { $regex: safeSearch, $options: 'i' } },
@@ -115,7 +116,7 @@ router.get('/trending', async (req, res) => {
     ]);
 
     // Get trending creators
-    const trendingCreators = await User.find({ isCreator: true, isActive: true })
+    const trendingCreators = await User.find({ isCreator: true, isActive: true, isQaAccount: { $ne: true } })
       .select('username displayName avatar followersCount')
       .sort('-followersCount')
       .limit(parseInt(limit));
@@ -142,6 +143,7 @@ router.get('/trending', async (req, res) => {
 router.get('/suggestions', async (req, res) => {
   try {
     const { q, limit = 5 } = req.query;
+    const resultLimit = Math.min(20, Math.max(1, parseInt(limit, 10) || 5));
 
     if (typeof q !== 'string' || q.trim().length === 0) {
       return res.json({
@@ -156,25 +158,30 @@ router.get('/suggestions', async (req, res) => {
     // Search users
     const users = await User.find({
       isActive: true,
+      isQaAccount: { $ne: true },
       $or: [
       { username: { $regex: `^${safeSearch}`, $options: 'i' } },
       { displayName: { $regex: safeSearch, $options: 'i' } }
       ]
     })
     .select('username displayName avatar isVerified')
-    .limit(parseInt(limit));
+    .limit(resultLimit);
 
     // Search hashtags
-    const hashtags = await Post.distinct('tags', {
-      status: 'published', visibility: 'public', isNSFW: false,
-      tags: { $regex: safeSearch, $options: 'i' }
-    }).limit(parseInt(limit));
+    const hashtags = await Post.aggregate([
+      { $match: { status: 'published', visibility: 'public', isNSFW: false, tags: { $regex: safeSearch, $options: 'i' } } },
+      { $unwind: '$tags' },
+      { $match: { tags: { $regex: safeSearch, $options: 'i' } } },
+      { $group: { _id: '$tags', count: { $sum: 1 } } },
+      { $sort: { count: -1, _id: 1 } },
+      { $limit: resultLimit }
+    ]);
 
     res.json({
       success: true,
       data: {
         users,
-        hashtags: hashtags.map(tag => ({ tag, type: 'hashtag' }))
+        hashtags: hashtags.map(({ _id: tag }) => ({ tag, type: 'hashtag' }))
       }
     });
   } catch (error) {

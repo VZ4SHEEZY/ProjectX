@@ -4,8 +4,7 @@ import AuthPage from './components/AuthPage';
 import { authAPI, userAPI } from './services/api';
 import { API_BASE_URL } from './config';
 
-import BiometricScanner from './components/BiometricScanner';
-import FactionReveal from './components/FactionReveal';
+import FirstRunProfileSetup from './components/FirstRunProfileSetup';
 import WalletConnect from './components/WalletConnect';
 
 
@@ -37,7 +36,7 @@ const Stories = lazy(() => import('./components/Stories').then(module => ({ defa
 const CreateStory = lazy(() => import('./components/Stories').then(module => ({ default: module.CreateStory })));
 const Groups = lazy(() => import('./components/Groups').then(module => ({ default: module.Groups })));
 
-type OnboardingStep = 'auth' | 'scanning' | 'reveal' | 'app';
+type OnboardingStep = 'auth' | 'profile-setup' | 'app';
 type MainView = 'feed' | 'explore' | 'messages' | 'profile' | 'userprofile' | 'admin';
 type FeedTab = 'discover' | 'friends' | 'faction';
 // Cache bust: force redeploy
@@ -77,6 +76,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('auth');
   const [isLoading, setIsLoading] = useState(true);
+  const [guestAuthOpen, setGuestAuthOpen] = useState(false);
   
   const initialRoute = routeFromLocation();
   const [currentView, setCurrentView] = useState<MainView>(initialRoute.view);
@@ -226,30 +226,20 @@ const App: React.FC = () => {
         console.error('Failed to parse user:', e);
       }
     }
+    setGuestAuthOpen(false);
     if (isNewUser) {
-      setOnboardingStep('scanning');
+      setOnboardingStep('profile-setup');
     } else {
       setOnboardingStep('app');
     }
   };
 
-  // 2. Scanner Success -> Go to Faction Reveal (or skip if faction already assigned)
-  const handleScanComplete = () => {
-    if (user && user.faction && user.faction !== 'Unaffiliated') {
-      // User already has a faction from backend, skip reveal
-      setOnboardingStep('app');
-    } else {
-      // User needs to select/confirm faction
-      setOnboardingStep('reveal');
-    }
-  };
-
-  // 3. Reveal Success -> Enter App
-  const handleRevealComplete = (faction: string) => {
-    if (user) {
-      setUser({ ...user, faction });
-    }
+  const handleFirstRunComplete = (updates: Partial<User>, openStudio: boolean) => {
+    handleProfileUpdate(updates);
     setOnboardingStep('app');
+    const returningToPublicProfile = currentView === 'userprofile' && Boolean(selectedUserId);
+    setCurrentView(returningToPublicProfile ? 'userprofile' : openStudio ? 'profile' : 'explore');
+    setIsThemeEditorOpen(!returningToPublicProfile && openStudio);
   };
 
   // Tip Modal Handler
@@ -377,19 +367,20 @@ const App: React.FC = () => {
     );
   }
 
+  // Public profile routes remain useful without a session. Authenticated actions
+  // open login while the canonical URL and profile context stay intact.
+  if (!user && currentView === 'userprofile' && selectedUserId) {
+    if (guestAuthOpen) return <AuthPage onLoginSuccess={handleLoginSuccess} />;
+    return <UserProfilePage userId={selectedUserId} username={selectedUserId} onBack={() => window.history.length > 1 ? window.history.back() : window.location.assign('/')} onRequireAuth={() => setGuestAuthOpen(true)} />;
+  }
+
   // Step 1: Authentication
   if (!user || onboardingStep === 'auth') {
     return <AuthPage onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // Step 2: Biometric Scanner
-  if (onboardingStep === 'scanning') {
-    return <BiometricScanner onScanComplete={handleScanComplete} />;
-  }
-
-  // Step 3: Faction Reveal
-  if (onboardingStep === 'reveal') {
-    return <FactionReveal onComplete={handleRevealComplete} />;
+  if (onboardingStep === 'profile-setup') {
+    return <FirstRunProfileSetup user={user} onComplete={handleFirstRunComplete} />;
   }
 
   // Step 4: Main Application
@@ -626,6 +617,7 @@ const App: React.FC = () => {
                 activeTab={feedTab}
                 onTabChange={setFeedTab}
                 onCreate={() => setIsPostComposerOpen(true)}
+                onDiscoverPeople={() => navigateTo('explore')}
                 onCreatorClick={handleViewUserProfile}
               />
             </div>
@@ -694,6 +686,7 @@ const App: React.FC = () => {
               currentUser={user}
               onBack={() => window.history.length > 1 ? window.history.back() : navigateTo('feed')}
               onMessage={handleMessageUser}
+              onRequireAuth={() => setOnboardingStep('auth')}
             />
           </div>
         )}

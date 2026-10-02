@@ -15,6 +15,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [accessKey, setAccessKey] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
+  const [faction, setFaction] = useState('');
   const [status, setStatus] = useState<AuthStatus>('idle');
   const [errorFlash, setErrorFlash] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -102,7 +103,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       triggerError('MISSING_CREDENTIALS');
       return;
     }
-    if (mode === 'register' && (!username || !email || !accessKey)) {
+    if (mode === 'register' && (!username || !email || !accessKey || !faction)) {
       triggerError('MISSING_CREDENTIALS');
       return;
     }
@@ -123,7 +124,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
       const body = mode === 'login'
         ? { email, password: accessKey }
-        : { username, email, password: accessKey, dateOfBirth };
+        : { username, email, password: accessKey, dateOfBirth, faction };
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 30000);
@@ -225,7 +226,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                    <Terminal size={12} /> Birth_Date // Faction Assignment
+                    <Terminal size={12} /> Birth_Date // Optional
                   </label>
                   <input 
                     type="date" 
@@ -234,7 +235,25 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                     className="w-full bg-black/60 border border-gray-700 text-[#FF00FF] font-bold font-mono py-3 px-4 focus:outline-none focus:border-[#FF00FF] focus:shadow-[0_0_15px_rgba(255,0,255,0.2)] transition-all placeholder-gray-800 [color-scheme:dark]"
                     disabled={status !== 'idle' && status !== 'error'}
                   />
-                  <p className="text-[9px] text-gray-600 tracking-widest">ZODIAC DETERMINES YOUR FACTION</p>
+                  <p className="text-[9px] text-gray-600 tracking-widest">USED FOR AGE CONTEXT — NEVER AUTO-ASSIGNS A FACTION</p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <Terminal size={12} /> Choose your identity
+                  </label>
+                  <select
+                    aria-label="Faction choice"
+                    value={faction}
+                    onChange={(e) => setFaction(e.target.value)}
+                    required
+                    className="w-full bg-black/80 border border-gray-700 text-[#39FF14] font-bold font-mono py-3 px-4 focus:outline-none focus:border-[#39FF14] [color-scheme:dark]"
+                    disabled={status !== 'idle' && status !== 'error'}
+                  >
+                    <option value="" disabled>Select a faction or remain independent</option>
+                    <option value="Unaffiliated">Unaffiliated — independent</option>
+                    {['Neon Wraith','Iron Veil','Crimson Static','Void Circuit','Gold Syndicate','Azure Phantom','Toxic Bloom','Scarlet Dominion','Chrome Legion','Phantom Signal','Obsidian Pact','Ember Protocol','Violet Surge','Steel Covenant','Binary Ghost','Copper Throne','Nova Rift','Silver Wraith','Inferno Grid','Quantum Veil'].map(name => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                  <p className="text-[9px] text-gray-500 tracking-wider">Unaffiliated is a complete experience. Your personal progression is unchanged.</p>
                 </div>
               </>
             )}
@@ -315,4 +334,3 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
 };
 
 export default AuthPage;
-

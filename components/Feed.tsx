@@ -15,6 +15,7 @@ interface FeedProps {
   activeTab: 'discover' | 'friends' | 'faction';
   onTabChange?: (tab: 'discover' | 'friends' | 'faction') => void;
   onCreate?: () => void;
+  onDiscoverPeople?: () => void;
   onCreatorClick?: (username: string) => void;
 }
 
@@ -121,7 +122,7 @@ const VideoCounter: React.FC<{ current: number; total: number }> = ({ current, t
   );
 };
 
-const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, activeTab, onTabChange, onCreate, onCreatorClick }) => {
+const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, activeTab, onTabChange, onCreate, onDiscoverPeople, onCreatorClick }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [systemMsg, setSystemMsg] = useState("SYSTEM_ONLINE");
@@ -131,6 +132,9 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
   const [apiVideos, setApiVideos] = useState<Video[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedError, setFeedError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' && window.innerWidth >= 1024);
 
   useEffect(() => {
@@ -162,11 +166,10 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
     },
   });
 
-  useEffect(() => {
-    const loadFeed = async () => {
-      setFeedLoading(true);
-      setActiveIndex(0);
-      setIsTransitioning(true);
+  const loadFeed = useCallback(async (nextPage = 1, replace = true) => {
+      if (replace) setFeedLoading(true);
+      else setIsRefreshing(true);
+      if (replace) { setActiveIndex(0); setIsTransitioning(true); }
       setFeedError(null);
       
       try {
@@ -174,76 +177,41 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
         
         switch (activeTab) {
           case 'friends':
-            response = await postAPI.getFollowingFeed({ page: 1, limit: 20 });
+            response = await postAPI.getFollowingFeed({ page: nextPage, limit: 20 });
             break;
           case 'faction':
-            response = await postAPI.getFactionFeed({ page: 1, limit: 20 });
+            response = await postAPI.getFactionFeed({ page: nextPage, limit: 20 });
             break;
           case 'discover':
           default:
-            response = await postAPI.getForYouFeed({ page: 1, limit: 20 });
+            response = await postAPI.getForYouFeed({ page: nextPage, limit: 20 });
         }
         
         const posts = response.data?.data || [];
-        console.log('Feed response full:', JSON.stringify(response.data));
-        console.log('Posts array:', posts);
-        console.log('Posts count:', posts.length);
-        if (posts.length === 0) {
-          console.warn(`No posts returned from API for tab: ${activeTab}`);
-        }
-        setApiVideos(posts.length > 0 ? posts.map(mapPostToVideo) : []);
+        const mapped = posts.map(mapPostToVideo);
+        setApiVideos(current => {
+          const combined = replace ? mapped : [...current, ...mapped];
+          return Array.from(new Map<string, Video>(combined.map(video => [video.id, video] as [string, Video])).values());
+        });
+        setPage(nextPage);
+        setHasMore(response.data?.hasMore ?? nextPage < (response.data?.totalPages || 1));
       } catch (err: any) {
         const msg = err?.response?.data?.message || err?.message || 'Unknown error';
         console.error(`Feed error [${activeTab}]:`, err);
         setFeedError(`${err?.response?.status || 'ERR'}: ${msg}`);
-        setApiVideos([]);
+        if (replace) setApiVideos([]);
       } finally {
         setFeedLoading(false);
+        setIsRefreshing(false);
         setIsTransitioning(false);
         // Force scroll to top when tab changes
         if (containerRef.current) {
           containerRef.current.scrollTop = 0;
         }
       }
-    };
-    loadFeed();
   }, [activeTab]);
 
-  // Refetch feed when user logs in (currentUser changes)
-  useEffect(() => {
-    if (apiVideos.length === 0 && !feedLoading) {
-      const loadFeed = async () => {
-        setFeedLoading(true);
-        setFeedError(null);
-        
-        try {
-          let response;
-          
-          switch (activeTab) {
-            case 'friends':
-              response = await postAPI.getFollowingFeed({ page: 1, limit: 20 });
-              break;
-            case 'faction':
-              response = await postAPI.getFactionFeed({ page: 1, limit: 20 });
-              break;
-            case 'discover':
-            default:
-              response = await postAPI.getForYouFeed({ page: 1, limit: 20 });
-          }
-          
-          const posts = response.data?.data || [];
-          setApiVideos(posts.length > 0 ? posts.map(mapPostToVideo) : []);
-        } catch (err: any) {
-          const msg = err?.response?.data?.message || err?.message || 'Unknown error';
-          setFeedError(`${err?.response?.status || 'ERR'}: ${msg}`);
-          setApiVideos([]);
-        } finally {
-          setFeedLoading(false);
-        }
-      };
-      loadFeed();
-    }
-  }, [currentUser.id]);
+  useEffect(() => { void loadFeed(1, true); }, [loadFeed, currentUser.id]);
 
   // Filter Videos: Remove NSFW if user is not age verified
   const visibleVideos = useMemo(() => {
@@ -292,8 +260,10 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
   const goToNext = useCallback(() => {
     if (activeIndex < visibleVideos.length - 1) {
       navigateToVideo(activeIndex + 1);
+    } else if (hasMore && !isRefreshing) {
+      void loadFeed(page + 1, false);
     }
-  }, [activeIndex, navigateToVideo, visibleVideos.length]);
+  }, [activeIndex, navigateToVideo, visibleVideos.length, hasMore, isRefreshing, loadFeed, page]);
 
   // Touch handlers for swipe
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -382,8 +352,8 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
                   <p className="text-gray-400 text-xs font-mono mb-6 leading-relaxed">
                       The feed is empty. Be the first to post and shape the network.
                   </p>
-                  <button onClick={onCreate} className="px-6 py-2 border border-[#39FF14] text-[#39FF14] text-xs font-bold hover:bg-[#39FF14] hover:text-black transition-all">
-                      CREATE POST
+                  <button onClick={feedError ? () => loadFeed(1, true) : activeTab === 'friends' ? onDiscoverPeople : onCreate} className="px-6 py-2 border border-[#39FF14] text-[#39FF14] text-xs font-bold hover:bg-[#39FF14] hover:text-black transition-all">
+                      {feedError ? 'RETRY' : activeTab === 'friends' ? 'DISCOVER PEOPLE' : 'CREATE POST'}
                   </button>
               </div>
           </div>
@@ -411,6 +381,10 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
         allVideos={visibleVideos}
         onTipClick={onTipClick}
         onCommentClick={onCommentClick}
+        hasMore={hasMore}
+        isLoadingMore={isRefreshing}
+        onLoadMore={() => loadFeed(page + 1, false)}
+        onRefresh={() => loadFeed(1, true)}
         onCreatorClick={onCreatorClick}
         onVideoSelect={(selectedVideo) => {
           const index = visibleVideos.findIndex(v => v.id === selectedVideo.id);
@@ -451,7 +425,7 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
         onPrev={goToPrev} 
         onNext={goToNext}
         canGoPrev={activeIndex > 0}
-        canGoNext={activeIndex < visibleVideos.length - 1}
+        canGoNext={activeIndex < visibleVideos.length - 1 || hasMore}
       />
 
       {/* Video Counter */}
@@ -488,6 +462,7 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
 
       {/* Bottom Gradient Fade */}
       <div className="absolute bottom-0 left-0 w-full h-20 bg-gradient-to-t from-black/80 to-transparent pointer-events-none z-20" />
+      <button onClick={() => loadFeed(1, true)} disabled={feedLoading || isRefreshing} className="absolute top-20 right-3 z-40 bg-black/70 border border-white/20 px-3 py-1.5 text-[10px] text-white disabled:opacity-50">{isRefreshing ? 'LOADING…' : 'REFRESH'}</button>
     </div>
   );
 };

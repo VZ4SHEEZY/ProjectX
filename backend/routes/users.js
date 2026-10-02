@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
       limit = 20
     } = req.query;
 
-    const query = { isActive: true };
+    const query = { isActive: true, isQaAccount: { $ne: true } };
 
     // Search by username or display name
     if (search) {
@@ -95,10 +95,10 @@ router.get('/suggested', protect, async (req, res) => {
         $nin: [...following, req.user._id] 
       },
       isActive: true,
-      isCreator: true
+      isQaAccount: { $ne: true }
     })
     .select(PUBLIC_USER_FIELDS)
-    .sort('-followersCount')
+    .sort({ isCreator: -1, followersCount: -1, createdAt: -1 })
     .limit(parseInt(limit));
 
     res.json({
