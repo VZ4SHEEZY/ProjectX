@@ -34,7 +34,7 @@ test('invalid and expired sessions fail closed', async ({ monitoredPage: page })
 test('signup validates errors and creates a disposable account in the isolated database', async ({ monitoredPage: page }, testInfo) => {
   const data = await runtime(); const suffix = `${data.runId}${testInfo.project.name.startsWith('mobile') ? 'm' : 'd'}`;
   await page.goto('/'); await page.getByRole('button', { name: 'INITIALIZE' }).click();
-  await page.getByPlaceholder(/letters, numbers/i).fill(`qa_${suffix}`); await page.getByPlaceholder('your@email.com').fill(`qa_${suffix}@example.invalid`);
+  await page.getByPlaceholder(/letters, numbers/i).fill(`member_${suffix}`); await page.getByPlaceholder('your@email.com').fill(`member_${suffix}@example.invalid`);
   await page.getByPlaceholder('••••••••').fill('ephemeral-password');
   await page.getByLabel('Faction choice').selectOption('Unaffiliated');
   await page.getByRole('button', { name: 'CREATE NODE' }).click();
@@ -56,16 +56,20 @@ test('anonymous visitors can view a public profile and auth actions preserve its
   await expect(page).toHaveURL(new RegExp(`/users/${peer.username}$`));
 });
 
-test('profile, follow count, search, direct navigation, and browser history work', async ({ monitoredPage: page }) => {
+test('profile, follow count, search, direct navigation, and browser history work', async ({ monitoredPage: page }, testInfo) => {
   const { data } = await login(page); const peer = userFor(data, 'peer');
   await page.goto(`/users/${peer.username}`);
   const follow = page.getByRole('button', { name: /^(FOLLOW|FOLLOWING)$/ });
   const before = await follow.textContent(); await follow.click();
   await expect(page.getByRole('button', { name: before?.trim() === 'FOLLOW' ? 'FOLLOWING' : 'FOLLOW' })).toBeVisible();
-  await page.getByTitle(/Search/).click(); await page.getByPlaceholder(/Search/i).fill(peer.username);
-  const result = page.getByRole('button').filter({ hasText: peer.username }).first();
+  const suffix = `${data.runId}${testInfo.project.name.startsWith('mobile') ? 'm' : 'd'}`;
+  const discoverableUsername = `member_${suffix}`;
+  await page.getByTitle(/Search/).click(); await page.getByPlaceholder(/Search/i).fill(discoverableUsername);
+  const result = page.getByRole('button').filter({ hasText: discoverableUsername }).first();
   await expect(result).toBeVisible(); await result.click();
-  await expect(page).toHaveURL(/\/users\//); await page.goBack(); await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(new RegExp(`/users/${discoverableUsername}$`));
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/users/${peer.username}$`));
 });
 
 test('ordinary user cannot invoke admin APIs or render admin dashboard', async ({ monitoredPage: page, request }) => {
