@@ -1,5 +1,6 @@
 const PRODUCTION_API_ORIGIN = 'https://cyberdope-api.onrender.com';
 const STAGING_API_ORIGIN = 'https://cyberdope-api-staging.onrender.com';
+const RELEASE_A_STAGING_API_ORIGIN = 'https://cyberdope-release-a-api-staging.onrender.com';
 
 function originOf(value, name) {
   try { return new URL(value).origin; }
@@ -14,9 +15,14 @@ function socketOrigin(origin) {
 }
 
 export function frontendDeployment(env = process.env) {
-  const production = env.VERCEL_ENV !== 'preview';
+  const releaseAStaging = env.CYBERDOPE_RELEASE_A_STAGING === 'true';
+  const production = env.VERCEL_ENV !== 'preview' && !releaseAStaging;
   const apiOrigin = originOf(env.VITE_API_URL || `${PRODUCTION_API_ORIGIN}/api`, 'VITE_API_URL');
   const socketOriginBinding = originOf(env.VITE_SOCKET_URL || apiOrigin, 'VITE_SOCKET_URL');
+
+  if (releaseAStaging && (apiOrigin !== RELEASE_A_STAGING_API_ORIGIN || socketOriginBinding !== RELEASE_A_STAGING_API_ORIGIN)) {
+    throw new Error('Release A staging must target the isolated Release A staging API');
+  }
 
   if (production && (apiOrigin !== PRODUCTION_API_ORIGIN || socketOriginBinding !== PRODUCTION_API_ORIGIN)) {
     throw new Error('Production VITE_API_URL and VITE_SOCKET_URL must target the production API');
@@ -57,4 +63,4 @@ export function createVercelConfig({ appRoot = false, env = process.env } = {}) 
   };
 }
 
-export const deploymentOrigins = Object.freeze({ PRODUCTION_API_ORIGIN, STAGING_API_ORIGIN });
+export const deploymentOrigins = Object.freeze({ PRODUCTION_API_ORIGIN, STAGING_API_ORIGIN, RELEASE_A_STAGING_API_ORIGIN });

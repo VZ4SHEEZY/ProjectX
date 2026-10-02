@@ -12,6 +12,12 @@ const stagingEnv = {
   VITE_API_URL: `${deploymentOrigins.STAGING_API_ORIGIN}/api`,
   VITE_SOCKET_URL: deploymentOrigins.STAGING_API_ORIGIN
 };
+const releaseAStagingEnv = {
+  VERCEL_ENV: 'production',
+  CYBERDOPE_RELEASE_A_STAGING: 'true',
+  VITE_API_URL: `${deploymentOrigins.RELEASE_A_STAGING_API_ORIGIN}/api`,
+  VITE_SOCKET_URL: deploymentOrigins.RELEASE_A_STAGING_API_ORIGIN
+};
 
 test('production binding and CSP include production and exclude staging', () => {
   const deployment = frontendDeployment(productionEnv);
@@ -28,6 +34,15 @@ test('preview binding and CSP permit staging API and socket while retaining requ
   assert.equal(deployment.apiOrigin, deploymentOrigins.STAGING_API_ORIGIN);
   assert.equal(deployment.socketOrigin, deploymentOrigins.STAGING_API_ORIGIN);
   for (const origin of [deploymentOrigins.PRODUCTION_API_ORIGIN, deploymentOrigins.STAGING_API_ORIGIN, 'wss://cyberdope-api-staging.onrender.com']) assert.ok(deployment.csp.includes(origin), origin);
+});
+
+test('dedicated Release A staging is exact-origin bound and cannot target production or shared Outrider staging', () => {
+  const deployment = frontendDeployment(releaseAStagingEnv);
+  assert.equal(deployment.production, false);
+  assert.match(deployment.csp, /cyberdope-release-a-api-staging/);
+  for (const origin of [deploymentOrigins.PRODUCTION_API_ORIGIN, deploymentOrigins.STAGING_API_ORIGIN]) {
+    assert.throws(() => frontendDeployment({ ...releaseAStagingEnv, VITE_API_URL: `${origin}/api`, VITE_SOCKET_URL: origin }), /must target the isolated Release A staging API/);
+  }
 });
 
 test('both Vercel project-root configurations use the environment-derived CSP', () => {
