@@ -27,7 +27,7 @@ test.describe('Release 3E production-shaped staging smoke', () => {
     for (const path of manifest.profilePaths || []) {
       await page.goto(new URL(path, manifest.baseURL).toString());
       await expect(page.locator('body')).toBeVisible();
-      await expect(page.locator('[data-testid="progression-panel"], text=Progression signal').first()).toBeVisible();
+      await expect(page.locator('[data-testid="progression-panel"], [data-testid="progression-panel-status"]').first()).toBeVisible();
     }
   });
 });

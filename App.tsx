@@ -12,7 +12,7 @@ import { User } from './types';
 import { 
   Wallet, Zap, User as UserIcon, Settings, 
   Mail, Bell, Search, LogOut, LayoutGrid, Crown, Plus,
-  BarChart3, Home, Compass, Image, Users, Menu, X, Palette, Eye
+  BarChart3, Home, Compass, Image, Users, Menu, X, Palette, Eye, Flag
 } from 'lucide-react';
 
 const VideoFeed = lazy(() => import('./components/Feed'));
@@ -36,25 +36,27 @@ const Stories = lazy(() => import('./components/Stories').then(module => ({ defa
 const CreateStory = lazy(() => import('./components/Stories').then(module => ({ default: module.CreateStory })));
 const Groups = lazy(() => import('./components/Groups').then(module => ({ default: module.Groups })));
 const OutriderGlass = lazy(() => import('./components/OutriderGlass'));
+const FactionsPage = lazy(() => import('./components/FactionsPage'));
 
 type OnboardingStep = 'auth' | 'profile-setup' | 'app';
-type MainView = 'feed' | 'explore' | 'messages' | 'profile' | 'userprofile' | 'admin' | 'outrider';
-type FeedTab = 'discover' | 'friends' | 'faction';
+type MainView = 'feed' | 'explore' | 'factions' | 'messages' | 'profile' | 'userprofile' | 'admin' | 'outrider';
+type FeedTab = 'discover' | 'following' | 'faction';
 // Cache bust: force redeploy
 
-const routeFromLocation = (): { view: MainView; userId?: string } => {
+const routeFromLocation = (): { view: MainView; userId?: string; factionKey?: string } => {
   const segments = window.location.pathname.split('/').filter(Boolean);
   if (segments[0] === 'users' && segments[1]) {
     return { view: 'userprofile', userId: decodeURIComponent(segments[1]) };
   }
-  if (['feed', 'explore', 'messages', 'profile', 'admin', ...(OUTRIDER_ENABLED ? ['outrider'] : [])].includes(segments[0])) {
+  if (segments[0] === 'factions') return { view: 'factions', factionKey: segments[1] ? decodeURIComponent(segments[1]) : undefined };
+  if (['feed', 'explore', 'factions', 'messages', 'profile', 'admin', ...(OUTRIDER_ENABLED ? ['outrider'] : [])].includes(segments[0])) {
     return { view: segments[0] as MainView };
   }
   return { view: 'feed' };
 };
 
-const pathForRoute = (view: MainView, userId?: string) =>
-  view === 'userprofile' && userId ? `/users/${encodeURIComponent(userId)}` : `/${view}`;
+const pathForRoute = (view: MainView, identifier?: string) =>
+  view === 'userprofile' && identifier ? `/users/${encodeURIComponent(identifier)}` : view === 'factions' && identifier ? `/factions/${encodeURIComponent(identifier)}` : `/${view}`;
 
 const mapApiUser = (apiUser: any): User => ({
   id: apiUser.id || apiUser._id,
@@ -82,6 +84,9 @@ const App: React.FC = () => {
   const initialRoute = routeFromLocation();
   const [currentView, setCurrentView] = useState<MainView>(initialRoute.view);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(initialRoute.userId || null);
+  const [sessionRestoreFailed, setSessionRestoreFailed] = useState(false);
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
+  const [selectedFactionKey, setSelectedFactionKey] = useState<string | null>(initialRoute.factionKey || null);
   const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
   const [feedTab, setFeedTab] = useState<FeedTab>('discover');
   const [creatorModeEnabled, setCreatorModeEnabled] = useState(false);
@@ -122,6 +127,8 @@ const App: React.FC = () => {
   // Initial loading + session restore (validates token against real API)
   useEffect(() => {
     const restore = async () => {
+      setIsLoading(true);
+      setSessionRestoreFailed(false);
       const token = localStorage.getItem('cdToken');
       const storedUser = localStorage.getItem('cdUser');
 
@@ -148,27 +155,30 @@ const App: React.FC = () => {
           localStorage.setItem('cdUser', JSON.stringify(freshUser));
           setUser(mapApiUser(freshUser));
           setOnboardingStep('app');
-        } else {
+        } else if ([401, 403].includes(res.status)) {
           // Token invalid or expired — wipe and send to auth
           localStorage.removeItem('cdToken');
           localStorage.removeItem('cdUser');
+        } else {
+          setSessionRestoreFailed(true);
         }
       } catch (e) {
         // Preserve credentials through transient backend failures/cold starts.
         // Cached roles are not activated until the server validates them.
-        console.error('Session validation unavailable:', e);
+        setSessionRestoreFailed(true);
       }
 
       setIsLoading(false);
     };
     restore();
-  }, []);
+  }, [restoreAttempt]);
 
   useEffect(() => {
     const handlePopState = () => {
       const route = routeFromLocation();
       setCurrentView(route.view);
       setSelectedUserId(route.userId || null);
+      setSelectedFactionKey(route.factionKey || null);
       setIsMobileMenuOpen(false);
     };
     window.addEventListener('popstate', handlePopState);
@@ -300,6 +310,7 @@ const App: React.FC = () => {
     if (view === 'userprofile' && userId) {
       setSelectedUserId(userId);
     }
+    if (view === 'factions') setSelectedFactionKey(userId || null);
     setCurrentView(view);
     const nextPath = pathForRoute(view, userId);
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
@@ -370,6 +381,8 @@ const App: React.FC = () => {
 
   // Public profile routes remain useful without a session. Authenticated actions
   // open login while the canonical URL and profile context stay intact.
+  if (sessionRestoreFailed) return <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4 px-6 text-center"><p className="text-white">Your session is saved. The network is temporarily unavailable.</p><button onClick={() => setRestoreAttempt(value => value + 1)} className="border border-[#39FF14] px-5 py-3 text-[#39FF14]">RETRY CONNECTION</button></div>;
+
   if (!user && currentView === 'userprofile' && selectedUserId) {
     if (guestAuthOpen) return <AuthPage onLoginSuccess={handleLoginSuccess} />;
     return <UserProfilePage userId={selectedUserId} username={selectedUserId} onBack={() => window.history.length > 1 ? window.history.back() : window.location.assign('/')} onRequireAuth={() => setGuestAuthOpen(true)} />;
@@ -442,6 +455,7 @@ const App: React.FC = () => {
             icon={Compass}
             label="EXPLORE"
           />
+          <NavButton active={currentView === 'factions'} onClick={() => navigateTo('factions')} icon={Flag} label="FACTIONS" />
           <NavButton 
             active={currentView === 'messages'}
             onClick={() => setIsPostComposerOpen(true)}
@@ -556,6 +570,7 @@ const App: React.FC = () => {
           <div className="p-4 space-y-2">
             <MobileMenuItem active={currentView === 'feed'} onClick={() => navigateTo('feed')} icon={Home} label="HOME" />
             <MobileMenuItem active={currentView === 'explore'} onClick={() => navigateTo('explore')} icon={Compass} label="EXPLORE" />
+            <MobileMenuItem active={currentView === 'factions'} onClick={() => navigateTo('factions')} icon={Flag} label="FACTIONS" />
             <MobileMenuItem active={currentView === 'messages'} onClick={() => navigateTo('messages')} icon={Mail} label="MESSAGES" />
             <MobileMenuItem active={currentView === 'profile'} onClick={() => navigateTo('profile')} icon={UserIcon} label="PROFILE" />
             {OUTRIDER_ENABLED && <MobileMenuItem active={currentView === 'outrider'} onClick={() => navigateTo('outrider')} icon={Eye} label="OUTRIDER" />}
@@ -588,9 +603,9 @@ const App: React.FC = () => {
                 DISCOVER
               </button>
               <button
-                onClick={() => setFeedTab('friends')}
+                onClick={() => setFeedTab('following')}
                 className={`px-4 py-2 rounded-lg font-mono text-sm transition-all ${
-                  feedTab === 'friends'
+                  feedTab === 'following'
                     ? 'bg-[var(--primary-color,#39FF14)] text-black'
                     : 'bg-black/50 border border-gray-800 text-gray-400 hover:text-white'
                 }`}
@@ -621,6 +636,7 @@ const App: React.FC = () => {
                 onTabChange={setFeedTab}
                 onCreate={() => setIsPostComposerOpen(true)}
                 onDiscoverPeople={() => navigateTo('explore')}
+                onDiscoverFactions={() => navigateTo('factions')}
                 onCreatorClick={handleViewUserProfile}
               />
             </div>
@@ -637,6 +653,7 @@ const App: React.FC = () => {
             />
           </div>
         )}
+        {currentView === 'factions' && <div className="h-full w-full overflow-y-auto"><FactionsPage currentUser={user} factionKey={selectedFactionKey} onOpen={(key) => navigateTo('factions', key)} onBack={() => navigateTo('factions')} onUserClick={handleViewUserProfile}/></div>}
         
         {/* MESSAGES VIEW */}
         {currentView === 'messages' && (
@@ -704,6 +721,10 @@ const App: React.FC = () => {
           handleViewUserProfile(username);
           setIsNotificationsOpen(false);
         }}
+        onFactionClick={(key) => { navigateTo('factions', key); setIsNotificationsOpen(false); }}
+        onPostClick={(postId) => { setActivePostId(postId); setIsCommentsOpen(true); setIsNotificationsOpen(false); }}
+        onMessagesClick={() => { navigateTo('messages'); setIsNotificationsOpen(false); }}
+        onProgressionClick={() => { navigateTo('profile'); setIsNotificationsOpen(false); }}
       />}
 
       {/* 3. Mobile Bottom Navigation Bar - 5 items: Home, Explore, Create, Messages, Profile */}
@@ -965,8 +986,10 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, labe
   return (
     <button
       onClick={onClick}
+      aria-label={label}
+      title={label}
       className={`
-        flex items-center gap-2 px-3 lg:px-4 py-2 rounded-md text-xs font-bold tracking-wider transition-all duration-200
+        flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold tracking-wider transition-all duration-200
         ${active 
           ? 'bg-white/10 text-white' 
           : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
@@ -978,7 +1001,7 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, labe
       }}
     >
       <Icon size={16} />
-      <span className="hidden lg:inline">{label}</span>
+      <span className="hidden 2xl:inline">{label}</span>
     </button>
   );
 };

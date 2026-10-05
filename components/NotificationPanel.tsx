@@ -5,7 +5,7 @@ import { userAPI } from '../services/api';
 interface Notification {
   _id: string;
   type: 'follow' | 'like' | 'comment' | 'reply' | 'mention' | 'faction_win' | 'rank_up' | 'top_post' | 'message';
-  actor: {
+  actor?: {
     _id: string;
     username: string;
     avatar: string;
@@ -19,15 +19,20 @@ interface Notification {
     mediaUrl: string;
     title: string;
   };
+  metadata?: { factionName?: string };
 }
 
 interface NotificationPanelProps {
   isOpen: boolean;
   onClose: () => void;
   onUserClick?: (username: string) => void;
+  onFactionClick?: (key: string) => void;
+  onPostClick?: (postId: string) => void;
+  onMessagesClick?: () => void;
+  onProgressionClick?: () => void;
 }
 
-const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, onUserClick }) => {
+const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, onUserClick, onFactionClick, onPostClick, onMessagesClick, onProgressionClick }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -86,6 +91,17 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, 
 
   const handleUserClick = (username: string) => {
     onUserClick?.(username);
+    onClose();
+  };
+
+  const handleDestination = async (notification: Notification) => {
+    if (!notification.read) await handleMarkAsRead(notification._id);
+    if (notification.metadata?.factionName && ['faction_win','faction_update'].includes(notification.type)) {
+      onFactionClick?.(notification.metadata.factionName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''));
+    } else if (notification.post?._id) onPostClick?.(notification.post._id);
+    else if (notification.type === 'message') onMessagesClick?.();
+    else if (notification.type === 'rank_up') onProgressionClick?.();
+    else if (notification.actor?.username) handleUserClick(notification.actor.username);
     onClose();
   };
 
@@ -182,6 +198,10 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, 
               {notifications.map((notification) => (
                 <div
                   key={notification._id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleDestination(notification)}
+                  onKeyDown={(event) => { if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); handleDestination(notification); } }}
                   className={`p-4 hover:bg-white/5 transition-colors group ${
                     !notification.read ? 'bg-white/5' : ''
                   }`}
@@ -189,12 +209,12 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, 
                   <div className="flex gap-3">
                     {/* Avatar Button */}
                     <button
-                      onClick={() => handleUserClick(notification.actor.username)}
+                      onClick={(event) => { event.stopPropagation(); notification.actor?.username && handleUserClick(notification.actor.username); }}
                       className="w-10 h-10 rounded-full flex-shrink-0 border border-gray-700 hover:border-[#39FF14] transition-colors p-0 bg-none cursor-pointer overflow-hidden"
                     >
                       <img
-                        src={notification.actor.avatar}
-                        alt={notification.actor.username}
+                        src={notification.actor?.avatar}
+                        alt={notification.actor?.username}
                         className="w-full h-full object-cover"
                       />
                     </button>
@@ -203,12 +223,12 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, 
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-white flex items-center gap-1">
                         <button
-                          onClick={() => handleUserClick(notification.actor.username)}
+                          onClick={(event) => { event.stopPropagation(); notification.actor?.username && handleUserClick(notification.actor.username); }}
                           className="font-bold hover:text-[#39FF14] transition-colors bg-none border-none p-0 cursor-pointer text-left"
                         >
-                          @{notification.actor.username}
+                          @{notification.actor?.username}
                         </button>
-                        {notification.actor.isVerified && (
+                        {notification.actor?.isVerified && (
                           <span className="text-[#39FF14] text-xs">✓</span>
                         )}
                       </div>
@@ -225,7 +245,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, 
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                         {!notification.read && (
                           <button
-                            onClick={() => handleMarkAsRead(notification._id)}
+                            onClick={(event) => { event.stopPropagation(); handleMarkAsRead(notification._id); }}
                             className="p-1 hover:bg-white/10 rounded text-gray-500 hover:text-[#39FF14]"
                             title="Mark as read"
                           >
@@ -233,7 +253,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, 
                           </button>
                         )}
                         <button
-                          onClick={() => handleDelete(notification._id)}
+                          onClick={(event) => { event.stopPropagation(); handleDelete(notification._id); }}
                           className="p-1 hover:bg-white/10 rounded text-gray-500 hover:text-red-500"
                           title="Delete"
                         >
@@ -246,7 +266,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose, 
                   {/* Post thumbnail if available */}
                   {notification.post && notification.post.mediaUrl && (
                     <button
-                      onClick={() => handleUserClick(notification.actor.username)}
+                      onClick={(event) => { event.stopPropagation(); handleDestination(notification); }}
                       className="mt-3 w-full h-24 rounded border border-gray-800 hover:border-[#39FF14] transition-colors p-0 bg-none cursor-pointer overflow-hidden"
                     >
                       <img

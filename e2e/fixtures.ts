@@ -2,7 +2,7 @@ import { test as base, expect, Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 type RuntimeUser = { id: string; role: string; username: string; email: string };
-export type Runtime = { runId: string; password: string; users: RuntimeUser[]; postId: string; apiURL: string; qaSecret: string };
+export type Runtime = { runId: string; password: string; users: RuntimeUser[]; postId: string; apiURL: string; qaSecret: string; certification?: any };
 export const runtime = async (): Promise<Runtime> => JSON.parse(await readFile('.e2e/runtime.json', 'utf8'));
 export const userFor = (data: Runtime, role: string) => data.users.find(user => user.role === role)!;
 

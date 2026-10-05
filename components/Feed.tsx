@@ -12,16 +12,15 @@ interface FeedProps {
   onTipClick: (creatorId: string) => void;
   onCommentClick: (postId: string) => void;
   currentUser: User;
-  activeTab: 'discover' | 'friends' | 'faction';
-  onTabChange?: (tab: 'discover' | 'friends' | 'faction') => void;
+  activeTab: 'discover' | 'following' | 'faction';
+  onTabChange?: (tab: 'discover' | 'following' | 'faction') => void;
   onCreate?: () => void;
   onDiscoverPeople?: () => void;
+  onDiscoverFactions?: () => void;
   onCreatorClick?: (username: string) => void;
 }
 
-type FeedTab = 'discover' | 'friends' | 'faction';
-
-// Compatibility key "friends" currently means the distinct Following feed.
+type FeedTab = 'discover' | 'following' | 'faction';
 
 // Progress Indicator Component
 const ProgressIndicator: React.FC<{ total: number; current: number }> = ({ total, current }) => {
@@ -122,8 +121,9 @@ const VideoCounter: React.FC<{ current: number; total: number }> = ({ current, t
   );
 };
 
-const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, activeTab, onTabChange, onCreate, onDiscoverPeople, onCreatorClick }) => {
+const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, activeTab, onTabChange, onCreate, onDiscoverPeople, onDiscoverFactions, onCreatorClick }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const feedRequestId = useRef(0);
   const [activeIndex, setActiveIndex] = useState(0);
   const [systemMsg, setSystemMsg] = useState("SYSTEM_ONLINE");
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -167,16 +167,17 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
   });
 
   const loadFeed = useCallback(async (nextPage = 1, replace = true) => {
+      const requestId = ++feedRequestId.current;
       if (replace) setFeedLoading(true);
       else setIsRefreshing(true);
-      if (replace) { setActiveIndex(0); setIsTransitioning(true); }
+      if (replace) { setApiVideos([]); setActiveIndex(0); setIsTransitioning(true); }
       setFeedError(null);
       
       try {
         let response;
         
         switch (activeTab) {
-          case 'friends':
+          case 'following':
             response = await postAPI.getFollowingFeed({ page: nextPage, limit: 20 });
             break;
           case 'faction':
@@ -187,6 +188,7 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
             response = await postAPI.getForYouFeed({ page: nextPage, limit: 20 });
         }
         
+        if (requestId !== feedRequestId.current) return;
         const posts = response.data?.data || [];
         const mapped = posts.map(mapPostToVideo);
         setApiVideos(current => {
@@ -196,11 +198,13 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
         setPage(nextPage);
         setHasMore(response.data?.hasMore ?? nextPage < (response.data?.totalPages || 1));
       } catch (err: any) {
+        if (requestId !== feedRequestId.current) return;
         const msg = err?.response?.data?.message || err?.message || 'Unknown error';
         console.error(`Feed error [${activeTab}]:`, err);
         setFeedError(`${err?.response?.status || 'ERR'}: ${msg}`);
         if (replace) setApiVideos([]);
       } finally {
+        if (requestId !== feedRequestId.current) return;
         setFeedLoading(false);
         setIsRefreshing(false);
         setIsTransitioning(false);
@@ -211,7 +215,7 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
       }
   }, [activeTab]);
 
-  useEffect(() => { void loadFeed(1, true); }, [loadFeed, currentUser.id]);
+  useEffect(() => { void loadFeed(1, true); return () => { feedRequestId.current += 1; }; }, [loadFeed, currentUser.id]);
 
   // Filter Videos: Remove NSFW if user is not age verified
   const visibleVideos = useMemo(() => {
@@ -341,19 +345,20 @@ const Feed: React.FC<FeedProps> = ({ onTipClick, onCommentClick, currentUser, ac
     );
   }
 
+  const independentFactionFeed = activeTab === 'faction' && (!currentUser.faction || currentUser.faction === 'Unaffiliated');
   if (visibleVideos.length === 0) {
       return (
           <div className="w-full h-full flex items-center justify-center bg-black text-center p-8">
               <div className="border-2 border-[#39FF14] p-8 max-w-sm">
-                  <h2 className="text-[#39FF14] font-bold text-lg mb-3 tracking-wider">NO CONTENT YET</h2>
+                  <h2 className="text-[#39FF14] font-bold text-lg mb-3 tracking-wider">{independentFactionFeed ? 'INDEPENDENT BY CHOICE' : 'NO CONTENT YET'}</h2>
                   {feedError && (
                     <p className="text-red-400 text-[10px] font-mono mb-3 break-all">{feedError}</p>
                   )}
                   <p className="text-gray-400 text-xs font-mono mb-6 leading-relaxed">
-                      The feed is empty. Be the first to post and shape the network.
+                      {independentFactionFeed ? 'Your personal progression and social connections stand on their own. Explore faction communities without joining one.' : 'The feed is empty. Be the first to post and shape the network.'}
                   </p>
-                  <button onClick={feedError ? () => loadFeed(1, true) : activeTab === 'friends' ? onDiscoverPeople : onCreate} className="px-6 py-2 border border-[#39FF14] text-[#39FF14] text-xs font-bold hover:bg-[#39FF14] hover:text-black transition-all">
-                      {feedError ? 'RETRY' : activeTab === 'friends' ? 'DISCOVER PEOPLE' : 'CREATE POST'}
+                  <button onClick={feedError ? () => loadFeed(1, true) : independentFactionFeed ? onDiscoverFactions : activeTab === 'following' ? onDiscoverPeople : onCreate} className="px-6 py-2 border border-[#39FF14] text-[#39FF14] text-xs font-bold hover:bg-[#39FF14] hover:text-black transition-all">
+                      {feedError ? 'RETRY' : independentFactionFeed ? 'EXPLORE FACTIONS' : activeTab === 'following' ? 'DISCOVER PEOPLE' : 'CREATE POST'}
                   </button>
               </div>
           </div>

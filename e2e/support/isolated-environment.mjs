@@ -2,6 +2,9 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const mongoose = require('../../backend/node_modules/mongoose');
 
 // Pin the database engine so local and CI runs use the same wire/storage behavior.
 const mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 }, binary: { version: '7.0.14' } });
@@ -26,7 +29,9 @@ launch(process.execPath, ['backend/server.js'], {
   JWT_SECRET: crypto.randomBytes(48).toString('base64url'), JWT_EXPIRE: '5m',
   QA_E2E_ENABLED: 'true', QA_E2E_SECRET: qaSecret,
   RATE_LIMIT_MAX: '2000',
-  FRONTEND_URL: 'http://127.0.0.1:4173', PAYMENT_EXECUTION_ENABLED: 'false'
+  FRONTEND_URL: 'http://127.0.0.1:4173', PAYMENT_EXECUTION_ENABLED: 'false',
+  USER_FACING_PROGRESSION_ENABLED: 'true', VITE_USER_FACING_PROGRESSION_ENABLED: 'true', PROGRESSION_ROLLOUT_STAGE: '4',
+  OUTRIDER_ENV: 'test', OUTRIDER_ENABLED: 'true', OUTRIDER_GLASS_ENABLED: 'true', OUTRIDER_OBSERVER_ENABLED: 'true'
 });
 await waitFor('http://127.0.0.1:5001/api/health');
 const seedResponse = await fetch('http://127.0.0.1:5001/api/qa/seed', {
@@ -34,10 +39,25 @@ const seedResponse = await fetch('http://127.0.0.1:5001/api/qa/seed', {
 });
 if (!seedResponse.ok) throw new Error('Unable to seed isolated QA accounts');
 const runtime = await seedResponse.json();
+// Seed only the isolated in-memory world; no runtime execution is enabled.
+await mongoose.connect(mongo.getUri('cyberdope-e2e'));
+await require('../../backend/models/OutriderWorldSpace').create({ spaceId: 'outrider-hub', name: 'Outrider Hub', kind: 'commons', visibility: 'public' });
+// Synthetic presentation checkpoints belong only to this disposable test database.
+const Projection = require('../../backend/models/ProgressionProjection');
+const checkpoint = { projectionContextId: 'release-b-ui-fixture', policyId: 'ui-fixture', policyVersion: '1', policyArtifactDigest: 'fixture', evaluationGeneration: 'fixture', projectionContext: {}, rebuiltAt: new Date() };
+const independentId = runtime.users.find(user => user.role === 'primary').id;
+const memberId = runtime.certification.factionProfiles[0].id;
+await Projection.create([
+  { ...checkpoint, scope: 'personal', subjectId: independentId, checkpoint: { contribution: 10, specialties: { social: 10 } } },
+  { ...checkpoint, scope: 'personal', subjectId: memberId, checkpoint: { contribution: 40, specialties: { creation: 30, social: 10 } } },
+  { ...checkpoint, scope: 'faction', subjectId: 'neon_wraith', checkpoint: { total: 120, contributors: { [memberId]: 25 } } }
+]);
+await mongoose.disconnect();
 await mkdir('.e2e', { recursive: true });
 await writeFile('.e2e/runtime.json', JSON.stringify({ ...runtime, qaSecret, apiURL: 'http://127.0.0.1:5001/api' }), { mode: 0o600 });
 launch(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '4173'], {
-  VITE_API_URL: 'http://127.0.0.1:5001/api', VITE_SOCKET_URL: 'http://127.0.0.1:5001'
+  VITE_API_URL: 'http://127.0.0.1:5001/api', VITE_SOCKET_URL: 'http://127.0.0.1:5001',
+  VITE_USER_FACING_PROGRESSION_ENABLED: 'true', VITE_PROGRESSION_ROLLOUT_STAGE: '4', VITE_OUTRIDER_ENABLED: 'true'
 });
 const cleanup = async () => {
   for (const child of children) child.kill('SIGTERM');

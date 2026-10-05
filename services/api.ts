@@ -151,6 +151,11 @@ export const progressionAPI = {
   getUser: (userId: string) => api.get(`/progression/users/${userId}`),
 };
 
+export const factionAPI = {
+  list: () => api.get('/factions'),
+  get: (key: string) => api.get(`/factions/${encodeURIComponent(key)}`),
+};
+
 export const outriderAPI = {
   snapshot: () => api.get('/internal/outrider/snapshot'),
   enter: (spaceId: string) => api.post('/internal/outrider/observer/enter', { spaceId }),
