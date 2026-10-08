@@ -70,6 +70,7 @@ const postSchema = new mongoose.Schema({
   isPublished: { type: Boolean, default: true },
   
   // Moderation
+  moderationState: { type: String, enum: ['clear', 'removed'], default: 'clear' },
   isReported: { type: Boolean, default: false },
   reports: [{ 
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

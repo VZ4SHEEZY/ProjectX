@@ -35,7 +35,8 @@ export interface User {
   isVerified?: boolean;
   isAgeVerified?: boolean;
   isCreator?: boolean;
-  isAdmin?: boolean; // Admin role flag from database
+  isAdmin?: boolean;
+  isModerator?: boolean; // Admin role flag from database
   theme?: ProfileTheme;
   subscriptionPlan?: SubscriptionPlan;
   subscriptionTiers?: SubscriptionTier[];

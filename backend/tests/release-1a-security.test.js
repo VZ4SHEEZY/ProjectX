@@ -30,7 +30,8 @@ test('public projections never expose age, verification dates, private theme cod
   assert.equal(value.embeddedWalletAddress, undefined);
   assert.equal(value.theme.customCss, undefined);
   assert.equal(value.theme.primaryColor, '#112233');
-  assert.equal(privateVerificationProjection(user).age.verified, true);
+  // A legacy flag is not an authoritative provider assertion.
+  assert.equal(privateVerificationProjection(user).age.verified, false);
 });
 
 test('private profiles and blocks deny profile and post metadata server-side', async () => {

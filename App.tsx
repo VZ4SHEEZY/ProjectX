@@ -36,10 +36,12 @@ const Stories = lazy(() => import('./components/Stories').then(module => ({ defa
 const CreateStory = lazy(() => import('./components/Stories').then(module => ({ default: module.CreateStory })));
 const Groups = lazy(() => import('./components/Groups').then(module => ({ default: module.Groups })));
 const OutriderGlass = lazy(() => import('./components/OutriderGlass'));
+const CreatorDiscovery = lazy(() => import('./components/CreatorDiscovery'));
+const CreatorStudio = lazy(() => import('./components/CreatorStudio'));
 const FactionsPage = lazy(() => import('./components/FactionsPage'));
 
 type OnboardingStep = 'auth' | 'profile-setup' | 'app';
-type MainView = 'feed' | 'explore' | 'factions' | 'messages' | 'profile' | 'userprofile' | 'admin' | 'outrider';
+type MainView = 'feed' | 'explore' | 'factions' | 'messages' | 'profile' | 'userprofile' | 'admin' | 'outrider' | 'creator' | 'creators';
 type FeedTab = 'discover' | 'following' | 'faction';
 // Cache bust: force redeploy
 
@@ -49,7 +51,7 @@ const routeFromLocation = (): { view: MainView; userId?: string; factionKey?: st
     return { view: 'userprofile', userId: decodeURIComponent(segments[1]) };
   }
   if (segments[0] === 'factions') return { view: 'factions', factionKey: segments[1] ? decodeURIComponent(segments[1]) : undefined };
-  if (['feed', 'explore', 'factions', 'messages', 'profile', 'admin', ...(OUTRIDER_ENABLED ? ['outrider'] : [])].includes(segments[0])) {
+  if (['feed', 'explore', 'factions', 'messages', 'profile', 'creator', 'creators', 'admin', ...(OUTRIDER_ENABLED ? ['outrider'] : [])].includes(segments[0])) {
     return { view: segments[0] as MainView };
   }
   return { view: 'feed' };
@@ -70,6 +72,7 @@ const mapApiUser = (apiUser: any): User => ({
   isAgeVerified: apiUser.isAgeVerified || false,
   isCreator: apiUser.isCreator || false,
   isAdmin: apiUser.isAdmin || false,
+  isModerator: apiUser.isModerator || false,
   followersCount: apiUser.followersCount || 0,
   followingCount: apiUser.followingCount || 0,
   postsCount: apiUser.postsCount || 0,
@@ -185,12 +188,7 @@ const App: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Show age verification modal if user is not verified (and not on auth page)
-  useEffect(() => {
-    if (user && !user.isAgeVerified && currentView === 'feed' && !agePromptDismissed) {
-      setIsAgeVerificationOpen(true);
-    }
-  }, [user, currentView, agePromptDismissed]);
+  // Verification is unavailable; display its explanation only on explicit request.
 
   // Fetch unread notifications count periodically
   useEffect(() => {
@@ -298,6 +296,8 @@ const App: React.FC = () => {
     } finally {
       localStorage.removeItem('cdToken');
       localStorage.removeItem('cdUser');
+      setIsTipModalOpen(false);
+      setActiveCreatorId('');
       setUser(null);
       setOnboardingStep('auth');
       setCurrentView('feed');
@@ -474,8 +474,9 @@ const App: React.FC = () => {
             icon={UserIcon}
             label="PROFILE"
           />
+          <NavButton active={currentView === 'creator'} onClick={() => navigateTo('creator')} icon={Crown} label="CREATOR" />
           {OUTRIDER_ENABLED && <NavButton active={currentView === 'outrider'} onClick={() => navigateTo('outrider')} icon={Eye} label="OUTRIDER" />}
-          {user?.isAdmin === true && (
+          {(user?.isAdmin === true || user?.isModerator === true) && (
             <NavButton 
               active={currentView === 'admin'}
               onClick={() => navigateTo('admin')}
@@ -573,11 +574,12 @@ const App: React.FC = () => {
             <MobileMenuItem active={currentView === 'factions'} onClick={() => navigateTo('factions')} icon={Flag} label="FACTIONS" />
             <MobileMenuItem active={currentView === 'messages'} onClick={() => navigateTo('messages')} icon={Mail} label="MESSAGES" />
             <MobileMenuItem active={currentView === 'profile'} onClick={() => navigateTo('profile')} icon={UserIcon} label="PROFILE" />
+            <MobileMenuItem active={currentView === 'creator'} onClick={() => navigateTo('creator')} icon={Crown} label="CREATOR STUDIO" />
             {OUTRIDER_ENABLED && <MobileMenuItem active={currentView === 'outrider'} onClick={() => navigateTo('outrider')} icon={Eye} label="OUTRIDER" />}
             <MobileMenuItem onClick={() => { setIsStoriesOpen(true); setIsMobileMenuOpen(false); }} icon={Image} label="STORIES" />
             <MobileMenuItem onClick={() => { setIsGroupsOpen(true); setIsMobileMenuOpen(false); }} icon={Users} label="COMMUNITIES" />
             <MobileMenuItem onClick={() => { setIsThemeEditorOpen(true); setIsMobileMenuOpen(false); }} icon={Palette} label="PROFILE STUDIO" />
-            {user.isAdmin && (
+            {(user.isAdmin || user.isModerator) && (
               <MobileMenuItem active={currentView === 'admin'} onClick={() => navigateTo('admin')} icon={BarChart3} label="ADMIN" />
             )}
           </div>
@@ -664,11 +666,13 @@ const App: React.FC = () => {
             initialRecipientId={messageRecipientId}
           />
         )}
+        {currentView === 'creators' && <CreatorDiscovery onProfile={handleViewUserProfile}/>}
+        {currentView === 'creator' && <CreatorStudio user={user} onActivated={async () => { const response = await authAPI.getMe(); const nextUser = mapApiUser(response.data.user); setUser(nextUser); localStorage.setItem('cdUser', JSON.stringify(nextUser)); }} onCreate={() => setIsPostComposerOpen(true)} onProfileStudio={() => setIsThemeEditorOpen(true)} onTiers={() => setIsSubscriptionTiersOpen(true)} onDiscover={() => navigateTo('creators')} />}
         {currentView === 'outrider' && OUTRIDER_ENABLED && <OutriderGlass user={user} />}
         
         {/* PROFILE VIEW - with conditional Creator tab */}
         {/* Admin Modal - Overlay */}
-        {isAdminOpen && user?.isAdmin === true && (
+        {isAdminOpen && (user?.isAdmin === true || user?.isModerator === true) && (
           <div className="fixed inset-0 z-[9999] bg-black/95">
             <button
               onClick={() => setIsAdminOpen(false)}
@@ -681,7 +685,7 @@ const App: React.FC = () => {
         )}
 
         {/* Old route - no longer used */}
-        {currentView === 'admin' && user?.isAdmin === true && !isAdminOpen && (
+        {currentView === 'admin' && (user?.isAdmin === true || user?.isModerator === true) && !isAdminOpen && (
           <AdminDashboard user={user} />
         )}
 
@@ -707,6 +711,7 @@ const App: React.FC = () => {
               currentUser={user}
               onBack={() => window.history.length > 1 ? window.history.back() : navigateTo('feed')}
               onMessage={handleMessageUser}
+              onTip={handleTipClick}
               onRequireAuth={() => setOnboardingStep('auth')}
             />
           </div>
@@ -808,8 +813,8 @@ const App: React.FC = () => {
               className="flex items-center gap-2 text-pink-500 hover:text-pink-400 text-xs transition-colors"
             >
               <span className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" />
-              <span className="hidden lg:inline">VERIFY AGE FOR 18+ CONTENT</span>
-              <span className="lg:hidden hidden sm:inline">VERIFY AGE</span>
+              <span className="hidden lg:inline">18+ VERIFICATION UNAVAILABLE</span>
+              <span className="lg:hidden hidden sm:inline">VERIFICATION STATUS</span>
             </button>
           )}
         </div>

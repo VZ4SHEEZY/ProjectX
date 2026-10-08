@@ -1,8 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/auth');
+const { protect, optionalAuth } = require('../middleware/auth');
 const User = require('../models/User');
 const Tip = require('../models/Tip');
+const Post = require('../models/Post');
+const Creator = require('../models/Creator');
+const AccountCapability = require('../models/AccountCapability');
+const { ethers } = require('ethers');
+const tipService = require('../services/tip');
 const { requireAdmin, logAdminAction } = require('../middleware/admin');
 const { withProgressionOutbox } = require('../progression/runtime/outbox');
 
@@ -45,68 +50,46 @@ const validateTiers = (tiers) => {
   return null;
 };
 
-/**
- * Creator Routes
- * 
- * Verification Tiers (SEPARATE CONCERNS):
- * - isAgeVerified: User can VIEW 18+ content (viewer check)
- * - isCreatorVerified: User can POST 18+ content and monetize (creator document check)
- * 
- * Creator Application Flow:
- * 1. User applies (POST /api/creator/apply)
- * 2. Status goes to pending
- * 3. Admin verifies identity (POST /api/creator/verify-admin)
- * 4. isCreatorVerified set to true
- * 5. Creator status auto-approved
- */
-
-// @route   POST /api/creator/apply
-// @desc    Apply to become a creator (requires admin verification)
-// @access  Private
+// Activate SFW creator tools on the existing account. Verification is separate.
 router.post('/apply', protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    let user = await User.findById(req.user._id);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Check if already a creator or pending
-    if (user.creatorStatus !== 'none') {
-      return res.status(400).json({ 
-        error: `Already ${user.creatorStatus === 'pending' ? 'pending' : 'an approved'} creator` 
-      });
-    }
+    const capability = await AccountCapability.findOne({ user: user._id, capability: 'creator_mode' });
+    const creator = await Creator.findOne({ user: user._id });
+    if (['suspended', 'revoked'].includes(capability?.state) || ['suspended', 'revoked'].includes(creator?.state)) return res.status(403).json({ error: 'Creator Mode is restricted by moderation' });
+    if (user.isCreator) return res.json({ success: true, isCreator: true, creatorStatus: user.creatorStatus });
 
-    // Set status to pending
-    user.creatorStatus = 'pending';
-    user.creatorApplicationDate = new Date();
-
-    // If already creator verified (admin has verified their documents), approve immediately
-    if (user.isCreatorVerified) {
-      user.creatorStatus = 'approved';
-      user.isCreator = true;
-      user.creatorApprovedDate = new Date();
-    }
-
-    if (user.creatorStatus === 'approved') {
-      await withProgressionOutbox(async ({ session, enqueue }) => {
-        await user.save({ session });
-        await enqueue({ principal: 'user', eventType: 'achievement.reached', activityClass: 'ACHIEVE', actorId: user._id, beneficiaryId: user._id,
-          occurredAt: user.creatorApprovedDate, subject: { type: 'user', id: String(user._id) }, object: { type: 'creator_status', id: String(user._id) },
-          source: { objectType: 'creator_status', objectId: user._id, transition: 'approved', version: '1' } });
-      });
-    } else await user.save();
+    const approvedAt = new Date();
+    user = await withProgressionOutbox(async ({ session, enqueue }) => {
+      // Reload inside every transaction attempt: Mongoose clears dirty fields on
+      // save, even when the driver subsequently retries an aborted transaction.
+      const current = await User.findById(user._id).session(session);
+      if (current.isCreator) return current;
+      current.creatorStatus = 'approved';
+      current.isCreator = true;
+      current.creatorApplicationDate ||= approvedAt;
+      current.creatorApprovedDate = approvedAt;
+      await AccountCapability.findOneAndUpdate({ user: current._id, capability: 'creator_mode', state: { $nin: ['suspended', 'revoked'] } }, { state: 'enabled', activatedAt: approvedAt }, { upsert: true, session });
+      await Creator.findOneAndUpdate({ user: current._id, state: { $nin: ['suspended', 'revoked'] } }, { state: 'active', applicationDate: current.creatorApplicationDate, approvedDate: approvedAt, source: 'native' }, { upsert: true, session });
+      await current.save({ session });
+      await enqueue({ principal: 'user', eventType: 'achievement.reached', activityClass: 'ACHIEVE', actorId: current._id, beneficiaryId: current._id,
+        occurredAt: approvedAt, subject: { type: 'user', id: String(current._id) }, object: { type: 'creator_status', id: String(current._id) },
+        source: { objectType: 'creator_status', objectId: current._id, transition: 'approved', version: '1' } });
+      return current;
+    });
 
     res.json({
       success: true,
-      message: user.isCreatorVerified 
-        ? 'Creator status approved! You can now post 18+ content and monetize.' 
-        : 'Application submitted. Admin verification of your identity required to unlock creator features.',
+      message: 'Creator Mode activated on your existing profile. Restricted content and real payments remain unavailable.',
       creatorStatus: user.creatorStatus,
       isCreator: user.isCreator,
-      isAgeVerified: user.isAgeVerified,
-      isCreatorVerified: user.isCreatorVerified
+      isAgeVerified: false,
+      isCreatorVerified: false
     });
   } catch (error) {
     console.error('Creator apply error:', error);
@@ -129,8 +112,8 @@ router.get('/status', protect, async (req, res) => {
       success: true,
       creatorStatus: user.creatorStatus,
       isCreator: user.isCreator,
-      isAgeVerified: user.isAgeVerified,
-      isCreatorVerified: user.isCreatorVerified,
+      isAgeVerified: false,
+      isCreatorVerified: false,
       applicationDate: user.creatorApplicationDate,
       approvedDate: user.creatorApprovedDate
     });
@@ -186,6 +169,49 @@ router.put('/subscription-tiers', protect, async (req, res) => {
   }
 });
 
+async function loadEarnings(userId) {
+    // Get all tips for this creator
+    const tips = await Tip.find({ 
+      creator: userId,
+      txStatus: 'confirmed'
+    })
+      .populate('sender', 'username avatar')
+      .populate('post', 'title')
+      .sort({ createdAt: -1 }).limit(100);
+
+    const [totals] = await Tip.aggregate([
+      { $match: { creator: userId, txStatus: 'confirmed' } },
+      { $group: { _id: null, total: { $sum: { $toDecimal: '$creatorAmount' } }, count: { $sum: 1 } } }
+    ]);
+    const totalEarnings = ethers.parseUnits(totals?.total?.toString() || '0', 6);
+    const totalTips = totals?.count || 0;
+    const avgTip = totalTips ? ethers.formatUnits(totalEarnings / BigInt(totalTips), 6) : '0.00';
+
+    return {
+      stats: {
+        totalEarnings: ethers.formatUnits(totalEarnings, 6),
+        totalTips,
+        avgTip,
+        pendingTips: await Tip.countDocuments({
+          creator: userId,
+          txStatus: 'pending', txHash: { $exists: true }
+        })
+      },
+      recentTips: tips.slice(0, 100).map(tip => ({
+        id: tip._id,
+        from: tip.sender?.username || 'Unavailable account',
+        fromAvatar: tip.sender?.avatar || '',
+        amount: tip.amount,
+        creatorAmount: tip.creatorAmount,
+        platformAmount: tip.platformAmount,
+        onPost: tip.post?.title || 'Direct tip',
+        message: tip.message,
+        date: tip.createdAt,
+        txHash: tip.txHash
+      }))
+    };
+}
+
 // @route   GET /api/creator/earnings
 // @desc    Get creator earnings dashboard
 // @access  Private
@@ -197,170 +223,51 @@ router.get('/earnings', protect, async (req, res) => {
       return res.status(403).json({ error: 'Not a creator' });
     }
 
-    // Get all tips for this creator
-    const tips = await Tip.find({ 
-      creator: req.user._id,
-      txStatus: 'confirmed'
-    })
-      .populate('sender', 'username avatar')
-      .populate('post', 'title')
-      .sort({ createdAt: -1 })
-      .limit(100);
-
-    // Calculate stats
-    const totalEarnings = tips.reduce((sum, tip) => {
-      return sum + parseFloat(tip.creatorAmount || 0);
-    }, 0);
-
-    const totalTips = tips.length;
-    const avgTip = totalTips > 0 ? (totalEarnings / totalTips).toFixed(2) : '0.00';
-
-    // Group by date for chart
-    const earningsByDate = {};
-    tips.forEach(tip => {
-      const date = new Date(tip.createdAt).toISOString().split('T')[0];
-      if (!earningsByDate[date]) {
-        earningsByDate[date] = 0;
-      }
-      earningsByDate[date] += parseFloat(tip.creatorAmount || 0);
-    });
-
-    res.json({
-      success: true,
-      stats: {
-        totalEarnings: totalEarnings.toFixed(2),
-        totalTips,
-        avgTip,
-        pendingTips: await Tip.countDocuments({
-          creator: req.user._id,
-          txStatus: 'pending'
-        })
-      },
-      recentTips: tips.map(tip => ({
-        id: tip._id,
-        from: tip.sender.username,
-        fromAvatar: tip.sender.avatar,
-        amount: tip.amount,
-        creatorAmount: tip.creatorAmount,
-        platformAmount: tip.platformAmount,
-        onPost: tip.post?.title || 'Direct tip',
-        message: tip.message,
-        date: tip.createdAt,
-        txHash: tip.txHash
-      })),
-      earningsByDate
-    });
+    res.json({ success: true, ...await loadEarnings(req.user._id) });
   } catch (error) {
     console.error('Earnings fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch earnings' });
   }
 });
 
-// @route   GET /api/creator/dashboard
-// @desc    Full creator dashboard (stats + earnings + recent activity)
-// @access  Private
+// Keep the existing dashboard response shape, with lifetime receipt totals.
 router.get('/dashboard', protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
-
-    if (!user || !user.isCreator) {
-      return res.status(403).json({ error: 'Not a creator' });
-    }
-
-    // Get tips
-    const tips = await Tip.find({ 
-      creator: req.user._id,
-      txStatus: 'confirmed'
-    })
-      .populate('sender', 'username avatar')
-      .sort({ createdAt: -1 })
-      .limit(20);
-
-    // Calculate earnings
-    const totalEarnings = tips.reduce((sum, tip) => {
-      return sum + parseFloat(tip.creatorAmount || 0);
-    }, 0);
-
-    res.json({
-      success: true,
-      creator: {
-        username: user.username,
-        avatar: user.avatar,
-        bio: user.bio,
-        isCreator: user.isCreator,
-        followersCount: user.followersCount
-      },
-      earnings: {
-        total: totalEarnings.toFixed(2),
-        tips: tips.length,
-        average: tips.length > 0 ? (totalEarnings / tips.length).toFixed(2) : '0.00',
-        embeddedWallet: user.embeddedWalletAddress
-      },
-      recentTips: tips.map(tip => ({
-        from: tip.sender.username,
-        amount: tip.amount,
-        creatorAmount: tip.creatorAmount,
-        date: tip.createdAt
-      }))
-    });
-  } catch (error) {
-    console.error('Dashboard error:', error);
-    res.status(500).json({ error: 'Failed to fetch dashboard' });
-  }
+    const user = req.user;
+    if (!user.isCreator) return res.status(403).json({ error: 'Not a creator' });
+    const summary = await loadEarnings(user._id);
+    res.json({ success: true, creator: { username: user.username, avatar: user.avatar, bio: user.bio, isCreator: true, followersCount: user.followersCount },
+      earnings: { total: summary.stats.totalEarnings, tips: summary.stats.totalTips, average: summary.stats.avgTip, embeddedWallet: user.embeddedWalletAddress }, recentTips: summary.recentTips.slice(0, 20) });
+  } catch { res.status(500).json({ error: 'Failed to fetch dashboard' }); }
 });
 
 // @route   POST /api/creator/verify-admin
 // @desc    Admin: Set isCreatorVerified for a user (document identity check)
 // @access  Private (admin only)
 router.post('/verify-admin', protect, requireAdmin, logAdminAction('creator_verification_override'), async (req, res) => {
-  try {
-    const { userId } = req.body;
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID required' });
-    }
+  return res.status(503).json({ error: 'A legitimate identity verification provider is required. Manual overrides are disabled.' });
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Set creator verified
-    user.isCreatorVerified = true;
-    user.creatorVerifiedAt = new Date();
-
-    // If pending, auto-approve
-    const becameCreator = user.creatorStatus === 'pending';
-    if (becameCreator) {
-      user.creatorStatus = 'approved';
-      user.isCreator = true;
-      user.creatorApprovedDate = new Date();
-    }
-
-    if (becameCreator) {
-      await withProgressionOutbox(async ({ session, enqueue }) => {
-        await user.save({ session });
-        await enqueue({ principal: 'user', eventType: 'achievement.reached', activityClass: 'ACHIEVE', actorId: user._id, beneficiaryId: user._id,
-          occurredAt: user.creatorApprovedDate, subject: { type: 'user', id: String(user._id) }, object: { type: 'creator_status', id: String(user._id) },
-          source: { objectType: 'creator_status', objectId: user._id, transition: 'approved', version: '1' } });
-      });
-    } else await user.save();
-    await req.logAdminAction({ targetType: 'user', targetId: user._id, creatorStatus: user.creatorStatus });
-
-    res.json({
-      success: true,
-      message: `${user.username} is now creator verified`,
-      user: {
-        id: user._id,
-        username: user.username,
-        isCreatorVerified: user.isCreatorVerified,
-        creatorStatus: user.creatorStatus,
-        isCreator: user.isCreator
-      }
-    });
-  } catch (error) {
-    console.error('Admin verify error:', error);
-    res.status(500).json({ error: 'Failed to verify creator' });
-  }
 });
 
+
+// Owner-only content and real counts, built on existing posts and account records.
+router.get('/studio', protect, async (req, res) => {
+  try {
+    const user = req.user;
+    if (tipService.executionRequested) { try { await tipService.verifyConfiguration(); } catch {} }
+    const posts = user.isCreator ? await Post.find({ author: user._id }).select('title content type status visibility isNSFW moderationState createdAt stats likesCount commentsCount').sort({ createdAt: -1 }).limit(100).lean() : [];
+    const counts = user.isCreator ? await Post.aggregate([{ $match: { author: user._id } }, { $group: { _id: '$status', count: { $sum: 1 } } }]) : [];
+    res.json({ success: true, isCreator: user.isCreator, audience: { followers: user.followersCount || 0, following: user.followingCount || 0 }, contentCounts: counts, posts: posts.map(post => post.isNSFW || post.moderationState === 'removed' ? { ...post, content: '', title: post.isNSFW ? 'Restricted content unavailable' : 'Removed by moderation' } : post), monetization: { ...tipService.getStatus(), realPaymentsEnabled: false, membershipsAvailable: false, verificationAvailable: false, wallet: user.externalWalletAddress || user.embeddedWalletAddress || user.walletAddress || null } });
+  } catch { res.status(500).json({ error: 'Unable to load Creator Studio' }); }
+});
+
+router.get('/discover', optionalAuth, async (req, res) => {
+  try {
+    const candidates = await User.find({ isCreator: true, isActive: true, isQaAccount: { $ne: true }, $or: [{ profilePrivacy: 'public' }, { profilePrivacy: { $exists: false }, isPrivate: { $ne: true } }] }).select('username displayName avatar bio faction isCreator profilePrivacy isPrivate isActive').sort({ createdAt: -1 }).limit(50);
+    const creators = [];
+    const { canViewProfile, publicUserProjection } = require('../services/accessPolicy');
+    for (const user of candidates) if ((await canViewProfile(req.user, user)).allowed) creators.push(publicUserProjection(user));
+    res.json({ success: true, creators });
+  } catch { res.status(500).json({ error: 'Creator discovery unavailable' }); }
+});
 module.exports = router;

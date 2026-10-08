@@ -1,10 +1,12 @@
 const express = require('express');
 const crypto = require('crypto');
 const { ethers } = require('ethers');
-const { protect, requireAgeVerified } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const Tip = require('../models/Tip');
 const tipService = require('../services/tip');
+const { canViewProfile, canViewPost } = require('../services/accessPolicy');
+const Post = require('../models/Post');
 const { withProgressionOutbox } = require('../progression/runtime/outbox');
 
 const router = express.Router();
@@ -18,19 +20,30 @@ const requireWebhookSecret = (req, res, next) => {
   next();
 };
 const walletFor = user => user.externalWalletAddress || user.embeddedWalletAddress || user.walletAddress;
-const publicTip = tip => ({ id: tip._id, amount: tip.amount, status: tip.txStatus, txHash: tip.txHash, chainId: tip.chainId, createdAt: tip.createdAt });
+const publicTip = tip => ({ failureReason: tip.failureReason || null, id: tip._id, amount: tip.amount, status: tip.txStatus, txHash: tip.txHash, chainId: tip.chainId, createdAt: tip.createdAt });
 
 async function confirmTip(tip, txHash) {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(txHash || '')) throw new Error('Malformed transaction hash');
   if (tip.txHash && tip.txHash.toLowerCase() !== txHash.toLowerCase()) throw new Error('Intent is already bound to a different transaction');
-  const result = await tipService.verifyTipTransaction(tip.toObject ? tip.toObject() : tip, txHash);
+  if (tip.txStatus === 'confirmed') return { result: { pending: false }, tip };
+  if (tip.txStatus === 'failed') throw new Error(tip.failureReason || 'Transaction failed');
+  let result;
+  try { result = await tipService.verifyTipTransaction({ sender: tip.senderWallet, creator: tip.creatorWallet, router: tip.routerAddress, amountUnits: tip.amountUnits }, txHash); }
+  catch (error) {
+    if (error.code === 'TIP_REVERTED') { tip.txHash = txHash.toLowerCase(); tip.txStatus = 'failed'; tip.failureReason = 'Transaction reverted on Base Sepolia'; tip.failedAt = new Date(); await tip.save(); }
+    throw error;
+  }
   const normalizedHash = txHash.toLowerCase();
   if (result.pending) {
-    tip.txHash = normalizedHash; tip.txStatus = 'pending'; tip.confirmationCount = result.confirmations || 0;
-    await tip.save();
+    const updated = await Tip.findOneAndUpdate({ _id: tip._id, txStatus: 'pending', $or: [{ txHash: { $exists: false } }, { txHash: normalizedHash }] }, { txHash: normalizedHash, confirmationCount: result.confirmations || 0 }, { new: true });
+    if (!updated) { const current = await Tip.findById(tip._id); if (current?.txStatus === 'confirmed' && current.txHash === normalizedHash) return { result: { pending: false }, tip: current }; throw new Error('Intent is already bound to another transaction'); }
+    tip = updated;
   } else {
     tip = await withProgressionOutbox(async ({ session, enqueue }) => {
       const current = await Tip.findById(tip._id).session(session);
+      if (current.txHash && current.txHash !== normalizedHash) throw new Error('Intent is already bound to another transaction');
       if (current.txStatus === 'confirmed') return current;
+      if (current.txStatus === 'failed') throw new Error('Transaction failed');
       current.txHash = normalizedHash; current.txStatus = 'confirmed'; current.blockNumber = result.blockNumber;
       current.confirmationCount = result.confirmations; current.confirmedAt = new Date(); current.failureReason = undefined;
       await current.save({ session });
@@ -51,16 +64,25 @@ async function confirmTip(tip, txHash) {
   return { result, tip };
 }
 
-router.post('/intents', protect, requireAgeVerified, async (req, res) => {
+router.post('/intents', protect, async (req, res) => {
   try {
     await tipService.assertExecutionEnabled();
     const key = req.get('idempotency-key');
     if (!key || !/^[A-Za-z0-9_-]{16,128}$/.test(key)) return res.status(400).json({ error: 'A valid Idempotency-Key header is required' });
     const existing = await Tip.findOne({ sender: req.user._id, idempotencyKey: key });
-    if (existing) return res.json({ success: true, reused: true, intent: existing, allowance: (await tipService.getAllowance(existing.senderWallet)).toString() });
+    if (existing) {
+      if (existing.expiresAt < new Date() || existing.txStatus !== 'pending' || existing.txHash) return res.status(409).json({ error: 'Intent already submitted or expired; check its receipt' });
+      const allowance = await tipService.getAllowance(existing.senderWallet);
+      return res.json({ success: true, reused: true, intent: existing, allowance: allowance.toString(), approvalRequired: allowance !== BigInt(existing.amountUnits) });
+    }
 
     const [tipper, creator] = await Promise.all([User.findById(req.user._id), User.findById(req.body.creatorId)]);
     if (!tipper || !creator) return res.status(404).json({ error: 'Tipper or creator not found' });
+    if (!creator.isCreator || !(await canViewProfile(tipper, creator)).allowed) return res.status(403).json({ error: 'Creator is unavailable' });
+    if (req.body.postId) {
+      const post = await Post.findById(req.body.postId).populate('author');
+      if (!post || String(post.author?._id) !== String(creator._id) || !(await canViewPost(tipper, post)).allowed) return res.status(403).json({ error: 'Content is unavailable' });
+    }
     const sender = walletFor(tipper); const recipient = walletFor(creator);
     const intent = tipService.createIntent({ sender, creator: recipient, amount: req.body.amount });
     const creatorUnits = (BigInt(intent.amountUnits) * 8000n) / 10000n;
@@ -80,7 +102,12 @@ router.post('/intents', protect, requireAgeVerified, async (req, res) => {
   }
 });
 
-router.post('/intents/:id/confirm', protect, requireAgeVerified, async (req, res) => {
+router.get('/intents/:id', protect, async (req, res) => {
+  try { const tip = await Tip.findOne({ _id: req.params.id, sender: req.user._id }); if (!tip) return res.status(404).json({ error: 'Receipt not found' }); return res.json({ success: true, tip: publicTip(tip) }); }
+  catch { return res.status(400).json({ error: 'Invalid receipt' }); }
+});
+
+router.post('/intents/:id/confirm', protect, async (req, res) => {
   try {
     const tip = await Tip.findOne({ _id: req.params.id, sender: req.user._id });
     if (!tip) return res.status(404).json({ error: 'Tip intent not found' });
@@ -89,8 +116,8 @@ router.post('/intents/:id/confirm', protect, requireAgeVerified, async (req, res
       return res.json({ success: true, duplicate: true, tip: publicTip(tip) });
     }
     if (tip.expiresAt < new Date() && !tip.txHash) return res.status(410).json({ error: 'Tip intent expired' });
-    const { result } = await confirmTip(tip, req.body.txHash);
-    return res.status(result.pending ? 202 : 200).json({ success: !result.pending, pending: result.pending, tip: publicTip(tip) });
+    const { result, tip: receipt } = await confirmTip(tip, req.body.txHash);
+    return res.status(result.pending ? 202 : 200).json({ success: !result.pending, pending: result.pending, tip: publicTip(receipt) });
   } catch (error) {
     if (error.code === 11000) return res.status(409).json({ error: 'Transaction was already used for another payment' });
     return res.status(error.name === 'PaymentConfigurationError' ? 503 : 400).json({ error: error.message || 'Unable to verify transaction' });
@@ -101,21 +128,21 @@ router.post('/webhook/confirm', requireWebhookSecret, async (req, res) => {
   try {
     const tip = await Tip.findById(req.body.tipId);
     if (!tip) return res.status(404).json({ error: 'Tip not found' });
-    const { result } = await confirmTip(tip, req.body.txHash);
-    return res.status(result.pending ? 202 : 200).json({ success: !result.pending, pending: result.pending, tip: publicTip(tip) });
+    const { result, tip: receipt } = await confirmTip(tip, req.body.txHash);
+    return res.status(result.pending ? 202 : 200).json({ success: !result.pending, pending: result.pending, tip: publicTip(receipt) });
   } catch (error) { return res.status(400).json({ error: error.message || 'Unable to verify transaction' }); }
 });
 
-router.get('/creator/:creatorId', async (req, res) => {
+router.get('/creator/:creatorId', protect, async (req, res) => {
   try {
-    const tips = await Tip.find({ creator: req.params.creatorId, txStatus: 'confirmed' }).populate('sender', 'username avatar').sort({ createdAt: -1 });
-    const totalUnits = tips.reduce((sum, tip) => sum + BigInt(tip.amountUnits || '0'), 0n);
-    return res.json({ success: true, creatorId: req.params.creatorId, totalEarnings: ethers.formatUnits(totalUnits, 6), totalTips: tips.length, tips });
+    if (String(req.user._id) !== req.params.creatorId) return res.status(403).json({ error: 'Private creator receipts' });
+    const tips = await Tip.find({ creator: req.params.creatorId, txStatus: 'confirmed' }).sort({ createdAt: -1 }).limit(100);
+    return res.json({ success: true, tips: tips.map(publicTip) });
   } catch { return res.status(500).json({ error: 'Failed to fetch tips' }); }
 });
 
 router.get('/user', protect, async (req, res) => {
-  try { const tips = await Tip.find({ sender: req.user._id }).populate('creator', 'username avatar').sort({ createdAt: -1 }); return res.json({ success: true, tips }); }
+  try { const tips = await Tip.find({ sender: req.user._id }).sort({ createdAt: -1 }).limit(100); return res.json({ success: true, tips: tips.map(publicTip) }); }
   catch { return res.status(500).json({ error: 'Failed to fetch tips' }); }
 });
 

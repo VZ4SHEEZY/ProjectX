@@ -1,4 +1,5 @@
 
+import ReportContent from './ReportContent';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Video } from '../types';
 import { Play, AlertTriangle, ShieldCheck, Cpu, ArrowBigUp, MessageSquare, Share2, Lock, Unlock, EyeOff, Heart, Check, Volume2, VolumeX, Bookmark } from 'lucide-react';
@@ -236,6 +237,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     >
       
       {/* Share Toast Notification */}
+      <div className="absolute top-16 right-4 z-40"><ReportContent postId={video.id}/></div>
       <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[60] bg-[#39FF14] text-black px-4 py-2 rounded-full font-bold font-mono text-xs shadow-[0_0_20px_#39FF14] transition-all duration-300 pointer-events-none flex items-center gap-2 ${showShareToast ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
           <Check size={14} /> LINK COPIED
       </div>

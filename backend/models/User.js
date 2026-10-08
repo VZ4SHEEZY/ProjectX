@@ -231,13 +231,9 @@ userSchema.methods.toPublicProfile = function(options = {}) {
   // Verification assertions are account-private and only returned by authenticated
   // self endpoints. Public callers must never receive verification state or dates.
   if (options.includePrivateVerification === true) {
-    profile.verification = {
-      age: { verified: this.isAgeVerified === true, verifiedAt: this.ageVerifiedAt || null },
-      creatorIdentity: { verified: this.isCreatorVerified === true, verifiedAt: this.creatorVerifiedAt || null }
-    };
-    // Temporary self-response aliases retained for the existing frontend.
-    profile.isAgeVerified = this.isAgeVerified === true;
-    profile.isCreatorVerified = this.isCreatorVerified === true;
+    profile.verification = require('../services/accessPolicy').privateVerificationProjection(this);
+    profile.isAgeVerified = profile.verification.age.verified;
+    profile.isCreatorVerified = profile.verification.creatorIdentity.verified;
     // Platform authority is account-private. Public profile APIs never expose it.
     profile.isAdmin = this.isAdmin === true;
   }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ModerationQueue from './ModerationQueue';
 import { User } from '../types';
 import { BarChart3, Bell } from 'lucide-react';
 import { adminAPI, AdminStats } from '../services/api';
@@ -8,7 +9,7 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'stats' | 'announcements'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'announcements' | 'moderation'>('stats');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -26,6 +27,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
   }, [user.isAdmin]);
 
   // Fail-closed: if isAdmin is not explicitly true, deny access
+  if (user.isModerator === true && user.isAdmin !== true) return <div className="h-full overflow-y-auto p-4 md:p-8"><ModerationQueue /></div>;
   if (user.isAdmin !== true) {
     return (
       <div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -69,8 +71,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
           </button>
         </div>
 
+        <button className="text-[#39FF14] border border-gray-800 p-3 mb-4" onClick={() => setActiveTab('moderation')}>MODERATION</button>
         {/* Content */}
-        {loading ? (
+        {activeTab === 'moderation' ? <ModerationQueue /> : loading ? (
           <div className="text-center text-gray-400">Loading...</div>
         ) : error ? (
           <div className="border border-red-500/50 bg-red-950/40 p-4 text-red-300">{error}</div>

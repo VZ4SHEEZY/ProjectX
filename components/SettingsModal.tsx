@@ -36,12 +36,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentU
   };
 
   const handleIdentityCheck = () => {
-      setIsVerifying(true);
-      // Simulate ID Scan Process
-      setTimeout(() => {
-          onVerify(true);
-          setIsVerifying(false);
-      }, 3000);
+      // No provider is configured; never simulate identity verification.
+      setIsVerifying(false);
   };
 
   const ToggleItem = ({ label, value, onChange, icon: Icon }: any) => (
@@ -103,10 +99,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentU
                      </p>
                      <GlitchButton 
                         onClick={handleIdentityCheck} 
-                        disabled={isVerifying}
+                        disabled={true}
                         className="h-10 text-xs"
                      >
-                        {isVerifying ? 'SCANNING DATABASE...' : 'VERIFY AGE (ID SCAN)'}
+                        {isVerifying ? 'SCANNING DATABASE...' : 'VERIFICATION UNAVAILABLE'}
                      </GlitchButton>
                    </>
                ) : (
@@ -119,10 +115,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentU
             <div className="bg-gray-900/30 p-4 border border-gray-800 rounded-sm">
                <div className="flex justify-between items-center mb-2">
                   <span className="text-xs text-gray-400 font-mono">WALLET</span>
-                  <span className="text-xs text-[#39FF14] font-bold bg-[#39FF14]/10 px-2 py-0.5 rounded">CONNECTED</span>
+                  <span className="text-xs text-[#39FF14] font-bold bg-[#39FF14]/10 px-2 py-0.5 rounded">UNAVAILABLE</span>
                </div>
                <div className="text-[10px] text-gray-600 font-mono break-all">
-                  0x71C7656EC7ab88b098defB751B7401B5f6d8976F
+                  Connect a verified wallet through the navigation bar.
                </div>
             </div>
           </div>

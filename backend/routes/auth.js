@@ -156,7 +156,7 @@ router.post('/register', [
     res.status(201).json({
       success: true,
       token,
-      user: user.toPublicProfile({ includePrivateVerification: true })
+      user: { ...user.toPublicProfile({ includePrivateVerification: true }), isAdmin: await require('../services/platformAuthorization').hasPlatformRole(user, 'admin'), isModerator: await require('../services/platformAuthorization').hasPlatformRole(user, 'moderator') }
     });
   } catch (error) {
     console.error('Register error:', error);
@@ -217,7 +217,7 @@ router.post('/login', [
     res.json({
       success: true,
       token,
-      user: user.toPublicProfile({ includePrivateVerification: true })
+      user: { ...user.toPublicProfile({ includePrivateVerification: true }), isAdmin: await require('../services/platformAuthorization').hasPlatformRole(user, 'admin'), isModerator: await require('../services/platformAuthorization').hasPlatformRole(user, 'moderator') }
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -244,7 +244,7 @@ router.get('/me', protect, async (req, res) => {
   try {
     res.json({
       success: true,
-      user: req.user.toPublicProfile({ includePrivateVerification: true })
+      user: { ...req.user.toPublicProfile({ includePrivateVerification: true }), isAdmin: await require('../services/platformAuthorization').hasPlatformRole(req.user, 'admin'), isModerator: await require('../services/platformAuthorization').hasPlatformRole(req.user, 'moderator') }
     });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });

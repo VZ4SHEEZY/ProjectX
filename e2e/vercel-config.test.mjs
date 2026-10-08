@@ -65,3 +65,11 @@ test('both Vercel project-root configurations use the environment-derived CSP', 
   assert.equal(root.buildCommand, 'npm run build');
   assert.equal(app.buildCommand, 'cd .. && npm run build -- --outDir app/dist');
 });
+
+test('the release branch cannot auto-deploy to shared Git-linked projects', () => {
+  for (const appRoot of [true, false]) {
+    const config = createVercelConfig({ appRoot });
+    assert.equal(config.git.deploymentEnabled['feature/cyberdope-current'], false);
+    assert.equal(config.git.deploymentEnabled.master, undefined);
+  }
+});

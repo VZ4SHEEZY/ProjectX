@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 const localChrome = process.platform === 'darwin'
   ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
   : undefined;
+const frontendURL = `http://127.0.0.1:${process.env.E2E_FRONTEND_PORT || '4173'}`;
 
 export default defineConfig({
   testDir: './e2e',
@@ -12,7 +13,7 @@ export default defineConfig({
   workers: 1,
   reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : 'line',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: frontendURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',
@@ -20,7 +21,7 @@ export default defineConfig({
   },
   webServer: {
     command: 'node e2e/support/isolated-environment.mjs',
-    url: 'http://127.0.0.1:4173',
+    url: frontendURL,
     timeout: 180_000,
     reuseExistingServer: false,
     stdout: 'pipe',

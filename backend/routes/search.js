@@ -4,7 +4,7 @@ const User = require('../models/User');
 const Post = require('../models/Post');
 const { optionalAuth } = require('../middleware/auth');
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const { canViewPost, publicUserProjection } = require('../services/accessPolicy');
+const { canViewPost, publicUserProjection, publicPostProjection, hasVerifiedAge } = require('../services/accessPolicy');
 
 // @route   GET /api/search
 // @desc    Search users and posts
@@ -70,7 +70,7 @@ router.get('/', optionalAuth, async (req, res) => {
       }
 
       // NSFW filtering
-      if (!req.user || !req.user.isAgeVerified) {
+      if (!req.user || !hasVerifiedAge(req.user)) {
         postQuery.isNSFW = false;
       }
 
@@ -81,7 +81,7 @@ router.get('/', optionalAuth, async (req, res) => {
         .skip((page - 1) * limit);
 
       for (const post of posts) if ((await canViewPost(req.user, post, post.author)).allowed) {
-        const value = post.toObject(); value.author = publicUserProjection(value.author); results.posts.push(value);
+        results.posts.push(publicPostProjection(post));
       }
     }
 

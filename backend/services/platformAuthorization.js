@@ -18,10 +18,11 @@ async function hasPlatformRole(user, minimumRole = 'admin') {
   return false;
 }
 
-async function auditPlatformAction(user, action, details = {}) {
+async function auditPlatformAction(user, action, details = {}, { session } = {}) {
   const roles = await rolesFor(user);
   const actorRole = roles.includes('platform_owner') ? 'platform_owner' : roles.includes('admin') ? 'admin' : roles.includes('moderator') ? 'moderator' : 'admin';
-  return AuditLog.create({ admin: user._id, actorRole, action, targetType: details.targetType || null, targetId: details.targetId || null, details });
+  const record = { admin: user._id, actorRole, action, targetType: details.targetType || null, targetId: details.targetId || null, details };
+  return session ? (await AuditLog.create([record], { session }))[0] : AuditLog.create(record);
 }
 
 module.exports = { LEVEL, rolesFor, hasPlatformRole, auditPlatformAction };

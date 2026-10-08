@@ -33,9 +33,9 @@ test('wrong chain and failed RPC prevent execution', async () => {
 });
 
 test('reverted payment is never confirmed', async () => {
-  const service = new TipService(validEnv, { getTransactionReceipt: async () => ({ status: 0 }) });
+  const service = new TipService(validEnv, { getTransactionReceipt: async () => ({ status: 0, from: validEnv.TIP_ROUTER_TREASURY_ADDRESS, to: validEnv.TIP_ROUTER_CONTRACT_ADDRESS }) });
   service.assertExecutionEnabled = async () => {};
-  await assert.rejects(service.verifyTipTransaction({}, `0x${'a'.repeat(64)}`), /reverted/);
+  await assert.rejects(service.verifyTipTransaction({ sender: validEnv.TIP_ROUTER_TREASURY_ADDRESS, router: validEnv.TIP_ROUTER_CONTRACT_ADDRESS }, `0x${'a'.repeat(64)}`), /reverted/);
 });
 
 test('intent rejects wrong sender, self-payment, and treasury recipient', () => {

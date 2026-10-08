@@ -57,6 +57,8 @@ export function createVercelConfig({ appRoot = false, env = process.env } = {}) 
     buildCommand: appRoot ? 'cd .. && npm run build -- --outDir app/dist' : 'npm run build',
     outputDirectory: 'dist',
     framework: 'vite',
+    // This release branch is deployed manually to the isolated staging project.
+    git: { deploymentEnabled: { 'feature/cyberdope-current': false } },
     headers: [{ source: '/(.*)', headers: [
       { key: 'Content-Security-Policy', value: csp },
       { key: 'X-Content-Type-Options', value: 'nosniff' },

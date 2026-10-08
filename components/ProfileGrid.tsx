@@ -75,12 +75,10 @@ const SparkleTrail: React.FC = () => {
 };
 
 const VisitorCounter: React.FC = () => {
-  const [count, setCount] = useState(1337);
-  useEffect(() => { setCount(Math.floor(Math.random() * 5000) + 1000); }, []);
   return (
     <div className="flex items-center gap-2 text-[10px] font-mono text-[#39FF14]">
       <EyeIcon size={12} />
-      <span>VISITORS: {count.toLocaleString()}</span>
+      <span>PROFILE VIEWS UNAVAILABLE</span>
     </div>
   );
 };

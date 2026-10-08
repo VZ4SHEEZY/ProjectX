@@ -22,10 +22,10 @@ router.get('/status', protect, async (req, res) => {
       success: true,
       verification: {
         available: false,
-        isAgeVerified: user.isAgeVerified,
-        ageVerifiedAt: user.ageVerifiedAt,
-        isCreatorVerified: user.isCreatorVerified,
-        creatorVerifiedAt: user.creatorVerifiedAt
+        isAgeVerified: false,
+        ageVerifiedAt: null,
+        isCreatorVerified: false,
+        creatorVerifiedAt: null
       }
     });
   } catch {

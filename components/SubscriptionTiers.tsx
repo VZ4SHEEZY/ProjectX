@@ -179,7 +179,7 @@ const SubscriptionTiers: React.FC<SubscriptionTiersProps> = ({ isOpen, onClose, 
           <div className="flex items-center gap-3">
             <Crown className="text-[#39FF14]" size={24} />
             <div>
-              <h2 className="text-[#39FF14] font-bold text-xl tracking-wider">SUBSCRIPTION TIERS</h2>
+              <h2 className="text-[#39FF14] font-bold text-xl tracking-wider">MEMBERSHIP DRAFTS</h2>
               <p className="text-[#39FF14]/70 text-[10px] font-mono">SET UP YOUR MONETIZATION</p>
             </div>
           </div>
@@ -204,7 +204,7 @@ const SubscriptionTiers: React.FC<SubscriptionTiersProps> = ({ isOpen, onClose, 
               <div>
                 <h3 className="text-[#39FF14] font-bold text-sm mb-1">Tier catalog</h3>
                 <p className="text-gray-400 text-xs leading-relaxed">
-                  These controls publish tier names, prices, and benefits to your profile. Subscription checkout and recurring billing are not currently available.
+                  These controls save planned tier names, prices, and benefits to your profile. They grant no paid access. Subscription checkout and recurring billing are not currently available.
                 </p>
               </div>
             </div>

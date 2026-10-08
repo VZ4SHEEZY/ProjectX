@@ -13,11 +13,12 @@ interface UserProfilePageProps {
   currentUser?: User;
   onBack: () => void;
   onFollowChange?: (userId: string, isFollowing: boolean) => void;
+  onTip?: (creatorId: string) => void;
   onMessage?: (userId: string) => void;
   onRequireAuth?: () => void;
 }
 
-const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, currentUser, onBack, onMessage, onRequireAuth }) => {
+const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, currentUser, onBack, onMessage, onRequireAuth, onTip }) => {
   const [user, setUser] = useState<any>(null);
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -185,6 +186,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ userId, username, cur
                   <MessageSquare size={16} />
                   MESSAGE
                 </button>
+                {user.isCreator && <button onClick={() => currentUser ? onTip?.(user._id) : onRequireAuth?.()} className="p-3 border border-amber-500 text-amber-300 rounded">Tip on Base Sepolia</button>}
                 {currentUser && <button aria-label="Mute user" onClick={() => socialAPI.mute(user._id)} className="p-2 border border-gray-700 text-gray-400 rounded"><VolumeX size={16} /></button>}
                 <button aria-label="Block user" onClick={handleBlock} className="p-2 border border-red-800 text-red-400 rounded"><Ban size={16} /></button>
               </div>

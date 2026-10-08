@@ -73,6 +73,7 @@ exports.optionalAuth = async (req, res, next) => {
         }
         const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
         req.user = await User.findById(decoded.userId);
+        if (req.user?.isActive === false) req.user = null;
       } catch (err) {
         // Invalid token, continue without user
         req.user = null;
@@ -87,7 +88,7 @@ exports.optionalAuth = async (req, res, next) => {
 
 // Check if user is age verified for NSFW content
 exports.requireAgeVerified = async (req, res, next) => {
-  if (!req.user.isAgeVerified) {
+  if (!require('../services/accessPolicy').hasVerifiedAge(req.user)) {
     return res.status(403).json({
       success: false,
       message: 'Age verification required to access this content',

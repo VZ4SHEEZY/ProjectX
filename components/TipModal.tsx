@@ -62,6 +62,10 @@ const getErrorMessage = (error: unknown): string => {
   return raw || 'Unable to send tip. Please try again.';
 };
 
+const receiptStorageKey = (creatorId: string) => {
+  try { const account = JSON.parse(localStorage.getItem('cdUser') || '{}'); return `cdTestTip:${account.id || account._id || 'anonymous'}:${creatorId}`; } catch { return `cdTestTip:anonymous:${creatorId}`; }
+};
+
 const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
   const [amount, setAmount] = useState('1.00');
   const [status, setStatus] = useState<TransactionStatus>('idle');
@@ -74,6 +78,8 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
 
   useEffect(() => {
     if (isOpen) {
+      const saved = sessionStorage.getItem(receiptStorageKey(creatorId));
+      if (saved) { try { const recovery = JSON.parse(saved); if (recovery.intent?.chainId === 84532 && /^0x[0-9a-fA-F]{64}$/.test(recovery.txHash)) { setIntent(recovery.intent); setTxHash(recovery.txHash); setStatus('pending'); return; } } catch {} }
       setAmount('1.00');
       setStatus('idle');
       setErrorMessage('');
@@ -83,11 +89,12 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
       setIntent(null);
       setPhase('preparing');
     }
-  }, [isOpen]);
+  }, [isOpen, creatorId]);
 
   if (!isOpen) return null;
 
   const getWallet = async (payment: PaymentIntent) => {
+    if (payment.chainId !== 84532) throw new Error('Only Base Sepolia testnet is supported.');
     if (!window.ethereum) throw new Error('A browser wallet is required.');
     const provider = new BrowserProvider(window.ethereum);
     const network = await provider.getNetwork();
@@ -103,7 +110,9 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
         }] });
       }
     }
-    const signer = await provider.getSigner();
+    const activeProvider = new BrowserProvider(window.ethereum);
+    if ((await activeProvider.getNetwork()).chainId !== 84532n) throw new Error('Wallet must be on Base Sepolia.');
+    const signer = await activeProvider.getSigner();
     const address = await signer.getAddress();
     if (address.toLowerCase() !== payment.senderWallet.toLowerCase()) throw new Error('Connected wallet does not match your verified CyberDope wallet.');
     return signer;
@@ -165,13 +174,14 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
   };
 
   const executeTip = async () => {
-    if (!intent) return;
+    if (!intent || txHash) return;
     if (!window.confirm(`Send exactly ${intent.amount} USDC to the selected creator through CyberDope TipRouter on Base Sepolia?`)) return;
     setStatus('sending'); setPhase('wallet'); setErrorMessage('');
     try {
       const signer = await getWallet(intent);
       const tx = await new Contract(intent.routerAddress, ROUTER_ABI, signer).sendTip(intent.creatorWallet, BigInt(intent.amountUnits));
       setTxHash(tx.hash);
+      try { sessionStorage.setItem(receiptStorageKey(creatorId), JSON.stringify({ intent, txHash: tx.hash })); } catch {};
       setPhase('confirming');
       await tx.wait(1);
       await confirmTip(tx.hash);
@@ -190,12 +200,16 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
       const data = response.data as TipResponse & { duplicate?: boolean };
       setSuccessMessage(data.duplicate ? 'This tip was already verified; no duplicate payment was recorded.' : 'Tip verified on Base Sepolia.');
       setStatus('success');
-    } catch (error) { setStatus('error'); setErrorMessage(getErrorMessage(error)); }
+      sessionStorage.removeItem(receiptStorageKey(creatorId));
+    } catch (error) {
+      setStatus('error'); setErrorMessage(getErrorMessage(error));
+      try { const receipt = (await api.get(`/tips/intents/${intent._id}`)).data.tip; if (receipt?.status === 'failed') { sessionStorage.removeItem(receiptStorageKey(creatorId)); setTxHash(''); setIntent(null); } } catch {}
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (intent) await executeTip(); else await prepareTip();
+    if (txHash) await confirmTip(); else if (intent) await executeTip(); else await prepareTip();
   };
 
   const busy = status === 'sending';
@@ -214,13 +228,14 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
             <button onClick={onClose} disabled={busy} className="text-gray-500 hover:text-white disabled:opacity-40" aria-label="Close tip modal"><X size={24} /></button>
           </div>
 
+          <p className="mb-3 text-xs text-amber-300">Testnet only. Test tokens have no monetary value.</p>
           {status === 'success' ? (
             <div className="flex flex-col items-center justify-center gap-6 py-10">
               <CheckCircle className="h-16 w-16 text-[#39FF14] drop-shadow-[0_0_15px_rgba(57,255,20,0.5)]" />
               <div className="text-center font-mono">
                 <h3 className="text-xl font-bold tracking-widest text-white">TIP CONFIRMED</h3>
                 <p className="mt-2 text-xs text-gray-400">{successMessage}</p>
-                {txHash && <p className="mt-3 break-all text-[10px] text-[#39FF14]">TX: {txHash}</p>}
+                {txHash && <a className="mt-3 block break-all text-xs text-[#39FF14]" href={`https://sepolia.basescan.org/tx/${txHash}`} target="_blank" rel="noreferrer">View testnet receipt: {txHash}</a>}
               </div>
               <GlitchButton onClick={onClose}>DONE</GlitchButton>
             </div>
@@ -241,7 +256,7 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
                 <h3 className="text-xl font-bold tracking-widest">TIP FAILED</h3>
                 <p className="mt-2 text-xs text-white">{errorMessage}</p>
               </div>
-              {needApproval && intent ? (
+              {txHash ? <><p className="text-xs text-yellow-300">A transaction was submitted. Check its receipt before any new payment.</p><GlitchButton onClick={() => confirmTip()}>CHECK EXISTING TRANSACTION</GlitchButton><a href={`https://sepolia.basescan.org/tx/${txHash}`} target="_blank" rel="noreferrer">View testnet receipt</a></> : needApproval && intent ? (
                 <GlitchButton onClick={approveExactAmount}>APPROVE EXACT TIP AMOUNT</GlitchButton>
               ) : (
                 <GlitchButton variant="danger" onClick={() => { setStatus('idle'); setErrorMessage(''); }}>TRY AGAIN</GlitchButton>
@@ -265,9 +280,9 @@ const TipModal: React.FC<TipModalProps> = ({ isOpen, onClose, creatorId }) => {
               </div>
               <div className="rounded border border-gray-800 bg-black/40 py-4 text-center">
                 <label htmlFor="tip-amount" className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-gray-500">Amount (USDC)</label>
-                <input id="tip-amount" type="number" min="0.01" step="0.01" inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)} className="w-full border-none bg-transparent py-2 text-center font-mono text-5xl text-[#39FF14] outline-none placeholder:text-gray-800" placeholder="1.00" />
+                <input id="tip-amount" type="number" min="0.01" step="0.01" inputMode="decimal" required disabled={Boolean(intent)} value={amount} onChange={(event) => setAmount(event.target.value)} className="w-full border-none bg-transparent py-2 text-center font-mono text-5xl text-[#39FF14] outline-none placeholder:text-gray-800" placeholder="1.00" />
               </div>
-              {intent && <div className="rounded border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs text-yellow-200">Verified intent: {intent.amount} USDC · Base Sepolia · separate wallet confirmation required.</div>}
+              {intent && <div className="rounded border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs text-yellow-200">Verified intent: {intent.amount} USDC · Base Sepolia · 80% to creator, 20% to platform · test tokens only.</div>}
               {intent && needApproval ? (
                 <GlitchButton type="button" onClick={approveExactAmount} fullWidth className="h-12 text-md">APPROVE EXACT TIP AMOUNT</GlitchButton>
               ) : (

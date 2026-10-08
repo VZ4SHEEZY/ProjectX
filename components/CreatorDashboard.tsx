@@ -36,11 +36,12 @@ const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ isCreator, userToke
   useEffect(() => {
     if (!isCreator) return;
     fetchEarnings();
-  }, [isCreator]);
+  }, [isCreator, userToken]);
 
   const fetchEarnings = async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch(`${API_BASE_URL}/creator/earnings`, {
         headers: {
           'Authorization': `Bearer ${userToken}`
@@ -87,10 +88,10 @@ const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ isCreator, userToke
     <div className="space-y-6">
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Total Earnings */}
+        {/* Confirmed test token receipts */}
         <div className="bg-gradient-to-br from-pink-600/20 to-pink-600/5 border border-pink-600/30 rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-gray-400 text-xs font-mono uppercase tracking-widest">Total Earnings</p>
+            <p className="text-gray-400 text-xs font-mono uppercase tracking-widest">Confirmed test token receipts</p>
             <DollarSign className="text-pink-500" size={16} />
           </div>
           <p className="text-3xl font-bold text-pink-500">${stats?.totalEarnings}</p>
@@ -139,7 +140,7 @@ const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ isCreator, userToke
 
         {recentTips.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-gray-500 text-sm">No tips yet. Share your content to get started!</p>
+            <p className="text-gray-500 text-sm">No confirmed testnet tips yet.</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-800 max-h-96 overflow-y-auto">
@@ -170,6 +171,7 @@ const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ isCreator, userToke
                     <p className="text-xs text-gray-500 mt-1">
                       You get: <span className="text-green-500 font-bold">${tip.creatorAmount}</span>
                     </p>
+                    {tip.txHash && <a className="block text-xs text-blue-400" href={`https://sepolia.basescan.org/tx/${tip.txHash}`} target="_blank" rel="noreferrer">View testnet receipt</a>}
                     <p className="text-xs text-gray-600">
                       Platform: ${tip.platformAmount}
                     </p>
@@ -186,9 +188,9 @@ const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ isCreator, userToke
         <div className="flex items-start gap-3">
           <DollarSign className="text-blue-500 flex-shrink-0 mt-0.5" size={20} />
           <div>
-            <p className="text-blue-400 font-bold text-sm mb-1">💳 Payouts</p>
+            <p className="text-blue-400 font-bold text-sm mb-1">Testnet receipts</p>
             <p className="text-gray-400 text-xs">
-              Earnings are automatically paid to your embedded wallet. Withdraw anytime to your external wallet or bank account.
+              Confirmed tips are sent on Base Sepolia to the wallet in the payment intent. Test tokens have no monetary value. Bank withdrawals and real payments are unavailable.
             </p>
           </div>
         </div>

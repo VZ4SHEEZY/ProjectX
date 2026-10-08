@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 type RuntimeUser = { id: string; role: string; username: string; email: string };
 export type Runtime = { runId: string; password: string; users: RuntimeUser[]; postId: string; apiURL: string; qaSecret: string; certification?: any };
-export const runtime = async (): Promise<Runtime> => JSON.parse(await readFile('.e2e/runtime.json', 'utf8'));
+export const runtime = async (): Promise<Runtime> => JSON.parse(await readFile(process.env.E2E_RUNTIME_FILE || '.e2e/runtime.json', 'utf8'));
 export const userFor = (data: Runtime, role: string) => data.users.find(user => user.role === role)!;
 
 export async function login(page: Page, role = 'primary') {

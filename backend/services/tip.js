@@ -61,7 +61,8 @@ class TipService {
   getProvider() {
     const status = this.validateStaticConfiguration();
     if (!status.valid) throw new PaymentConfigurationError(status.errors.join('; '));
-    if (!this.provider) this.provider = new ethers.JsonRpcProvider(this.rpcUrl, Number(BASE_SEPOLIA_CHAIN_ID), { staticNetwork: true });
+    // Detect the RPC's actual network before trusting it for testnet execution.
+    if (!this.provider) this.provider = new ethers.JsonRpcProvider(this.rpcUrl);
     return this.provider;
   }
   async verifyConfiguration() {
@@ -107,11 +108,11 @@ class TipService {
     const provider = this.getProvider();
     const receipt = await provider.getTransactionReceipt(txHash);
     if (!receipt) return { pending: true };
-    if (receipt.status !== 1) throw new PaymentVerificationError('Tip transaction reverted');
+    if (!sameAddress(receipt.from, intent.sender) || !sameAddress(receipt.to, intent.router)) throw new PaymentVerificationError('Transaction sender or recipient does not match intent');
+    if (receipt.status !== 1) { const error = new PaymentVerificationError('Tip transaction reverted'); error.code = 'TIP_REVERTED'; throw error; }
     const block = await provider.getBlockNumber();
     const count = block - receipt.blockNumber + 1;
     if (count < confirmations) return { pending: true, confirmations: count };
-    if (!sameAddress(receipt.from, intent.sender) || !sameAddress(receipt.to, intent.router)) throw new PaymentVerificationError('Transaction sender or recipient does not match intent');
     const tx = await provider.getTransaction(txHash);
     if (!tx || tx.chainId !== BASE_SEPOLIA_CHAIN_ID) throw new PaymentVerificationError('Transaction is on the wrong chain');
     const decoded = this.tipInterface.parseTransaction({ data: tx.data, value: tx.value });

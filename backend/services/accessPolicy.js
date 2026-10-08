@@ -1,8 +1,11 @@
 const { id, isBlockedEitherWay, isFollowing, areFriends } = require('./relationshipPolicy');
 
+// No legitimate provider adapter is installed. Legacy flags never grant restricted access.
+const hasVerifiedAge = () => false;
+
 const privateVerificationProjection = user => ({
-  age: { verified: user?.isAgeVerified === true, verifiedAt: user?.ageVerifiedAt || null },
-  creatorIdentity: { verified: user?.isCreatorVerified === true, verifiedAt: user?.creatorVerifiedAt || null }
+  age: { verified: hasVerifiedAge(user), verifiedAt: null },
+  creatorIdentity: { verified: false, verifiedAt: null }
 });
 
 async function buildContext(viewer, owner) {
@@ -17,12 +20,13 @@ async function buildContext(viewer, owner) {
     followedByOwner: !blocked && !isOwner && Boolean(viewerId) && await isFollowing(ownerId, viewerId),
     friends: !blocked && !isOwner && Boolean(viewerId) && await areFriends(viewerId, ownerId),
     sameFaction: !blocked && Boolean(viewer?.faction && owner?.faction && viewer.faction === owner.faction),
-    ageVerified: viewer?.isAgeVerified === true
+    ageVerified: hasVerifiedAge(viewer)
   };
 }
 
 async function canViewProfile(viewer, owner) {
   const context = await buildContext(viewer, owner);
+  if (owner?.isActive === false) return { allowed: false, reason: 'content_unavailable', context };
   if (context.blocked) return { allowed: false, reason: 'blocked', context };
   if (context.isOwner) return { allowed: true, context };
   const privacy = owner.profilePrivacy || (owner.isPrivate ? 'private' : 'public');
@@ -34,12 +38,18 @@ async function canViewProfile(viewer, owner) {
 }
 
 async function canViewPost(viewer, post, owner = post.author) {
+  // Interaction routes often receive an unpopulated author ID; load the same
+  // privacy/enforcement fields used by feeds before authorizing the action.
+  if (typeof owner === 'string' || owner?.constructor?.name === 'ObjectId') owner = await require('../models/User').findById(owner).select('profilePrivacy isPrivate isActive faction');
+  if (!owner || !id(owner)) return { allowed: false, reason: 'content_unavailable' };
   const context = await buildContext(viewer, owner);
+  if (owner?.isActive === false) return { allowed: false, reason: 'content_unavailable', context };
   if (context.blocked) return { allowed: false, reason: 'blocked', context };
+  if (post.moderationState === 'removed' || post.status !== undefined && post.status !== 'published' && !context.isOwner) return { allowed: false, reason: 'content_unavailable', context };
+  if (post.isNSFW && !context.ageVerified) return { allowed: false, reason: 'age_verification_required', context };
   if (context.isOwner) return { allowed: true, context };
   const profile = await canViewProfile(viewer, owner);
   if (!profile.allowed) return profile;
-  if (post.isNSFW && !context.ageVerified) return { allowed: false, reason: 'age_verification_required', context };
   const visibility = ['subscribers', 'ppv', 'faction'].includes(post.visibility) ? post.visibility : (post.monetizationType || post.visibility);
   if (!visibility || visibility === 'public' || visibility === 'free') return { allowed: true, context };
   if (visibility === 'faction') {
@@ -65,7 +75,8 @@ function evaluateAccessExpression(context, node) {
     if (current.op === 'or') return current.children.some(evaluate);
     return ({ everyone: true, authenticated: context.authenticated, followers: context.follows, friends: context.friends, same_faction: context.sameFaction, age_verified: context.ageVerified, owner: context.isOwner, subscribers: false, creator_tier: false })[current.type] === true;
   };
-  const allowed = context.isOwner || evaluate(node);
+  const containsAgeGate = current => current.op === 'predicate' ? current.type === 'age_verified' : current.children.some(containsAgeGate);
+  const allowed = (context.isOwner && !containsAgeGate(node)) || evaluate(node);
   return { allowed, reason: allowed ? undefined : 'access_rule_required' };
 }
 
@@ -95,4 +106,13 @@ function publicUserProjection(user, { includePresence = false } = {}) {
   return result;
 }
 
-module.exports = { buildContext, canViewProfile, canViewPost, validateAccessExpression, evaluateAccessExpression, evaluateAccessRules, publicUserProjection, privateVerificationProjection };
+function publicPostProjection(post) {
+  const source = post?.toObject ? post.toObject() : post;
+  const fields = ['_id','type','title','description','content','mediaUrl','thumbnailUrl','duration','monetizationType','price','isNSFW','isSensitive','views','likesCount','commentsCount','sharesCount','tags','isLive','isPinned','status','visibility','stats','faction','createdAt','updatedAt'];
+  const result = Object.fromEntries(fields.filter(key => source[key] !== undefined).map(key => [key, source[key]]));
+  result.author = publicUserProjection(source.author);
+  result.canAccess = true;
+  return result;
+}
+
+module.exports = { publicPostProjection, hasVerifiedAge, buildContext, canViewProfile, canViewPost, validateAccessExpression, evaluateAccessExpression, evaluateAccessRules, publicUserProjection, privateVerificationProjection };

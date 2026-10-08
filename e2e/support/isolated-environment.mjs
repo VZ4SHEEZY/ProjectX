@@ -4,6 +4,10 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
+const frontendPort = process.env.E2E_FRONTEND_PORT || '4173';
+const apiPort = process.env.E2E_API_PORT || '5001';
+const frontendURL = `http://127.0.0.1:${frontendPort}`;
+const apiOrigin = `http://127.0.0.1:${apiPort}`;
 const mongoose = require('../../backend/node_modules/mongoose');
 
 // Pin the database engine so local and CI runs use the same wire/storage behavior.
@@ -25,16 +29,16 @@ const waitFor = async (url, attempts = 120) => {
 };
 
 launch(process.execPath, ['backend/server.js'], {
-  NODE_ENV: 'test', PORT: '5001', MONGODB_URI: mongo.getUri('cyberdope-e2e'),
+  NODE_ENV: 'test', PORT: apiPort, MONGODB_URI: mongo.getUri('cyberdope-e2e'),
   JWT_SECRET: crypto.randomBytes(48).toString('base64url'), JWT_EXPIRE: '5m',
   QA_E2E_ENABLED: 'true', QA_E2E_SECRET: qaSecret,
   RATE_LIMIT_MAX: '2000',
-  FRONTEND_URL: 'http://127.0.0.1:4173', PAYMENT_EXECUTION_ENABLED: 'false',
+  FRONTEND_URL: frontendURL, PAYMENT_EXECUTION_ENABLED: 'false',
   USER_FACING_PROGRESSION_ENABLED: 'true', VITE_USER_FACING_PROGRESSION_ENABLED: 'true', PROGRESSION_ROLLOUT_STAGE: '4',
   OUTRIDER_ENV: 'test', OUTRIDER_ENABLED: 'true', OUTRIDER_GLASS_ENABLED: 'true', OUTRIDER_OBSERVER_ENABLED: 'true'
 });
-await waitFor('http://127.0.0.1:5001/api/health');
-const seedResponse = await fetch('http://127.0.0.1:5001/api/qa/seed', {
+await waitFor(`${apiOrigin}/api/health`);
+const seedResponse = await fetch(`${apiOrigin}/api/qa/seed`, {
   method: 'POST', headers: { 'content-type': 'application/json', 'x-qa-e2e-secret': qaSecret }, body: JSON.stringify({ runId })
 });
 if (!seedResponse.ok) throw new Error('Unable to seed isolated QA accounts');
@@ -53,10 +57,11 @@ await Projection.create([
   { ...checkpoint, scope: 'faction', subjectId: 'neon_wraith', checkpoint: { total: 120, contributors: { [memberId]: 25 } } }
 ]);
 await mongoose.disconnect();
-await mkdir('.e2e', { recursive: true });
-await writeFile('.e2e/runtime.json', JSON.stringify({ ...runtime, qaSecret, apiURL: 'http://127.0.0.1:5001/api' }), { mode: 0o600 });
-launch(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '4173'], {
-  VITE_API_URL: 'http://127.0.0.1:5001/api', VITE_SOCKET_URL: 'http://127.0.0.1:5001',
+const runtimeFile = process.env.E2E_RUNTIME_FILE || '.e2e/runtime.json';
+await mkdir((await import('node:path')).dirname(runtimeFile), { recursive: true });
+await writeFile(runtimeFile, JSON.stringify({ ...runtime, qaSecret, apiURL: `${apiOrigin}/api` }), { mode: 0o600 });
+launch(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', frontendPort, '--strictPort'], {
+  VITE_API_URL: `${apiOrigin}/api`, VITE_SOCKET_URL: apiOrigin,
   VITE_USER_FACING_PROGRESSION_ENABLED: 'true', VITE_PROGRESSION_ROLLOUT_STAGE: '4', VITE_OUTRIDER_ENABLED: 'true'
 });
 const cleanup = async () => {

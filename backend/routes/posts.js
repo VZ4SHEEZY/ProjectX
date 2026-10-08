@@ -6,16 +6,14 @@ const { protect, optionalAuth, requireAgeVerified } = require('../middleware/aut
 const { createNotification } = require('./notifications');
 const Notification = require('../models/Notification');
 const ContentView = require('../models/ContentView');
-const { canViewPost, publicUserProjection } = require('../services/accessPolicy');
+const { hasVerifiedAge, canViewPost, publicUserProjection, publicPostProjection } = require('../services/accessPolicy');
 const { hasPlatformRole, auditPlatformAction } = require('../services/platformAuthorization');
 const { withProgressionOutbox } = require('../progression/runtime/outbox');
 
 async function filterAuthorizedPosts(viewer, posts) {
   const allowed = [];
   for (const post of posts) if ((await canViewPost(viewer, post, post.author)).allowed) {
-    const value = post.toObject();
-    value.author = publicUserProjection(value.author);
-    value.canAccess = true;
+    const value = publicPostProjection(post);
     allowed.push(value);
   }
   return allowed;
@@ -67,12 +65,12 @@ router.get('/', optionalAuth, async (req, res) => {
     }
 
     // NSFW content filtering
-    if (!req.user || !req.user.isAgeVerified) {
+    if (!req.user || !hasVerifiedAge(req.user)) {
       query.isNSFW = false;
     }
 
     const posts = await Post.find(query)
-      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
+      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus isActive')
       .sort(sort)
       .limit(limit * 1)
       .skip((page - 1) * limit);
@@ -113,12 +111,12 @@ router.get('/feed/foryou', protect, async (req, res) => {
     };
 
     // Exclude NSFW for non-verified users
-    if (!req.user.isAgeVerified) {
+    if (!hasVerifiedAge(req.user)) {
       query.isNSFW = false;
     }
 
     const posts = await Post.find(query)
-      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
+      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus isActive')
       .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(limit);
@@ -173,12 +171,12 @@ router.get('/feed/following', protect, async (req, res) => {
       ]
     };
 
-    if (!req.user.isAgeVerified) {
+    if (!hasVerifiedAge(req.user)) {
       query.isNSFW = false;
     }
 
     const posts = await Post.find(query)
-      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
+      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus isActive')
       .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(limit);
@@ -230,12 +228,12 @@ router.get('/feed/faction', protect, async (req, res) => {
     };
 
     // Exclude NSFW for non-verified users
-    if (!req.user.isAgeVerified) {
+    if (!hasVerifiedAge(req.user)) {
       query.isNSFW = false;
     }
 
     const posts = await Post.find(query)
-      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
+      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus isActive')
       .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(limit);
@@ -289,7 +287,7 @@ router.get('/feed/trending', async (req, res) => {
     let effectiveQuery = { ...query, createdAt: { $gte: since } };
     if (!await Post.exists(effectiveQuery)) effectiveQuery = query;
     const posts = await Post.find(effectiveQuery)
-    .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
+    .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus isActive')
     .sort({ 'stats.likes': -1, 'stats.views': -1, createdAt: -1 })
     .limit(limit)
     .skip(skip);
@@ -319,14 +317,8 @@ router.get('/feed/trending', async (req, res) => {
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
-      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus')
-      .populate({
-        path: 'comments',
-        populate: {
-          path: 'author',
-          select: 'username displayName avatar isVerified'
-        }
-      });
+      .populate('author', 'username displayName avatar isVerified isCreator profilePrivacy isPrivate faction showOnlineStatus isActive')
+      ;
 
     if (!post) {
       return res.status(404).json({
@@ -347,9 +339,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       });
     }
 
-    const postObj = post.toObject();
-    postObj.author = publicUserProjection(postObj.author);
-    postObj.canAccess = true;
+    const postObj = publicPostProjection(post);
 
     res.json({
       success: true,
@@ -392,7 +382,7 @@ router.post('/', protect, async (req, res) => {
     }
 
     // Check age verification for NSFW
-    if (isNSFW && !req.user.isAgeVerified) {
+    if (isNSFW && !hasVerifiedAge(req.user)) {
       return res.status(403).json({
         success: false,
         message: 'Age verification required for NSFW content'
@@ -437,7 +427,7 @@ router.post('/', protect, async (req, res) => {
 
     res.status(201).json({
       success: true,
-      data: post
+      data: publicPostProjection(post)
     });
   } catch (error) {
     res.status(500).json({
@@ -453,7 +443,7 @@ router.post('/', protect, async (req, res) => {
 // @access  Private
 router.put('/:id', protect, async (req, res) => {
   try {
-    const post = await Post.findById(req.params.id);
+    let post = await Post.findById(req.params.id);
 
     if (!post) {
       return res.status(404).json({
@@ -471,8 +461,10 @@ router.put('/:id', protect, async (req, res) => {
       });
     }
 
+    if (post.moderationState === 'removed') return res.status(403).json({ success: false, message: 'Moderated content cannot be edited or republished' });
+    if ((post.isNSFW || req.body.isNSFW) && !hasVerifiedAge(req.user)) return res.status(403).json({ success: false, message: 'Age verification provider unavailable' });
     const updateFields = {};
-    const allowedFields = ['content', 'thumbnail', 'visibility', 'price', 'isNSFW', 'isSensitive', 'tags', 'status'];
+    const allowedFields = ['title', 'description', 'content', 'thumbnail', 'visibility', 'price', 'isNSFW', 'isSensitive', 'tags', 'status'];
     
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) {
@@ -480,16 +472,17 @@ router.put('/:id', protect, async (req, res) => {
       }
     });
 
-    post = await Post.findByIdAndUpdate(
-      req.params.id,
-      updateFields,
-      { new: true, runValidators: true }
-    ).populate('author', 'username displayName avatar isVerified');
-    if (administrativeOverride) await auditPlatformAction(req.user, 'modify_post', { targetType: 'post', targetId: post._id, fields: Object.keys(updateFields) });
+    const update = async session => {
+      const updated = await Post.findOneAndUpdate({ _id: req.params.id, moderationState: { $ne: 'removed' } }, updateFields, { new: true, runValidators: true, ...(session ? { session } : {}) }).populate('author', 'username displayName avatar isVerified');
+      if (!updated) throw new Error('Content was removed by moderation');
+      if (administrativeOverride) await auditPlatformAction(req.user, 'modify_post', { targetType: 'post', targetId: updated._id, fields: Object.keys(updateFields) }, { session });
+      return updated;
+    };
+    post = administrativeOverride ? await withProgressionOutbox(({ session }) => update(session)) : await update();
 
     res.json({
       success: true,
-      data: post
+      data: publicPostProjection(post)
     });
   } catch (error) {
     res.status(500).json({
@@ -505,7 +498,7 @@ router.put('/:id', protect, async (req, res) => {
 // @access  Private
 router.delete('/:id', protect, async (req, res) => {
   try {
-    const post = await Post.findById(req.params.id);
+    let post = await Post.findById(req.params.id);
 
     if (!post) {
       return res.status(404).json({
@@ -523,8 +516,11 @@ router.delete('/:id', protect, async (req, res) => {
       });
     }
 
-    await post.deleteOne();
-    if (administrativeOverride) await auditPlatformAction(req.user, 'delete_post', { targetType: 'post', targetId: post._id });
+    if (administrativeOverride) await withProgressionOutbox(async ({ session }) => {
+      await post.deleteOne({ session });
+      await auditPlatformAction(req.user, 'delete_post', { targetType: 'post', targetId: post._id }, { session });
+    });
+    else await post.deleteOne();
 
     res.json({
       success: true,
@@ -588,7 +584,7 @@ router.post('/:id/like', protect, async (req, res) => {
 // @access  Public
 router.post('/:id/view', optionalAuth, async (req, res) => {
   try {
-    const post = await Post.findById(req.params.id);
+    let post = await Post.findById(req.params.id);
 
     if (!post) {
       return res.status(404).json({
